@@ -16,4 +16,7 @@
 
   # Pas de param amdgpu sur Intel
   boot.kernelParams = lib.mkForce [];
+
+  # keyd échoue sur PC2 (pas de périphérique compatible)
+  services.keyd.enable = lib.mkForce false;
 }
