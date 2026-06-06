@@ -104,7 +104,7 @@
     brave
     google-chrome
     discord
-    rustdesk
+
     anydesk
     remmina
     localsend

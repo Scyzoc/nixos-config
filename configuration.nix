@@ -32,10 +32,6 @@
   };
   systemd.services.ollama.wantedBy = lib.mkForce [];
 
-  # Service RustDesk Server (désactivé — utilise le serveur public par défaut)
-  # Pour réactiver : services.rustdesk-server = { enable = true; openFirewall = true; signal.enable = true; relay.enable = true; };
-  services.rustdesk-server.enable = false;
-
   services.openssh = {
     enable = true;
     settings = {
