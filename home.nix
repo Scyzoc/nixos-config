@@ -4,8 +4,8 @@
   # ==========================================================================
   # 1. INFORMATIONS UTILISATEUR
   # ==========================================================================
-  home.username = "lei";
-  home.homeDirectory = "/home/lei";
+  home.username = "user";
+  home.homeDirectory = "/home/user";
   home.stateVersion = "23.11";
 
   home.pointerCursor = lib.mkForce {
