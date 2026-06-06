@@ -308,11 +308,6 @@
   # BTS SIO — Outils professionnels
   # ==========================================================================
 
-  # --- Cisco Packet Tracer (nécessite le .deb téléchargé manuellement) ---
-  nixpkgs.config.permittedInsecurePackages = [
-    "cisco-packet-tracer-9.0.0"
-  ];
-
   # --- VMware Workstation ---
   virtualisation.vmware.host = {
     enable = true;
@@ -376,7 +371,6 @@
     league-spartan
 
     # --- BTS SIO ---
-    ciscoPacketTracer9  # Cisco Packet Tracer (VMware et Wireshark → section BTS SIO)
     gnome-themes-extra  # Thème Adwaita avec icônes GTK stock pour VMware
   ];
 
