@@ -16,9 +16,9 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   # r8168 remplace r8169 pour corriger le hotplug câble Ethernet (bug r8169 sur RTL8111/8168)
-  boot.extraModulePackages = [ config.boot.kernelPackages.vmware config.boot.kernelPackages.r8168 ];
+  boot.extraModulePackages = [ config.boot.kernelPackages.r8168 ];
   boot.blacklistedKernelModules = [ "r8169" ];
-  boot.kernelModules = [ "vmmon" "vmnet" "r8168" ];
+  boot.kernelModules = [ "r8168" ];
   boot.kernelParams = [ "amdgpu.freesync_video=1" ];
 
 
@@ -286,7 +286,6 @@
   '';
 
   users.groups.uinput = {};
-  users.groups.vmware = {};
 
   users.users.user = {
     isNormalUser = true;
@@ -298,7 +297,6 @@
       "audio"           # Accès matériel audio
       "input"
       "render"
-      "vmware"
       "wireshark"       # Capture réseau sans root
       "dialout"         # Accès ports série (câble console switch/routeur)
     ];
@@ -307,15 +305,6 @@
   # ==========================================================================
   # BTS SIO — Outils professionnels
   # ==========================================================================
-
-  # --- VMware Workstation ---
-  virtualisation.vmware.host = {
-    enable = true;
-    extraConfig = "";
-  };
-  systemd.services.vmware-authdlauncher.wantedBy = lib.mkForce [];
-  systemd.services.vmware-networks.wantedBy = lib.mkForce [];
-  systemd.services.vmware-usbarbitrator.wantedBy = lib.mkForce [];
 
   # --- Wireshark (capture réseau) ---
   programs.wireshark = {
@@ -370,8 +359,6 @@
     rofi
     league-spartan
 
-    # --- BTS SIO ---
-    gnome-themes-extra  # Thème Adwaita avec icônes GTK stock pour VMware
   ];
 
   # ==========================================================================

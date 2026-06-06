@@ -9,7 +9,7 @@
 
   # Overrides PC2 (Intel) — neutralise les spécificités ThinkPad L14 AMD de configuration.nix
 
-  # Pas de r8168/r8169 ni vmware kernel modules sur PC2
+  # Pas de r8168/r8169 sur PC2 (Intel)
   boot.extraModulePackages = lib.mkForce [];
   boot.blacklistedKernelModules = lib.mkForce [];
   boot.kernelModules = lib.mkForce [ "kvm-intel" ];

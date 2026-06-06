@@ -736,22 +736,4 @@
     categories = [ "Network" "InstantMessaging" ];
   };
 
-  # VMware : forcer XWayland + thème Adwaita pour les icônes GTK stock dépréciées
-  xdg.desktopEntries.vmware-workstation = {
-    name = "VMware Workstation";
-    comment = "Run and manage virtual machines";
-    exec = "env GDK_BACKEND=x11 GTK_THEME=Adwaita vmware %U";
-    terminal = false;
-    type = "Application";
-    icon = "vmware-workstation";
-    startupNotify = true;
-    categories = [ "System" ];
-    mimeType = [
-      "application/x-vmware-vm"
-      "application/x-vmware-team"
-      "application/x-vmware-enc-vm"
-      "x-scheme-handler/vmrc"
-    ];
-  };
-
 }
