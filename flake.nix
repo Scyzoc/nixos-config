@@ -16,7 +16,7 @@
         home-manager.useGlobalPkgs = true;
         home-manager.useUserPackages = true;
         home-manager.backupFileExtension = "backup";
-        home-manager.users.lei = import ./home.nix;
+        home-manager.users.user = import ./home.nix;
       };
       mkSystem = host: nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";

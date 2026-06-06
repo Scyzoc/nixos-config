@@ -288,9 +288,9 @@
   users.groups.uinput = {};
   users.groups.vmware = {};
 
-  users.users.lei = {
+  users.users.user = {
     isNormalUser = true;
-    description = "lei";
+    description = "user";
     extraGroups = [
       "networkmanager"  # Gestion du réseau
       "wheel"           # Accès sudo
@@ -384,11 +384,11 @@
   # 12. CONFIGURATION NIX (FLAKES ET OPTIMISATIONS)
   # ==========================================================================
 
-  # Autoriser nixos-rebuild sans mot de passe pour lei
+  # Autoriser nixos-rebuild sans mot de passe pour user
   security.sudo.extraConfig = ''
-    lei ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/nixos-rebuild
-    lei ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/git
-    lei ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/cpupower
+    user ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/nixos-rebuild
+    user ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/git
+    user ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/cpupower
   '';
   # ==========================================================================
 
