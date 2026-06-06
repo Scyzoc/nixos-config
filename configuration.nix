@@ -26,12 +26,6 @@
   # 3. AUCUNE passerelle par défaut (defaultGateway) 
   # car internet passe toujours par le Wi-Fi.
 
-  services.ollama = {
-    enable = true;
-    package = pkgs.ollama;
-  };
-  systemd.services.ollama.wantedBy = lib.mkForce [];
-
   services.openssh = {
     enable = true;
     settings = {
