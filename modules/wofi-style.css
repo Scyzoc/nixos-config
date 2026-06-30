@@ -1,0 +1,54 @@
+window {
+  margin: 0px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(0, 0, 0, 0.25);
+  border-radius: 15px;
+  font-family: "Inter";
+  font-size: 13px;
+}
+
+#input {
+  margin: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: white;
+  padding: 8px 12px;
+}
+
+#inner-box {
+  margin: 10px;
+}
+
+#scroll {
+  margin: 5px;
+}
+
+#entry {
+  border-radius: 10px;
+  transition: all 0.15s ease;
+}
+
+#entry:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+#entry:selected {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+}
+
+#text {
+  margin: 5px;
+  color: white;
+}
+
+#text:selected {
+  color: white;
+  font-weight: bold;
+}
+
+#img {
+  margin-right: 8px;
+}
