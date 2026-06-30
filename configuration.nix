@@ -301,6 +301,9 @@
   
   services.udev.extraRules = ''
     KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"
+    # Rafraîchit instantanément le module batterie de waybar (signal RTMIN+7)
+    # au branchement/débranchement du câble d'alimentation
+    SUBSYSTEM=="power_supply", ACTION=="change", RUN+="${pkgs.procps}/bin/pkill -RTMIN+7 waybar"
   '';
 
   users.groups.uinput = {};
