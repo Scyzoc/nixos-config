@@ -145,6 +145,8 @@
     gnome-characters
     gnome-clocks
     gnome-weather
+    gnome-maps
+    gnome-font-viewer
   ];
 
   # GNOME services that might have been removed

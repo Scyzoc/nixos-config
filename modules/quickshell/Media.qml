@@ -12,7 +12,10 @@ Pill {
     id: root
 
     readonly property var players: Mpris.players.values
-    readonly property MprisPlayer player: players.find(p => p.isPlaying) ?? players[0] ?? null
+    // Lecteurs réels : Brave garde son MPRIS après fermeture de l'onglet vidéo (arrêté, sans
+    // titre) → ignoré. L'état vide transitoire d'un changement de morceau n'est pas « arrêté ».
+    readonly property var livePlayers: players.filter(p => p.playbackState !== MprisPlaybackState.Stopped || (p.trackTitle ?? "") !== "")
+    readonly property MprisPlayer player: players.find(p => p.isPlaying) ?? livePlayers[0] ?? players[0] ?? null
     // Métadonnées affichées, figées pendant les changements de morceau : le navigateur
     // publie ~0,5 s un état vide (pas de titre, logo Brave en pochette). On ne suit le
     // lecteur que lorsqu'il a un titre ; l'affichage n'est vidé qu'après 2 s sans titre.
@@ -397,10 +400,10 @@ Pill {
         // Choix du lecteur si plusieurs sont ouverts : logo seul, aux extrémités opposées
         RowLayout {
             Layout.fillWidth: true
-            visible: root.players.length > 1
+            visible: root.livePlayers.length > 1
             spacing: 0
             Repeater {
-                model: root.players
+                model: root.livePlayers
                 Item {
                     id: slot
                     required property MprisPlayer modelData
@@ -410,8 +413,8 @@ Pill {
                     ActionButton {
                         id: btn
                         anchors.left: slot.index === 0 ? parent.left : undefined
-                        anchors.right: slot.index === root.players.length - 1 && slot.index > 0 ? parent.right : undefined
-                        anchors.horizontalCenter: slot.index > 0 && slot.index < root.players.length - 1 ? parent.horizontalCenter : undefined
+                        anchors.right: slot.index === root.livePlayers.length - 1 && slot.index > 0 ? parent.right : undefined
+                        anchors.horizontalCenter: slot.index > 0 && slot.index < root.livePlayers.length - 1 ? parent.horizontalCenter : undefined
                         implicitWidth: 40
                         icon: root.sourceIcon(root.sourceOf(slot.modelData, slot.modelData.trackTitle))
                         highlighted: slot.modelData === root.player
