@@ -458,7 +458,7 @@ let notionTodo = ./modules/notion-todo.nix; in
     enable = true;
     enableCompletion = true;
     initExtra = ''
-      export PATH="$HOME/.local/bin:$PATH"
+      export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
 
       restart() {
         local name="$1"

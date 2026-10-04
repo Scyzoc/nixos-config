@@ -150,6 +150,7 @@
     simple-scan
     seahorse
     gnome-music
+    gnome-tour
   ];
 
   # GNOME services that might have been removed
