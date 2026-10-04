@@ -176,9 +176,17 @@ let
   # applis web de modules/webapps/apps.json,
   # sélection fzf (filtre optionnel en argument), retire la ligne + son commentaire
   # juste au-dessus, puis rebuild. Rebuild raté → home.nix restauré.
+  # `uninstall --app <id .desktop>` (clic droit du menu d'applications) : paquet
+  # deviné depuis le .desktop, pas de liste fzf, juste la confirmation.
   nixuninstall = pkgs.writeShellScriptBin "uninstall" ''
     set -u
+    APP_ID=""
+    if [ "''${1:-}" = "--app" ]; then
+      APP_ID="''${2:-}"; APP_ID="''${APP_ID%.desktop}"
+      set --
+    fi
     HOME_NIX=/etc/nixos/home.nix
+    SYS_NIX=/etc/nixos/configuration.nix
     FZF=${pkgs.fzf}/bin/fzf
     AWK=${pkgs.gawk}/bin/awk
     JQ=${pkgs.jq}/bin/jq
@@ -238,16 +246,114 @@ let
     # Applis web (modules/webapps.nix, commande `webapp`) : position = web:<id>
     LISTE+=$'\n'$($JQ -r '.[] | "web:\(.id)\t\(.id)\t \tApplis web\t\(.name) — \(.url)"' "$WEB_JSON")
 
+    # Applis de base GNOME (Cartes, Calculatrice…) installées par services.desktopManager.gnome :
+    # candidats = paquets exclusibles du module GNOME, gardés s'ils ont une appli visible
+    # dans le menu ; position = gnome:<attribut>, retrait via environment.gnome.excludePackages
+    GNOME_ATTRS=$($AWK '
+      /removeExcluded \[|optionalPackages = \[/ { l = 1 }
+      l || /notExcluded pkgs\./ {
+        s = $0
+        while (match(s, /pkgs\.[A-Za-z0-9_-]+/)) { print substr(s, RSTART + 5, RLENGTH - 5); s = substr(s, RSTART + RLENGTH) }
+      }
+      l && /\]/ { l = 0 }
+    ' ${pkgs.path}/nixos/modules/services/desktop-managers/gnome.nix | sort -u)
+    LISTE+=$'\n'$(for f in /run/current-system/sw/share/applications/*.desktop; do
+      grep -q '^NoDisplay=true' "$f" && continue
+      s=$(readlink -f "$f"); s=''${s#/nix/store/*-}; s=''${s%%/*}
+      nom=$(sed -n 's/^Name\[fr\]=//p' "$f" | head -1)
+      [ -z "$nom" ] && nom=$(sed -n 's/^Name=//p' "$f" | head -1)
+      printf '%s\t%s\n' "$s" "$nom"
+    done | $AWK -F'\t' -v attrs="$GNOME_ATTRS" '
+      BEGIN { n = split(attrs, a, "\n") }
+      # Dossier du store « gnome-maps-50.3 » ↔ attribut gnome-maps (ou tecla ↔ gnome-tecla)
+      function va(s, x) { return s == x || (index(s, x "-") == 1 && substr(s, length(x) + 2, 1) ~ /[0-9]/) }
+      {
+        for (i = 1; i <= n; i++) {
+          x = a[i]; y = x; sub(/^gnome-/, "", y)
+          if (va($1, x) || va($1, y)) {
+            if (!(x in noms)) ordre[++k] = x
+            noms[x] = (x in noms) ? noms[x] ", " $2 : $2
+            break
+          }
+        }
+      }
+      END {
+        for (i = 1; i <= k; i++) {
+          x = ordre[i]; m = (x == "nautilus") ? "⚠" : " "
+          printf "gnome:%s\t%s\t%s\tApplis GNOME (de base)\t%s\n", x, x, m, noms[x]
+        }
+      }')
+
+    # --app : retrouve la ligne de LISTE du paquet qui fournit le .desktop
+    #   webapp-<id>       → web:<id>
+    #   fichier du store  → dossier « discord-0.0.90 » ↔ attribut discord (ou kdePackages.kate ↔ kate)
+    #   fichier local     → .desktop hors Nix (wine, appli maison) : simple suppression
+    # Introuvable → liste fzf filtrée sur le nom de l'appli
+    APP_CHOIX=""
+    if [ -n "$APP_ID" ]; then
+      FICHIER=""
+      for d in "''${XDG_DATA_HOME:-$HOME/.local/share}" $(printf '%s' "''${XDG_DATA_DIRS:-}" | tr ':' ' '); do
+        [ -e "$d/applications/$APP_ID.desktop" ] && { FICHIER="$d/applications/$APP_ID.desktop"; break; }
+      done
+      APP_NOM=$APP_ID
+      if [ -n "$FICHIER" ]; then
+        n=$(sed -n 's/^Name\[fr\]=//p' "$FICHIER" | head -1)
+        [ -z "$n" ] && n=$(sed -n 's/^Name=//p' "$FICHIER" | head -1)
+        [ -n "$n" ] && APP_NOM=$n
+      fi
+
+      if [ -n "$FICHIER" ] && [[ "$(readlink -f "$FICHIER")" != /nix/store/* ]]; then
+        echo "« $APP_NOM » ne vient pas de la config Nix : $FICHIER"
+        read -r -p "Supprimer ce raccourci ? [o/N] " rep
+        [[ "$rep" =~ ^[oOyY]$ ]] || { echo "Annulé."; exit 0; }
+        rm -f "$FICHIER"
+        echo "''${G}󰄬''${R} Raccourci supprimé : $APP_NOM"
+        ${pkgs.libnotify}/bin/notify-send "Désinstallation" "Raccourci supprimé : $APP_NOM"
+        exit 0
+      fi
+
+      if [[ "$APP_ID" == webapp-* ]]; then
+        POS="web:''${APP_ID#webapp-}"
+      else
+        STORE=""
+        if [ -n "$FICHIER" ]; then
+          STORE=$(readlink -f "$FICHIER"); STORE=''${STORE#/nix/store/*-}; STORE=''${STORE%%/*}
+        fi
+        POS=$(printf '%s\n' "$LISTE" | $AWK -F'\t' -v s="$STORE" -v id="$APP_ID" '
+          # « discord-0.0.90 » ou « rustdesk » ↔ discord / rustdesk
+          function va(s, x) { return s == x || (index(s, x "-") == 1 && substr(s, length(x) + 2, 1) ~ /[0-9]/) }
+          $1 ~ /^web:/ { next }
+          {
+            x = $2; sub(/.*\./, "", x); y = x; sub(/^gnome-/, "", y)
+            if ((s != "" && (va(s, x) || va(s, y))) || tolower(id) == tolower(x)) { print $1; exit }
+          }')
+      fi
+      if [ -n "$POS" ]; then
+        APP_CHOIX=$(printf '%s\n' "$LISTE" | $AWK -F'\t' -v p="$POS" '$1 == p' \
+          | ${pkgs.util-linux}/bin/column -t -s $'\t' -o '  ')
+      fi
+      if [ -z "$APP_CHOIX" ]; then
+        echo "''${Y}󰅚''${R} Paquet de « $APP_NOM » introuvable dans home.nix (paquet système ou dépendance ?)."
+        echo "Choisis-le dans la liste (Échap = quitter)."
+        set -- "$APP_NOM"
+      fi
+    fi
+
     # Sélection + confirmation ; « non » → retour à la liste, Échap → quitter
     while true; do
-      CHOIX=$(printf '%s\n' "$LISTE" \
-        | ${pkgs.util-linux}/bin/column -t -s $'\t' -o '  ' \
-        | $FZF --multi --reverse --height=80% --query="$*" \
-            --with-nth=2.. --prompt="retirer > " \
-            --header="TAB = sélection multiple · Entrée = valider · Échap = quitter · ⚠ = utilisé par le bureau" \
-            --preview="case {1} in web:*) echo 'Appli web (brave --app)' ;; *) nix eval --raw nixpkgs#{2}.meta.description 2>/dev/null ;; esac" \
-            --preview-window=down,3,wrap)
-      [ -z "$CHOIX" ] && { echo "Annulé."; exit 0; }
+      if [ -n "$APP_CHOIX" ]; then
+        CHOIX=$APP_CHOIX
+        echo "Appli : $APP_NOM  →  paquet $(printf '%s\n' "$CHOIX" | $AWK '{print $2}')"
+      else
+        CHOIX=$(printf '%s\n' "$LISTE" \
+          | ${pkgs.util-linux}/bin/column -t -s $'\t' -o '  ' \
+          | $FZF --multi --reverse --height=80% --query="$*" \
+              --with-nth=2.. --prompt="retirer > " \
+              --header="TAB = sélection multiple · Entrée = valider · Échap = quitter · ⚠ = utilisé par le bureau" \
+              --preview="case {1} in web:*) echo 'Appli web (brave --app)' ;; gnome:*) echo 'Appli GNOME de base (environment.gnome.excludePackages)' ;; *) nix eval --raw nixpkgs#{2}.meta.description 2>/dev/null ;; esac" \
+              --preview-window=down,3,wrap)
+        [ -z "$CHOIX" ] && { echo "Annulé."; exit 0; }
+      fi
 
       LIGNES=$(printf '%s\n' "$CHOIX" | $AWK '{print $1}')
       NOMS=$(printf '%s\n' "$CHOIX" | $AWK '{print $2}' | tr '\n' ' ')
@@ -257,10 +363,13 @@ let
       fi
       read -r -p "Retirer : $NOMS? [o/N] " rep
       [[ "$rep" =~ ^[oOyY]$ ]] && break
+      [ -n "$APP_CHOIX" ] && { echo "Annulé."; exit 0; }
     done
 
     SAUVEGARDE=$(mktemp)
     cp "$HOME_NIX" "$SAUVEGARDE"
+    SYS_SAUVEGARDE=$(mktemp)
+    cp "$SYS_NIX" "$SYS_SAUVEGARDE"
     WEB_SAUVEGARDE=$(mktemp -d)
     cp -a "$WEB_DIR/." "$WEB_SAUVEGARDE/"
 
@@ -272,8 +381,31 @@ let
     # Flake : suppressions à refléter dans l'index git
     git -C /etc/nixos add -A "$WEB_DIR"
 
+    # Applis GNOME : ajoutées à environment.gnome.excludePackages (bloc créé au besoin
+    # juste sous services.desktopManager.gnome.enable)
+    EXCLUS=$(printf '%s\n' "$LIGNES" | sed -n 's/^gnome://p' | tr '\n' ' ')
+    if [ -n "$EXCLUS" ]; then
+      if ! grep -q '^  environment\.gnome\.excludePackages = with pkgs; \[$' "$SYS_NIX"; then
+        $AWK '
+          { print }
+          /^  services\.desktopManager\.gnome\.enable = true;/ {
+            print ""
+            print "  # Applis GNOME de base retirées (commande `uninstall`)"
+            print "  environment.gnome.excludePackages = with pkgs; ["
+            print "  ];"
+          }
+        ' "$SYS_SAUVEGARDE" > "$SYS_NIX.tmp" && cat "$SYS_NIX.tmp" > "$SYS_NIX" && rm -f "$SYS_NIX.tmp"
+      fi
+      $AWK -v ajout="$EXCLUS" '
+        BEGIN { n = split(ajout, a, " ") }
+        /^  environment\.gnome\.excludePackages = with pkgs; \[$/ { dans = 1 }
+        dans && /^  \];/ { for (i = 1; i <= n; i++) print "    " a[i]; dans = 0 }
+        { print }
+      ' "$SYS_NIX" > "$SYS_NIX.tmp" && cat "$SYS_NIX.tmp" > "$SYS_NIX" && rm -f "$SYS_NIX.tmp"
+    fi
+
     # Supprime les lignes choisies + les lignes de commentaire collées juste au-dessus
-    $AWK -v cibles="$(printf '%s\n' "$LIGNES" | grep -v '^web:' | tr '\n' ',')" '
+    $AWK -v cibles="$(printf '%s\n' "$LIGNES" | grep '^[0-9]' | tr '\n' ',')" '
       BEGIN {
         n = split(cibles, t, ",")
         for (i = 1; i <= n; i++) if (t[i] != "") {
@@ -293,15 +425,16 @@ let
 
     echo "''${C}󰑓''${R} Rebuild en cours..."
     if sudo /run/current-system/sw/bin/nixos-rebuild switch --flake /etc/nixos#pc1; then
-      rm -rf "$SAUVEGARDE" "$WEB_SAUVEGARDE"
+      rm -rf "$SAUVEGARDE" "$SYS_SAUVEGARDE" "$WEB_SAUVEGARDE"
       echo "''${G}󰄬''${R} Désinstallé : $NOMS"
       ${pkgs.libnotify}/bin/notify-send "Désinstallation" "Retiré : $NOMS"
     else
       cat "$SAUVEGARDE" > "$HOME_NIX"
+      cat "$SYS_SAUVEGARDE" > "$SYS_NIX"
       rm -rf "$WEB_DIR"; mkdir -p "$WEB_DIR"; cp -a "$WEB_SAUVEGARDE/." "$WEB_DIR/"
       git -C /etc/nixos add -A "$WEB_DIR"
-      rm -rf "$SAUVEGARDE" "$WEB_SAUVEGARDE"
-      echo "''${Y}󰅚''${R} Rebuild échoué — home.nix et applis web restaurés, rien n'a été retiré." >&2
+      rm -rf "$SAUVEGARDE" "$SYS_SAUVEGARDE" "$WEB_SAUVEGARDE"
+      echo "''${Y}󰅚''${R} Rebuild échoué — home.nix, configuration.nix et applis web restaurés, rien n'a été retiré." >&2
       exit 1
     fi
   '';
