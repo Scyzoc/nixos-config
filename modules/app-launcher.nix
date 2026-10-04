@@ -132,14 +132,6 @@ let
     grep -v '^show=' ${./wofi-config} > $out
   '';
 
-  # Prompt de recherche Brave (lancé depuis l'entrée .desktop du launcher)
-  brave-search = pkgs.writeShellScriptBin "brave-search" ''
-    QUERY=$(: | ${pkgs.wofi}/bin/wofi --dmenu --style ${./wofi-style.css} --conf ${dmenu-config} \
-      --prompt "Rechercher sur Brave...")
-    [ -z "$QUERY" ] && exit 0
-    exec ${pkgs.brave}/bin/brave "https://search.brave.com/search?q=$(${pkgs.jq}/bin/jq -rn --arg q "$QUERY" '$q|@uri')"
-  '';
-
   # Ancien menu (wofi), gardé en secours si le menu Quickshell ne répond pas
   app-launcher-wofi = pkgs.writeShellScriptBin "app-launcher-wofi" ''
     export PATH=${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.gnused}/bin:${pkgs.findutils}/bin:$PATH
@@ -259,7 +251,7 @@ let
 
 in
 {
-  home.packages = [ app-launcher app-launcher-wofi brave-search ];
+  home.packages = [ app-launcher app-launcher-wofi ];
 
   # Menus plein écran (applications, fonds d'écran) : config Quickshell à part, service
   # à part (un bug d'un menu ne fait pas tomber la barre)
@@ -278,15 +270,5 @@ in
       Restart = "on-failure";
     };
     Install.WantedBy = [ "hyprland-session.target" ];
-  };
-
-  xdg.desktopEntries.brave-search = {
-    name = "Rechercher sur Brave";
-    comment = "Lancer une recherche web dans Brave";
-    exec = "brave-search";
-    icon = "brave-browser";
-    terminal = false;
-    type = "Application";
-    categories = [ "Network" ];
   };
 }
