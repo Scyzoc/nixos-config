@@ -3,6 +3,10 @@
   atlas-task cached          thèmes + projets du dernier appel (cache, sans réseau)
   atlas-task meta            thèmes + projets en JSON (mis en cache)
   atlas-task create '<json>' crée une tâche (arguments de l'outil create_task)
+  atlas-task create-exam '<json>'
+                             crée un devoir (kind, courseId, teacherId, title, date, link,
+                             notes, toHandIn) : le MCP n'a pas d'outil pour les évaluations,
+                             on passe par l'action web « addExam » de /courses (sans jeton)
 
 Jeton : $ATLAS_TOKEN, sinon ~/.config/atlas/token, sinon la config MCP de Claude Code
 (~/.claude.json, serveur « atlas »). Sortie en JSON sur stdout ; en cas d'échec,
@@ -14,6 +18,7 @@ import ssl
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DEFAULT_URL = "https://atlas.homelab.lan/api/mcp"
@@ -38,15 +43,23 @@ def find_server(o):
     return None
 
 
-def credentials():
-    url, auth = DEFAULT_URL, None
+def claude_server():
     try:
-        srv = find_server(json.load(open(os.path.expanduser("~/.claude.json"))))
-        if srv:
-            url = srv.get("url", url)
-            auth = srv.get("headers", {}).get("Authorization")
+        return find_server(json.load(open(os.path.expanduser("~/.claude.json")))) or {}
     except (OSError, ValueError):
-        pass
+        return {}
+
+
+def base_url():
+    """Racine de l'appli web (l'URL MCP sans /api/mcp)."""
+    url = claude_server().get("url", DEFAULT_URL)
+    return url[: -len("/api/mcp")] if url.endswith("/api/mcp") else url.rstrip("/")
+
+
+def credentials():
+    srv = claude_server()
+    url = srv.get("url", DEFAULT_URL)
+    auth = srv.get("headers", {}).get("Authorization")
     tok = os.environ.get("ATLAS_TOKEN")
     if not tok:
         try:
@@ -138,9 +151,19 @@ class Client:
             return text
 
 
+def courses():
+    """Matières de la classe courante, avec leurs profs (API de l'appli web)."""
+    try:
+        with urllib.request.urlopen(base_url() + "/api/course-options", context=CTX, timeout=10) as r:
+            return json.load(r)
+    except (urllib.error.URLError, ValueError):
+        return []
+
+
 def meta():
     with Client() as c:
         out = {"themes": c.tool("list_themes", {}), "projects": c.tool("list_projects", {})}
+    out["courses"] = courses()
     os.makedirs(os.path.dirname(CACHE), exist_ok=True)
     with open(CACHE + ".tmp", "w") as f:
         json.dump(out, f, ensure_ascii=False)
@@ -156,6 +179,54 @@ def create(args):
     return task
 
 
+def devalue(raw):
+    """Décode les données d'une réponse d'action SvelteKit (format devalue, types simples)."""
+    arr = json.loads(raw)
+    if not isinstance(arr, list):
+        return None
+
+    def h(i):
+        if not isinstance(i, int) or i < 0:
+            return None
+        v = arr[i]
+        if isinstance(v, dict):
+            return {k: h(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return None if v and isinstance(v[0], str) else [h(x) for x in v]
+        return v
+    return h(0)
+
+
+def create_exam(args):
+    form = {k: args.get(k) for k in ("kind", "courseId", "teacherId", "title", "date", "link", "notes")}
+    form = {k: str(v) for k, v in form.items() if v not in (None, "")}
+    if args.get("toHandIn"):
+        form["toHandIn"] = "on"
+    base = base_url()
+    req = urllib.request.Request(base + "/courses?/addExam", urllib.parse.urlencode(form).encode(), {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Origin": base,
+        "Accept": "application/json",
+        "x-sveltekit-action": "true",
+    })
+    try:
+        with urllib.request.urlopen(req, context=CTX, timeout=15) as r:
+            res = json.load(r)
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Atlas : erreur HTTP {e.code}")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Atlas injoignable ({e.reason})")
+    if res.get("type") == "failure":
+        data = devalue(res.get("data", "null")) or {}
+        msgs = [m for v in (data.get("errors") or {}).values() for m in (v or [])]
+        raise RuntimeError(" ".join(msgs) or "Atlas a refusé le devoir")
+    if res.get("type") == "error":
+        raise RuntimeError((res.get("error") or {}).get("message", "Erreur d'Atlas"))
+    subprocess.Popen([NOTIFY, "-a", "Atlas", "-i", "atlas-homelab",
+                      "Devoir ajouté", args.get("title") or args.get("kindLabel", "")])
+    return {"ok": True}
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     try:
@@ -164,13 +235,15 @@ def main():
             try:
                 out = json.load(open(CACHE))
             except (OSError, ValueError):
-                out = {"themes": [], "projects": []}
+                out = {"themes": [], "projects": [], "courses": []}
         elif cmd == "meta":
             out = meta()
+        elif cmd == "create-exam" and len(sys.argv) > 2:
+            out = create_exam(json.loads(sys.argv[2]))
         elif cmd == "create" and len(sys.argv) > 2:
             out = create(json.loads(sys.argv[2]))
         else:
-            raise RuntimeError("usage : atlas-task meta | create '<json>'")
+            raise RuntimeError("usage : atlas-task cached | meta | create '<json>' | create-exam '<json>'")
     except Exception as e:
         print(json.dumps({"error": str(e)}))
         sys.exit(1)

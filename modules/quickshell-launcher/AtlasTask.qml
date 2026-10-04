@@ -6,7 +6,8 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 
 // Nouvelle tâche Atlas (SUPER+SHIFT+T) : formulaire envoyé au serveur MCP d'Atlas par le
-// script `atlas-task` (modules/atlas-task.nix). Entrée dans le titre ou Ctrl+Entrée :
+// script `atlas-task` (modules/atlas-task.nix). Le bouton chapeau bascule en « Nouveau devoir »
+// (évaluation de l'espace Cours, comme dans l'appli). Entrée dans le titre ou Ctrl+Entrée :
 // créer ; Tab : champ suivant ; Échap : fermer le menu ouvert puis le popup.
 PanelWindow {
     id: win
@@ -26,6 +27,7 @@ PanelWindow {
     // --- Données Atlas (cache puis serveur) ---------------------------------------------
     property var themes: []
     property var projects: []
+    property var courses: []    // matières + profs (devoirs)
     property bool metaLoaded: false
 
     readonly property var themeIcons: ({
@@ -58,6 +60,22 @@ PanelWindow {
             label: m < 60 ? m + " min" : Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) : "")
         })))
 
+    readonly property var kindOptions: [
+        { value: "tp", label: "TP", icon: 0xf0096, color: Theme.teal },
+        { value: "devoir", label: "Devoir", icon: 0xf0cb6, color: Theme.subtext },
+        { value: "controle", label: "Contrôle", icon: 0xf0dc9, color: Theme.yellow },
+        { value: "epreuve", label: "Épreuve", icon: 0xf002a, color: Theme.red }
+    ]
+    // Couleur de matière : « var(--accent) » (CSS de l'appli) → mauve
+    function courseColor(c) { return /^#[0-9a-f]{3,8}$/i.test(c ?? "") ? c : Theme.mauve; }
+    readonly property var courseOptions: courses.map(c => ({
+        value: c.id, label: c.name, icon: 0xf0b64, color: courseColor(c.color)
+    }))
+    readonly property var hwTeachers: courses.find(c => c.id === hwCourse)?.teachers ?? []
+    readonly property var teacherOptions: hwTeachers.map(t => ({
+        value: t.id, label: t.name, icon: 0xf0013, color: courseColor(t.color)
+    }))
+
     function opt(list, v) { return list.find(o => o.value === v) ?? list[0]; }
 
     // --- Formulaire -------------------------------------------------------------------
@@ -71,12 +89,38 @@ PanelWindow {
     property bool busy: false
     property string error: ""
 
-    readonly property int studiesId: themes.find(t => t.icon === "courses")?.id ?? -1
+    // Mode « Nouveau devoir »
+    property bool homework: false
+    property string hwKind: "devoir"
+    property int hwCourse: -1
+    property int hwTeacher: -1
+    property string hwDate: ""
+    property bool hwHandIn: true
+    property bool hwHandInTouched: false    // réglé à la main : le type ne le change plus
+    // Matière à plusieurs profs (Informatique…) : prof obligatoire
+    readonly property bool hwNeedsProf: hwTeachers.length > 1
+    readonly property bool hwReady: hwCourse >= 0 && (!hwNeedsProf || hwTeacher >= 0) && hwDate !== ""
+
+    function setHomework(on) {
+        closeMenu(false);
+        error = "";
+        homework = on;
+        (on ? hwTitleBox : titleBox).input.forceActiveFocus();
+    }
 
     function reset() {
         titleBox.input.text = "";
         linkBox.input.text = "";
+        hwTitleBox.input.text = "";
+        hwLinkBox.input.text = "";
         notesEdit.text = "";
+        homework = false;
+        hwKind = "devoir";
+        hwCourse = -1;
+        hwTeacher = -1;
+        hwDate = "";
+        hwHandIn = true;
+        hwHandInTouched = false;
         themeId = -1;
         projectId = -1;
         status = "a_faire";
@@ -123,6 +167,7 @@ PanelWindow {
                     const r = JSON.parse(text);
                     win.themes = r.themes ?? [];
                     win.projects = r.projects ?? [];
+                    win.courses = r.courses ?? [];
                 } catch (e) {}
             }
         }
@@ -141,14 +186,21 @@ PanelWindow {
                 win.metaLoaded = true;
                 win.themes = r.themes ?? [];
                 win.projects = r.projects ?? [];
+                win.courses = r.courses ?? [];
             }
         }
     }
 
     // --- Création ------------------------------------------------------------------
+    function fullLink(box) {
+        const l = box.input.text.trim();
+        return l === "" || /^[a-z][a-z0-9+.-]*:\/\//i.test(l) ? l : "https://" + l;
+    }
+
     function submit() {
         if (busy) return;
         closeMenu(false);
+        if (homework) return submitHomework();
         const title = titleBox.input.text.trim();
         if (title === "") {
             error = "Le titre est obligatoire";
@@ -173,17 +225,35 @@ PanelWindow {
         if (plannedDate) args.plannedDate = plannedDate;
         if (dueDate) args.dueDate = dueDate;
         if (duration > 0) args.durationMin = duration;
-        let link = linkBox.input.text.trim();
-        if (link !== "") {
-            if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(link)) link = "https://" + link;
-            args.link = link;
-        }
+        const link = fullLink(linkBox);
+        if (link !== "") args.link = link;
         const notes = notesEdit.text.trim();
         if (notes !== "") args.notes = notes;
 
         error = "";
         busy = true;
         createProc.command = [Paths.userBin + "/atlas-task", "create", JSON.stringify(args)];
+        createProc.running = true;
+    }
+    function submitHomework() {
+        if (hwCourse < 0) { error = "Choisis une matière"; return; }
+        if (hwNeedsProf && hwTeacher < 0) { error = "Choisis le prof"; return; }
+        if (hwDate === "") { error = "Date obligatoire"; return; }
+        const args = {
+            kind: hwKind,
+            kindLabel: opt(kindOptions, hwKind).label,
+            courseId: hwCourse,
+            title: hwTitleBox.input.text.trim(),
+            date: hwDate,
+            link: fullLink(hwLinkBox),
+            notes: notesEdit.text.trim(),
+            toHandIn: hwHandIn
+        };
+        if (hwTeachers.length === 1) args.teacherId = hwTeachers[0].id;
+        else if (hwTeacher >= 0) args.teacherId = hwTeacher;
+        error = "";
+        busy = true;
+        createProc.command = [Paths.userBin + "/atlas-task", "create-exam", JSON.stringify(args)];
         createProc.running = true;
     }
     Process {
@@ -198,6 +268,12 @@ PanelWindow {
             }
         }
     }
+
+    // Entrée dans un champ une ligne : créer
+    Connections { target: titleBox.input; function onAccepted() { win.submit(); } }
+    Connections { target: linkBox.input; function onAccepted() { win.submit(); } }
+    Connections { target: hwTitleBox.input; function onAccepted() { win.submit(); } }
+    Connections { target: hwLinkBox.input; function onAccepted() { win.submit(); } }
 
     Shortcut {
         sequences: ["Ctrl+Return", "Ctrl+Enter"]
@@ -323,7 +399,7 @@ PanelWindow {
         Layout.preferredWidth: 100
         Layout.alignment: Qt.AlignTop
         spacing: 7
-        FormLabel { text: ff.title }
+        FormLabel { text: ff.title; visible: ff.title !== "" }
     }
 
     // Champ cliquable qui ouvre un menu (icône, valeur, chevron)
@@ -394,6 +470,7 @@ PanelWindow {
         id: tb
         property alias input: ti
         property string placeholder: ""
+        property int icon: 0
         Layout.fillWidth: true
         implicitHeight: 42
         radius: 9
@@ -401,10 +478,19 @@ PanelWindow {
         border.width: 1
         border.color: ti.activeFocus ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.6) : Theme.pillBorder
         Behavior on border.color { ColorAnimation { duration: 150 } }
+        BarText {
+            visible: tb.icon !== 0
+            anchors.left: parent.left
+            anchors.leftMargin: 13
+            anchors.verticalCenter: parent.verticalCenter
+            text: tb.icon ? Theme.ic(tb.icon) : ""
+            font.pixelSize: 16
+            color: Theme.muted
+        }
         TextInput {
             id: ti
             anchors.fill: parent
-            anchors.leftMargin: 12
+            anchors.leftMargin: tb.icon ? 40 : 12
             anchors.rightMargin: 12
             verticalAlignment: TextInput.AlignVCenter
             color: Theme.text
@@ -471,6 +557,7 @@ PanelWindow {
         anchors.centerIn: parent
         width: Math.min(700, parent.width - 60)
         height: Math.min(content.implicitHeight, parent.height - 40)
+        Behavior on height { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
         radius: 16
         color: Qt.rgba(22 / 255, 22 / 255, 22 / 255, 0.88)
         border.color: Theme.border
@@ -498,18 +585,17 @@ PanelWindow {
                 spacing: 10
                 Text {
                     Layout.fillWidth: true
-                    text: "Nouvelle tâche"
+                    text: win.homework ? "Nouveau devoir" : "Nouvelle tâche"
                     color: Theme.text
                     font.family: Theme.labelFont
                     font.pixelSize: 19
                     font.weight: Font.DemiBold
                 }
-                // Raccourci thème « Études »
+                // Bascule tâche ↔ devoir
                 HeaderButton {
-                    visible: win.studiesId >= 0
-                    icon: 0xf1180    // md-school-outline
-                    active: win.themeId === win.studiesId
-                    onClicked: win.themeId = active ? -1 : win.studiesId
+                    icon: win.homework ? 0xf0756 : 0xf1180    // md-format-list-checks / md-school-outline
+                    active: win.homework
+                    onClicked: win.setHomework(!win.homework)
                 }
                 HeaderButton {
                     icon: 0xf0156    // md-close
@@ -523,6 +609,12 @@ PanelWindow {
                 Layout.margins: 18
                 Layout.topMargin: 16
                 spacing: 16
+
+                // --- Mode tâche ---
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    visible: !win.homework
+                    spacing: 16
 
                 FormField {
                     title: "Titre"
@@ -679,21 +771,175 @@ PanelWindow {
                     title: "Lien"
                     TextBox { id: linkBox; placeholder: "https://..." }
                 }
+                }
+
+                // --- Mode devoir : type, matière (+ prof), intitulé + « À rendre », date + lien ---
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    visible: win.homework
+                    spacing: 14
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 14
+                        SelectButton {
+                            id: kindSel
+                            Layout.preferredWidth: 100
+                            menuOpen: win.menuAnchor === kindSel
+                            readonly property var o: win.opt(win.kindOptions, win.hwKind)
+                            icon: o.icon
+                            iconColor: o.color
+                            label: o.label
+                            onActivated: win.openList(kindSel, win.kindOptions, win.hwKind, v => {
+                                win.hwKind = v;
+                                if (!win.hwHandInTouched) win.hwHandIn = v === "devoir";
+                            })
+                        }
+                        SelectButton {
+                            id: courseSel
+                            Layout.preferredWidth: 100
+                            menuOpen: win.menuAnchor === courseSel
+                            readonly property var o: win.courseOptions.find(c => c.value === win.hwCourse)
+                            icon: o ? o.icon : 0
+                            iconColor: o ? o.color : Theme.muted
+                            label: o ? o.label : (win.courses.length ? "Matière" : "Aucune matière")
+                            placeholder: !o
+                            onActivated: if (win.courseOptions.length)
+                                win.openList(courseSel, win.courseOptions, win.hwCourse, v => {
+                                    win.hwCourse = v;
+                                    win.hwTeacher = -1;
+                                })
+                        }
+                        SelectButton {
+                            id: teacherSel
+                            visible: win.hwNeedsProf
+                            Layout.preferredWidth: 100
+                            menuOpen: win.menuAnchor === teacherSel
+                            readonly property var o: win.teacherOptions.find(t => t.value === win.hwTeacher)
+                            icon: o ? o.icon : 0
+                            iconColor: o ? o.color : Theme.muted
+                            label: o ? o.label : "Prof"
+                            placeholder: !o
+                            onActivated: win.openList(teacherSel, win.teacherOptions, win.hwTeacher, v => win.hwTeacher = v)
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 14
+                        TextBox {
+                            id: hwTitleBox
+                            icon: 0xf05f4    // md-format-title
+                            placeholder: "Intitulé (par défaut : le type)"
+                        }
+                        // « À rendre » : bouton carré, orangé quand actif
+                        Rectangle {
+                            id: handIn
+                            implicitWidth: 46
+                            implicitHeight: 42
+                            radius: 9
+                            color: win.hwHandIn ? Qt.rgba(Theme.peach.r, Theme.peach.g, Theme.peach.b, 0.18)
+                                 : handInMa.containsMouse ? Theme.rowHover : Theme.pill
+                            border.width: 1
+                            border.color: win.hwHandIn || activeFocus
+                                ? Qt.rgba(Theme.peach.r, Theme.peach.g, Theme.peach.b, activeFocus ? 0.9 : 0.6) : Theme.pillBorder
+                            activeFocusOnTab: true
+                            Behavior on color { ColorAnimation { duration: 140 } }
+                            scale: handInMa.pressed ? 0.9 : 1
+                            Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutBack } }
+                            function flip() {
+                                win.hwHandIn = !win.hwHandIn;
+                                win.hwHandInTouched = true;
+                            }
+                            Keys.onPressed: event => {
+                                if ([Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter].includes(event.key)
+                                    && !(event.modifiers & Qt.ControlModifier)) {
+                                    event.accepted = true;
+                                    handIn.flip();
+                                }
+                            }
+                            BarText {
+                                anchors.centerIn: parent
+                                text: Theme.ic(0xf011d)    // md-tray-arrow-up
+                                font.pixelSize: 18
+                                color: win.hwHandIn ? Theme.peach : Theme.muted
+                            }
+                            MouseArea {
+                                id: handInMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: handIn.flip()
+                            }
+                            // Infobulle
+                            Rectangle {
+                                visible: handInMa.containsMouse
+                                anchors.bottom: parent.top
+                                anchors.bottomMargin: 6
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                implicitWidth: tipText.implicitWidth + 16
+                                implicitHeight: 24
+                                radius: 6
+                                color: Theme.popupBg
+                                border.color: Theme.border
+                                border.width: 1
+                                Text {
+                                    id: tipText
+                                    anchors.centerIn: parent
+                                    text: win.hwHandIn ? "À rendre" : "Pas à rendre"
+                                    color: Theme.text
+                                    font.family: Theme.labelFont
+                                    font.pixelSize: 11
+                                }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 14
+                        SelectButton {
+                            id: hwDateSel
+                            Layout.preferredWidth: 100
+                            menuOpen: win.menuAnchor === hwDateSel
+                            icon: 0xf0b66    // md-calendar-blank-outline
+                            iconColor: win.hwDate ? Theme.peach : Theme.muted
+                            label: win.dateLabel(win.hwDate, "Date")
+                            placeholder: !win.hwDate
+                            onActivated: win.openDate(hwDateSel, win.hwDate, v => win.hwDate = v)
+                        }
+                        TextBox {
+                            id: hwLinkBox
+                            Layout.preferredWidth: 100
+                            icon: 0xf0339    // md-link-variant
+                            placeholder: "Lien"
+                        }
+                    }
+                }
 
                 FormField {
-                    title: "Notes"
+                    title: win.homework ? "" : "Notes"
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 140
+                        implicitHeight: win.homework ? 104 : 140
                         radius: 9
                         color: Theme.pill
                         border.width: 1
                         border.color: notesEdit.activeFocus ? win.focusBorder : Theme.pillBorder
                         Behavior on border.color { ColorAnimation { duration: 150 } }
+                        BarText {
+                            visible: win.homework
+                            x: 13
+                            y: 12
+                            text: Theme.ic(0xf09aa)    // md-text-long
+                            font.pixelSize: 16
+                            color: Theme.muted
+                        }
                         Flickable {
                             id: notesFlick
                             anchors.fill: parent
                             anchors.margins: 12
+                            anchors.leftMargin: win.homework ? 40 : 12
                             contentHeight: notesEdit.implicitHeight
                             clip: true
                             boundsBehavior: Flickable.StopAtBounds
@@ -707,6 +953,14 @@ PanelWindow {
                                 wrapMode: TextEdit.Wrap
                                 selectByMouse: true
                                 activeFocusOnTab: true
+                                Text {
+                                    visible: win.homework && notesEdit.text === ""
+                                    width: parent.width
+                                    elide: Text.ElideRight
+                                    text: "Consignes, pages à lire, remarques du prof…"
+                                    color: Theme.muted
+                                    font: notesEdit.font
+                                }
                                 Keys.onTabPressed: nextItemInFocusChain().forceActiveFocus()
                                 Keys.onBacktabPressed: nextItemInFocusChain(false).forceActiveFocus()
                                 onCursorRectangleChanged: {
@@ -773,6 +1027,9 @@ PanelWindow {
                         implicitWidth: createRow.implicitWidth + 28
                         implicitHeight: 38
                         radius: 9
+                        // Devoir incomplet (matière, prof, date) : bouton estompé, comme dans l'appli
+                        opacity: win.homework && !win.hwReady ? 0.45 : 1
+                        Behavior on opacity { NumberAnimation { duration: 150 } }
                         color: win.busy ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.5)
                              : createMa.containsMouse ? Qt.lighter(Theme.mauve, 1.08) : Theme.mauve
                         Behavior on color { ColorAnimation { duration: 120 } }
@@ -788,7 +1045,7 @@ PanelWindow {
                                 color: "#1e1e2e"
                             }
                             Text {
-                                text: win.busy ? "Création…" : "Créer la tâche"
+                                text: win.busy ? "Création…" : win.homework ? "Ajouter le devoir" : "Créer la tâche"
                                 color: "#1e1e2e"
                                 font.family: Theme.labelFont
                                 font.pixelSize: 14
