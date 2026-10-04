@@ -1031,7 +1031,7 @@ PanelWindow {
                         opacity: win.homework && !win.hwReady ? 0.45 : 1
                         Behavior on opacity { NumberAnimation { duration: 150 } }
                         color: win.busy ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.5)
-                             : createMa.containsMouse ? Qt.lighter(Theme.text, 1.08) : Theme.text
+                             : createMa.containsMouse ? Qt.rgba(1, 1, 1, 0.85) : Theme.text
                         Behavior on color { ColorAnimation { duration: 120 } }
                         scale: createMa.pressed ? 0.95 : 1
                         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutBack } }
