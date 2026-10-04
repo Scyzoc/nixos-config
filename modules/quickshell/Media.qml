@@ -394,23 +394,33 @@ Pill {
             }
         }
 
-        // Choix du lecteur si plusieurs sont ouverts
-        Flow {
+        // Choix du lecteur si plusieurs sont ouverts : logo seul, aux extrémités opposées
+        RowLayout {
             Layout.fillWidth: true
             visible: root.players.length > 1
-            spacing: 6
+            spacing: 0
             Repeater {
                 model: root.players
-                ActionButton {
+                Item {
+                    id: slot
                     required property MprisPlayer modelData
-                    icon: root.sourceIcon(root.sourceOf(modelData, modelData.trackTitle))
-                    label: root.sourceName(modelData, modelData.trackTitle)
-                    highlighted: modelData === root.player
-                    accent: root.sourceColor(root.sourceOf(modelData, modelData.trackTitle))
-                    onClicked: {
-                        if (!modelData.isPlaying) {
-                            for (const p of root.players) if (p.isPlaying) p.pause();
-                            modelData.play();
+                    required property int index
+                    Layout.fillWidth: true
+                    implicitHeight: btn.implicitHeight
+                    ActionButton {
+                        id: btn
+                        anchors.left: slot.index === 0 ? parent.left : undefined
+                        anchors.right: slot.index === root.players.length - 1 && slot.index > 0 ? parent.right : undefined
+                        anchors.horizontalCenter: slot.index > 0 && slot.index < root.players.length - 1 ? parent.horizontalCenter : undefined
+                        implicitWidth: 40
+                        icon: root.sourceIcon(root.sourceOf(slot.modelData, slot.modelData.trackTitle))
+                        highlighted: slot.modelData === root.player
+                        accent: root.sourceColor(root.sourceOf(slot.modelData, slot.modelData.trackTitle))
+                        onClicked: {
+                            if (!slot.modelData.isPlaying) {
+                                for (const p of root.players) if (p.isPlaying) p.pause();
+                                slot.modelData.play();
+                            }
                         }
                     }
                 }
