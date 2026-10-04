@@ -11,6 +11,12 @@
     ]
   },
   {
+    "id": "claude",
+    "name": "Claude",
+    "url": "https://claude.ai/new",
+    "icon": "claude.svg"
+  },
+  {
     "id": "google-drive",
     "name": "Google Drive",
     "url": "https://drive.google.com",
