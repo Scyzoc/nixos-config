@@ -5,8 +5,9 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 
-// Emojis (SUPER+;) : grille par catégorie, récents, recherche en français (noms et
-// mots-clés CLDR, sans accents) et couleur de peau mémorisée.
+// Emojis (SUPER+;) : grille par catégorie (+ ponctuation, flèches, caractères spéciaux),
+// récents, recherche en français (noms et mots-clés CLDR, sans accents) et couleur de
+// peau mémorisée.
 // Entrée / clic : colle dans la fenêtre active ; Maj+Entrée / clic droit : copie seulement.
 // Données générées au build (assets/emoji-data.py, emoji.nix).
 PanelWindow {
@@ -154,7 +155,10 @@ PanelWindow {
         { id: 5, label: "Activités", icon: 0xf04b8, color: Theme.teal },
         { id: 6, label: "Objets", icon: 0xf0336, color: Theme.mauve },
         { id: 7, label: "Symboles", icon: 0xf02d5, color: Theme.pink },
-        { id: 8, label: "Drapeaux", icon: 0xf023d, color: Theme.blue }
+        { id: 8, label: "Drapeaux", icon: 0xf023d, color: Theme.blue },
+        { id: 9, label: "Ponctuation", icon: 0xf027e, color: Theme.text },
+        { id: 10, label: "Flèches", icon: 0xf0e74, color: Theme.text },
+        { id: 11, label: "Caractères spéciaux", icon: 0xf03c9, color: Theme.text }
     ]
     property var tab: "recent"
     readonly property var currentTab: tabs.find(t => t.id === tab) ?? tabs[0]
@@ -324,7 +328,7 @@ PanelWindow {
                             width: parent.width
                             elide: Text.ElideRight
                             visible: search.text === ""
-                            text: "Rechercher un emoji…"
+                            text: "Rechercher un emoji ou un caractère…"
                             color: Theme.muted
                             font: search.font
                         }

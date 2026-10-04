@@ -14,9 +14,45 @@ let
 
     [ -z "$LATEST_REV" ] && exit 0
 
+    # Hyprland : version installée (nixpkgs verrouillé), dans nixos-unstable, et dernière release upstream
+    HYPR_CUR="${pkgs.hyprland.version}"
+    HYPR_NIX=$(${pkgs.curl}/bin/curl -sf --max-time 10 \
+      https://raw.githubusercontent.com/NixOS/nixpkgs/nixos-unstable/pkgs/by-name/hy/hyprland/package.nix \
+      | ${pkgs.gnugrep}/bin/grep -m1 -oP 'version = "\K[^"]+')
+    HYPR_UP=$(${pkgs.coreutils}/bin/timeout 10 ${pkgs.git}/bin/git ls-remote --tags --refs https://github.com/hyprwm/Hyprland 'v*' 2>/dev/null \
+      | ${pkgs.gnused}/bin/sed 's|.*refs/tags/v||' | ${pkgs.gnugrep}/bin/grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+      | ${pkgs.coreutils}/bin/sort -V | ${pkgs.coreutils}/bin/tail -1)
+    : "''${HYPR_NIX:=$HYPR_CUR}"
+
+    # newer A B : vrai si version A > version B
+    newer() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | ${pkgs.coreutils}/bin/sort -V | ${pkgs.coreutils}/bin/tail -1)" = "$1" ]; }
+
+    # Release upstream pas encore dans nixpkgs : signalée une seule fois par version
+    STATE_DIR="''${XDG_CACHE_HOME:-$HOME/.cache}/nixos-update-check"
+    UPSTREAM_NOTE=""
+    if [ -n "$HYPR_UP" ] && newer "$HYPR_UP" "$HYPR_NIX" && newer "$HYPR_UP" "$HYPR_CUR" \
+       && [ "$(cat "$STATE_DIR/hyprland-upstream" 2>/dev/null)" != "$HYPR_UP" ]; then
+      UPSTREAM_NOTE="Hyprland $HYPR_UP sorti (pas encore dans nixpkgs)."
+      mkdir -p "$STATE_DIR"
+      echo "$HYPR_UP" > "$STATE_DIR/hyprland-upstream"
+    fi
+
+    if [ "$CURRENT_REV" = "$LATEST_REV" ]; then
+      [ -n "$UPSTREAM_NOTE" ] && $NOTIFY "󰖲 Nouvelle version de Hyprland" "$UPSTREAM_NOTE" -i software-update-available -u low
+      exit 0
+    fi
+
+    BODY="nixpkgs a de nouveaux commits."
+    if newer "$HYPR_NIX" "$HYPR_CUR"; then
+      BODY="$BODY
+    Hyprland $HYPR_CUR → $HYPR_NIX"
+    fi
+    [ -n "$UPSTREAM_NOTE" ] && BODY="$BODY
+    $UPSTREAM_NOTE"
+
     if [ "$CURRENT_REV" != "$LATEST_REV" ]; then
       ACTION=$($NOTIFY "󰚰 Mises à jour NixOS disponibles" \
-        "nixpkgs a de nouveaux commits." \
+        "$BODY" \
         -i software-update-available -u normal \
         -A "update=Lancer les MàJ")
 

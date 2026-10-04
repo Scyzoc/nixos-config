@@ -4,8 +4,9 @@ let
   quickshell = config.programs.quickshell.package;
 
   # Données du menu : ordre et catégories Unicode, noms / mots-clés français (CLDR),
-  # limités aux emojis que dessine la police par défaut, + planches d'images aux tailles
-  # affichées par le menu (28 px au repos, 33 px au survol) (assets/emoji-data.py)
+  # limités aux emojis que dessine la police par défaut, + ponctuation, flèches et
+  # caractères spéciaux (polices texte), + planches d'images aux tailles affichées par
+  # le menu (28 px au repos, 33 px au survol) (assets/emoji-data.py)
   emojiData = pkgs.runCommand "emoji-data" {
     nativeBuildInputs = [ (pkgs.python3.withPackages (p: [ p.uharfbuzz p.fonttools p.pillow ])) ];
   } ''
@@ -14,6 +15,7 @@ let
       ${pkgs.unicode-emoji}/share/unicode/emoji/emoji-test.txt \
       ${pkgs.cldr-annotations}/share/unicode/cldr/common \
       ${../fonts/AppleColorEmoji.ttf} \
+      ${pkgs.inter}/share/fonts/truetype/InterVariable.ttf:${pkgs.dejavu_fonts}/share/fonts/truetype/DejaVuSans.ttf:${pkgs.noto-fonts}/share/fonts/noto/NotoSansMath-Regular.otf:${pkgs.noto-fonts}/share/fonts/noto/NotoSansSymbols2-Regular.otf \
       $out 28 33
   '';
 

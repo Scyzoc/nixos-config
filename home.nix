@@ -195,7 +195,6 @@ let notionTodo = ./modules/notion-todo.nix; in
     drawio
 
     # --- Éditeurs ---
-    marktext          # lecteur/editeur markdown avec previsualisation
 
     # --- Musique et divertissement ---
     spotify
