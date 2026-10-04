@@ -233,7 +233,6 @@ let notionTodo = ./modules/notion-todo.nix; in
     wine
     nwg-displays
     unrar
-    nextcloud-client   # Client de synchronisation Nextcloud
     fsearch            # Recherche de fichiers instantanee (equivalent Everything)
     trash-cli          # Corbeille en CLI (trash-put, trash-list, trash-restore, trash-empty)
 

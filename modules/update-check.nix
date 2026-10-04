@@ -19,16 +19,15 @@ let
         -i software-update-available -u normal \
         -A "update=Lancer les MàJ")
 
+      # Synchrone : le service est Type=simple, pas de timeout de démarrage
+      # (un process détaché serait tué avec le cgroup du service).
       if [ "$ACTION" = "update" ]; then
         LOG=$(mktemp /tmp/nixos-update-XXXXXX.log)
-        setsid ${pkgs.bash}/bin/bash -c "
-          if ${pkgs.nix}/bin/nix flake update nixpkgs --flake /etc/nixos > '$LOG' 2>&1; then
-            $NOTIFY '󰄬 Mises à jour NixOS' 'flake.lock mis à jour.' -i software-update-available -u normal
-          else
-            $NOTIFY '󰀪 Échec mise à jour NixOS' \"Voir $LOG\" -i dialog-error -u critical
-          fi
-        " < /dev/null > /dev/null 2>&1 &
-        disown
+        if ${pkgs.nix}/bin/nix flake update nixpkgs --flake "$FLAKE_DIR" > "$LOG" 2>&1; then
+          $NOTIFY "󰄬 Mises à jour NixOS" "flake.lock mis à jour, rebuild pour appliquer." -i software-update-available -u normal
+        else
+          $NOTIFY "󰀪 Échec mise à jour NixOS" "Voir $LOG" -i dialog-error -u critical
+        fi
       fi
     fi
   '';
@@ -41,11 +40,15 @@ in
       Description = "Vérifie les mises à jour nixpkgs disponibles";
       After = [ "hyprland-session.target" "network-online.target" ];
       PartOf = [ "hyprland-session.target" ];
+      # Ne pas relancer la vérif (et la notif) à chaque home-manager switch
+      X-SwitchMethod = "keep-old";
     };
     Service = {
-      Type = "oneshot";
+      # simple : notify-send -A attend le clic, pas de timeout de démarrage
+      Type = "simple";
+      # Reste "active" après exécution → sd-switch ne le relance pas au rebuild
+      RemainAfterExit = true;
       ExecStart = "${check-nixos-updates}/bin/check-nixos-updates";
-      TimeoutStartSec = 15;
     };
     Install = {
       WantedBy = [ "hyprland-session.target" ];
