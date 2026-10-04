@@ -8,7 +8,8 @@ let
 
     [ -f "$LOCK" ] || exit 0
 
-    CURRENT_REV=$(${pkgs.jq}/bin/jq -r '.nodes.nixpkgs.locked.rev' "$LOCK")
+    # Passer par root.inputs : le nœud "nixpkgs" peut être celui d'un autre input (ex: claude-desktop)
+    CURRENT_REV=$(${pkgs.jq}/bin/jq -r '.nodes[.nodes.root.inputs.nixpkgs].locked.rev' "$LOCK")
     LATEST_REV=$(${pkgs.coreutils}/bin/timeout 10 ${pkgs.git}/bin/git ls-remote https://github.com/NixOS/nixpkgs nixos-unstable 2>/dev/null | cut -f1)
 
     [ -z "$LATEST_REV" ] && exit 0
