@@ -818,6 +818,12 @@ let notionTodo = ./modules/notion-todo.nix; in
         "match:class netfix, center 1"
         "match:class netfix, animation popin"
 
+        # Désinstallation (clic droit du menu d'applications) : terminal flottant centré
+        "match:class app-uninstall, float 1"
+        "match:class app-uninstall, size 760 480"
+        "match:class app-uninstall, center 1"
+        "match:class app-uninstall, animation popin"
+
         # Menu Notion TO DO
         "match:class notion-todo, float 1"
         "match:class notion-todo, center 1"

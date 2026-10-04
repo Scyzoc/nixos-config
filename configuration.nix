@@ -131,6 +131,11 @@
   # GNOME Desktop Environment
   services.desktopManager.gnome.enable = true; # Re-enabled as Nautilus requires GNOME components
 
+  # Applis GNOME de base retirées (commande `uninstall`)
+  environment.gnome.excludePackages = with pkgs; [
+    gnome-calculator
+  ];
+
   # GNOME services that might have been removed
   services.gvfs.enable = true;
   programs.dconf.enable = true;

@@ -182,7 +182,7 @@ let
     set -u
     APP_ID=""
     if [ "''${1:-}" = "--app" ]; then
-      APP_ID="''${2:-}"; APP_ID="''${APP_ID%.desktop}"
+      APP_ID="''${2:-}"
       set --
     fi
     HOME_NIX=/etc/nixos/home.nix
@@ -297,8 +297,9 @@ let
       done
       APP_NOM=$APP_ID
       if [ -n "$FICHIER" ]; then
-        n=$(sed -n 's/^Name\[fr\]=//p' "$FICHIER" | head -1)
-        [ -z "$n" ] && n=$(sed -n 's/^Name=//p' "$FICHIER" | head -1)
+        # Section principale seulement (pas les actions « Nouvelle fenêtre »…)
+        n=$(sed -n '/^\[Desktop Entry\]/,/^\[/{s/^Name\[fr\]=//p}' "$FICHIER" | head -1)
+        [ -z "$n" ] && n=$(sed -n '/^\[Desktop Entry\]/,/^\[/{s/^Name=//p}' "$FICHIER" | head -1)
         [ -n "$n" ] && APP_NOM=$n
       fi
 
@@ -319,13 +320,15 @@ let
         if [ -n "$FICHIER" ]; then
           STORE=$(readlink -f "$FICHIER"); STORE=''${STORE#/nix/store/*-}; STORE=''${STORE%%/*}
         fi
-        POS=$(printf '%s\n' "$LISTE" | $AWK -F'\t' -v s="$STORE" -v id="$APP_ID" '
-          # « discord-0.0.90 » ou « rustdesk » ↔ discord / rustdesk
+        # « discord-0.0.90 », « prismlauncher-unwrapped-11.0.3 » ou « rustdesk » ↔ attribut ;
+        # sinon id ou nom de l'appli = attribut (.desktop maison : Parabolic ↔ parabolic)
+        POS=$(printf '%s\n' "$LISTE" | $AWK -F'\t' -v s="$STORE" -v id="$APP_ID" -v nom="$APP_NOM" '
           function va(s, x) { return s == x || (index(s, x "-") == 1 && substr(s, length(x) + 2, 1) ~ /[0-9]/) }
+          BEGIN { sub(/-unwrapped/, "", s); id = tolower(id); nom = tolower(nom) }
           $1 ~ /^web:/ { next }
           {
             x = $2; sub(/.*\./, "", x); y = x; sub(/^gnome-/, "", y)
-            if ((s != "" && (va(s, x) || va(s, y))) || tolower(id) == tolower(x)) { print $1; exit }
+            if ((s != "" && (va(s, x) || va(s, y))) || id == tolower(x) || nom == tolower(x)) { print $1; exit }
           }')
       fi
       if [ -n "$POS" ]; then
@@ -333,8 +336,13 @@ let
           | ${pkgs.util-linux}/bin/column -t -s $'\t' -o '  ')
       fi
       if [ -z "$APP_CHOIX" ]; then
-        echo "''${Y}󰅚''${R} Paquet de « $APP_NOM » introuvable dans home.nix (paquet système ou dépendance ?)."
-        echo "Choisis-le dans la liste (Échap = quitter)."
+        echo "''${Y}󰅚''${R} Paquet de « $APP_NOM » introuvable dans home.packages."
+        # Piste : paquet système, ou activé par une option programs.X / services.X
+        RACINE=''${STORE%%-[0-9]*}
+        [ -n "$RACINE" ] && grep -n -F -- "$RACINE" "$SYS_NIX" "$HOME_NIX" | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' | head -3 \
+          | sed 's|^/etc/nixos/||; s/^/   déclaré ici ? /'
+        echo "Choisis-le dans la liste si tu le vois, sinon Échap (à retirer à la main)."
+        read -r -p "Entrée pour ouvrir la liste… " _ || exit 0
         set -- "$APP_NOM"
       fi
     fi

@@ -33,6 +33,7 @@ PanelWindow {
         win.screen = Quickshell.screens.find(s => s.name === m?.name) ?? Quickshell.screens[0];
         search.text = "";
         category = "all";
+        menuEntry = null;
         closeTimer.stop();
         visible = true;
         open = true;
@@ -41,6 +42,7 @@ PanelWindow {
         search.forceActiveFocus();
     }
     function hide() {
+        menuEntry = null;
         open = false;
         closeTimer.restart();
     }
@@ -199,6 +201,23 @@ PanelWindow {
         else webSearch();
     }
 
+    // --- Menu contextuel (clic droit / touche Menu) ------------------------------------
+    property var menuEntry: null
+    property point menuPos: Qt.point(0, 0)
+    function openMenu(e, item, x, y) {
+        menuPos = item.mapToItem(panel, x, y);
+        menuEntry = e;
+    }
+    // Désinstallation : commande `uninstall --app` (modules/nixinstall.nix) dans un kitty
+    // flottant, qui confirme puis rebuild ; reste ouvert pour lire le résultat
+    function uninstall(e) {
+        if (!e) return;
+        hide();
+        const sh = Paths.userBin + "/uninstall --app " + shq(e.id)
+                 + "; echo; read -r -p 'Entrée pour fermer… ' _";
+        Hyprland.dispatch("exec " + Paths.kitty + " --class app-uninstall -e sh -c " + shq(sh));
+    }
+
     function iconSource(e) {
         const i = e.icon ?? "";
         if (i.startsWith("/")) return "file://" + i;
@@ -274,7 +293,13 @@ PanelWindow {
                             const ctrl = event.modifiers & Qt.ControlModifier;
                             event.accepted = true;
                             switch (event.key) {
-                            case Qt.Key_Escape: win.hide(); break;
+                            case Qt.Key_Escape:
+                                if (win.menuEntry) win.menuEntry = null;
+                                else win.hide();
+                                break;
+                            case Qt.Key_Menu:
+                                if (grid.currentItem) win.openMenu(win.results[grid.currentIndex], grid.currentItem, grid.currentItem.width / 2, grid.currentItem.height / 2);
+                                break;
                             case Qt.Key_Down: grid.moveCurrentIndexDown(); break;
                             case Qt.Key_Up: grid.moveCurrentIndexUp(); break;
                             case Qt.Key_Left: grid.moveCurrentIndexLeft(); break;
@@ -469,8 +494,14 @@ PanelWindow {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 // Souris bougée seulement : le défilement au clavier ne vole pas la sélection
-                                onPositionChanged: grid.currentIndex = cell.index
-                                onClicked: win.launch(cell.modelData)
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                onPositionChanged: if (!win.menuEntry) grid.currentIndex = cell.index
+                                onClicked: mouse => {
+                                    if (mouse.button === Qt.RightButton) {
+                                        grid.currentIndex = cell.index;
+                                        win.openMenu(cell.modelData, cell, mouse.x, mouse.y);
+                                    } else win.launch(cell.modelData);
+                                }
                             }
                         }
                     }
@@ -527,7 +558,7 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: 14
                 Repeater {
-                    model: [["Entrée", "lancer"], ["Tab", "catégorie"], ["Ctrl+B", "recherche web"], ["Échap", "fermer"]]
+                    model: [["Entrée", "lancer"], ["Tab", "catégorie"], ["Ctrl+B", "recherche web"], ["Clic droit", "désinstaller"], ["Échap", "fermer"]]
                     RowLayout {
                         required property var modelData
                         spacing: 6
@@ -544,6 +575,98 @@ PanelWindow {
                     }
                 }
                 Item { Layout.fillWidth: true }
+            }
+        }
+
+        // Menu contextuel ; clic en dehors (dans le panneau) → fermeture
+        MouseArea {
+            anchors.fill: parent
+            visible: win.menuEntry !== null
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: win.menuEntry = null
+        }
+        Rectangle {
+            id: ctxMenu
+            visible: win.menuEntry !== null
+            width: 200
+            height: ctxCol.implicitHeight + 12
+            x: Math.min(win.menuPos.x, panel.width - width - 8)
+            y: Math.min(win.menuPos.y, panel.height - height - 8)
+            radius: 12
+            color: Qt.rgba(30 / 255, 30 / 255, 30 / 255, 0.97)
+            border.color: Theme.border
+            border.width: 1
+
+            opacity: visible ? 1 : 0
+            scale: visible ? 1 : 0.9
+            transformOrigin: Item.TopLeft
+            Behavior on opacity { NumberAnimation { duration: 120 } }
+            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutBack } }
+
+            Column {
+                id: ctxCol
+                anchors.fill: parent
+                anchors.margins: 6
+                spacing: 2
+
+                BarText {
+                    width: parent.width
+                    leftPadding: 8
+                    rightPadding: 8
+                    topPadding: 4
+                    bottomPadding: 4
+                    text: win.menuEntry?.name ?? ""
+                    elide: Text.ElideRight
+                    font.pixelSize: 11
+                    color: Theme.muted
+                }
+
+                Repeater {
+                    model: [
+                        { label: "Lancer", icon: 0xf040a, color: Theme.text, act: "launch" },
+                        { label: "Désinstaller", icon: 0xf0a7a, color: Theme.red, act: "uninstall" }
+                    ]
+                    Rectangle {
+                        id: ctxRow
+                        required property var modelData
+                        width: ctxCol.width
+                        height: 32
+                        radius: 8
+                        color: ctxMa.containsMouse ? Theme.rowHover : "transparent"
+                        Behavior on color { ColorAnimation { duration: 100 } }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            spacing: 10
+                            BarText {
+                                text: Theme.ic(ctxRow.modelData.icon)
+                                font.pixelSize: 15
+                                color: ctxRow.modelData.color
+                                Layout.preferredWidth: 18
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                            BarText {
+                                Layout.fillWidth: true
+                                text: ctxRow.modelData.label
+                                color: ctxRow.modelData.color
+                            }
+                        }
+                        MouseArea {
+                            id: ctxMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                const e = win.menuEntry;
+                                win.menuEntry = null;
+                                if (ctxRow.modelData.act === "launch") win.launch(e);
+                                else win.uninstall(e);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
