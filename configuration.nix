@@ -134,6 +134,7 @@
   # Applis GNOME de base retirées (commande `uninstall`)
   environment.gnome.excludePackages = with pkgs; [
     gnome-calculator
+    gnome-contacts
   ];
 
   # GNOME services that might have been removed
