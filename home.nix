@@ -1025,53 +1025,8 @@ let notionTodo = ./modules/notion-todo.nix; in
   # BTS SIO — Correctifs applications
   # ==========================================================================
 
-  xdg.desktopEntries.google-drive = {
-    name = "Google Drive";
-    comment = "Ouvrir Google Drive";
-    exec = "brave --app=https://drive.google.com";
-    terminal = false;
-    type = "Application";
-    icon = "google-drive";
-    startupNotify = true;
-    categories = [ "Network" "WebBrowser" ];
-  };
-
-  xdg.desktopEntries.whatsapp = {
-    name = "WhatsApp";
-    comment = "Ouvrir WhatsApp Web";
-    exec = "brave --app=https://web.whatsapp.com";
-    terminal = false;
-    type = "Application";
-    # Nom distinct : Papirus fournit déjà une icône "whatsapp" qui masquerait la nôtre
-    icon = "whatsapp-web";
-    startupNotify = true;
-    categories = [ "Network" "InstantMessaging" ];
-  };
-  xdg.dataFile."icons/hicolor/scalable/apps/whatsapp-web.svg".source = ./assets/whatsapp-icon.svg;
-
-  xdg.desktopEntries.soundcloud = {
-    name = "SoundCloud";
-    comment = "Ouvrir SoundCloud";
-    exec = "brave --app=https://soundcloud.com";
-    terminal = false;
-    type = "Application";
-    icon = "soundcloud";
-    startupNotify = true;
-    categories = [ "AudioVideo" "Audio" "Player" ];
-  };
-  xdg.dataFile."icons/hicolor/scalable/apps/soundcloud.svg".source = ./assets/soundcloud-icon.svg;
-
-  xdg.desktopEntries.atlas = {
-    name = "Atlas";
-    comment = "Ouvrir Atlas (homelab)";
-    exec = "brave --app=https://atlas.homelab.lan";
-    terminal = false;
-    type = "Application";
-    # Nom distinct pour éviter une éventuelle icône "atlas" du thème Papirus
-    icon = "atlas-homelab";
-    startupNotify = true;
-    categories = [ "Network" "Office" ];
-  };
+  # Applis web (Drive, WhatsApp, SoundCloud, Atlas…) → modules/webapps.nix + commande `webapp`
+  # Icône "atlas-homelab" gardée ici : utilisée par les notifications d'atlas-task
   xdg.dataFile."icons/hicolor/scalable/apps/atlas-homelab.svg".source = ./assets/atlas-icon.svg;
 
   # VMware : forcer XWayland + exposer le thème hicolor embarqué du paquet

@@ -1,8 +1,53 @@
 [
   {
+    "id": "atlas",
+    "name": "Atlas",
+    "url": "https://atlas.homelab.lan",
+    "icon": "atlas.svg",
+    "comment": "Ouvrir Atlas (homelab)",
+    "categories": [
+      "Network",
+      "Office"
+    ]
+  },
+  {
+    "id": "google-drive",
+    "name": "Google Drive",
+    "url": "https://drive.google.com",
+    "icon": "google-drive.svg",
+    "comment": "Ouvrir Google Drive",
+    "categories": [
+      "Network",
+      "WebBrowser"
+    ]
+  },
+  {
     "id": "rustdesk",
     "name": "RustDesk",
     "url": "https://rustdesk.com/web/",
     "icon": "rustdesk.svg"
+  },
+  {
+    "id": "soundcloud",
+    "name": "SoundCloud",
+    "url": "https://soundcloud.com",
+    "icon": "soundcloud.svg",
+    "comment": "Ouvrir SoundCloud",
+    "categories": [
+      "AudioVideo",
+      "Audio",
+      "Player"
+    ]
+  },
+  {
+    "id": "whatsapp",
+    "name": "WhatsApp",
+    "url": "https://web.whatsapp.com",
+    "icon": "whatsapp.svg",
+    "comment": "Ouvrir WhatsApp Web",
+    "categories": [
+      "Network",
+      "InstantMessaging"
+    ]
   }
 ]

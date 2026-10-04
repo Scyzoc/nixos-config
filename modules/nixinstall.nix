@@ -172,7 +172,8 @@ let
   '';
 
   # Commande `uninstall` : liste les paquets de home.packages (lignes simples et
-  # blocs enveloppés type override/symlinkJoin ; scripts maison exclus),
+  # blocs enveloppés type override/symlinkJoin ; scripts maison exclus) et les
+  # applis web de modules/webapps/apps.json,
   # sélection fzf (filtre optionnel en argument), retire la ligne + son commentaire
   # juste au-dessus, puis rebuild. Rebuild raté → home.nix restauré.
   nixuninstall = pkgs.writeShellScriptBin "uninstall" ''
@@ -180,6 +181,9 @@ let
     HOME_NIX=/etc/nixos/home.nix
     FZF=${pkgs.fzf}/bin/fzf
     AWK=${pkgs.gawk}/bin/awk
+    JQ=${pkgs.jq}/bin/jq
+    WEB_DIR=/etc/nixos/modules/webapps
+    WEB_JSON=$WEB_DIR/apps.json
     G=$'\e[32m'; C=$'\e[36m'; Y=$'\e[33m'; R=$'\e[0m'
 
     # Catégories dont les paquets servent au bureau (barre, captures, verrouillage…)
@@ -231,6 +235,9 @@ let
       }
     ' "$HOME_NIX")
 
+    # Applis web (modules/webapps.nix, commande `webapp`) : position = web:<id>
+    LISTE+=$'\n'$($JQ -r '.[] | "web:\(.id)\t\(.id)\t \tApplis web\t\(.name) — \(.url)"' "$WEB_JSON")
+
     # Sélection + confirmation ; « non » → retour à la liste, Échap → quitter
     while true; do
       CHOIX=$(printf '%s\n' "$LISTE" \
@@ -238,7 +245,7 @@ let
         | $FZF --multi --reverse --height=80% --query="$*" \
             --with-nth=2.. --prompt="retirer > " \
             --header="TAB = sélection multiple · Entrée = valider · Échap = quitter · ⚠ = utilisé par le bureau" \
-            --preview="nix eval --raw nixpkgs#{2}.meta.description 2>/dev/null" \
+            --preview="case {1} in web:*) echo 'Appli web (brave --app)' ;; *) nix eval --raw nixpkgs#{2}.meta.description 2>/dev/null ;; esac" \
             --preview-window=down,3,wrap)
       [ -z "$CHOIX" ] && { echo "Annulé."; exit 0; }
 
@@ -254,9 +261,19 @@ let
 
     SAUVEGARDE=$(mktemp)
     cp "$HOME_NIX" "$SAUVEGARDE"
+    WEB_SAUVEGARDE=$(mktemp -d)
+    cp -a "$WEB_DIR/." "$WEB_SAUVEGARDE/"
+
+    # Applis web : retirées de apps.json + icône supprimée
+    for id in $(printf '%s\n' "$LIGNES" | sed -n 's/^web://p'); do
+      rm -f "$WEB_DIR/icons/$($JQ -r --arg id "$id" '.[] | select(.id == $id) | .icon' "$WEB_JSON")"
+      $JQ --arg id "$id" 'map(select(.id != $id))' "$WEB_JSON" > "$WEB_JSON.tmp" && mv "$WEB_JSON.tmp" "$WEB_JSON"
+    done
+    # Flake : suppressions à refléter dans l'index git
+    git -C /etc/nixos add -A "$WEB_DIR"
 
     # Supprime les lignes choisies + les lignes de commentaire collées juste au-dessus
-    $AWK -v cibles="$(printf '%s\n' "$LIGNES" | tr '\n' ',')" '
+    $AWK -v cibles="$(printf '%s\n' "$LIGNES" | grep -v '^web:' | tr '\n' ',')" '
       BEGIN {
         n = split(cibles, t, ",")
         for (i = 1; i <= n; i++) if (t[i] != "") {
@@ -276,13 +293,15 @@ let
 
     echo "''${C}󰑓''${R} Rebuild en cours..."
     if sudo /run/current-system/sw/bin/nixos-rebuild switch --flake /etc/nixos#pc1; then
-      rm -f "$SAUVEGARDE"
+      rm -rf "$SAUVEGARDE" "$WEB_SAUVEGARDE"
       echo "''${G}󰄬''${R} Désinstallé : $NOMS"
       ${pkgs.libnotify}/bin/notify-send "Désinstallation" "Retiré : $NOMS"
     else
       cat "$SAUVEGARDE" > "$HOME_NIX"
-      rm -f "$SAUVEGARDE"
-      echo "''${Y}󰅚''${R} Rebuild échoué — home.nix restauré, rien n'a été retiré." >&2
+      rm -rf "$WEB_DIR"; mkdir -p "$WEB_DIR"; cp -a "$WEB_SAUVEGARDE/." "$WEB_DIR/"
+      git -C /etc/nixos add -A "$WEB_DIR"
+      rm -rf "$SAUVEGARDE" "$WEB_SAUVEGARDE"
+      echo "''${Y}󰅚''${R} Rebuild échoué — home.nix et applis web restaurés, rien n'a été retiré." >&2
       exit 1
     fi
   '';

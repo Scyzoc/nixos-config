@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<!-- Icône d'appli (écran d'accueil) : symbole « Aiguille / Repère » sur blanc chaud,
+	     marge de sécurité pour les masques arrondis (iOS, Android « maskable »). -->
+	<rect width="512" height="512" rx="112" fill="#f8f7f5"/>
+	<g transform="translate(256 262) scale(11) translate(-12 -12.5)" fill="none" stroke="#2c2723" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M4 21.5 12 3.5l8 18" stroke-width="3"/>
+		<path d="M12 9.5l3 6.7-3-1.6-3 1.6z" fill="#2c2723" stroke-width="0.6"/>
+		<circle cx="12" cy="19.6" r="1.5" fill="#2c2723" stroke="none"/>
+	</g>
+</svg>

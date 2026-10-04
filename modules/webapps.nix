@@ -3,6 +3,7 @@
 let
   # Applis web (brave --app) créées par la commande `webapp` :
   # liste dans webapps/apps.json, icônes (favicon du site) dans webapps/icons/
+  # Champs optionnels par appli : comment, categories (défaut [ "Network" ])
   apps = builtins.fromJSON (builtins.readFile ./webapps/apps.json);
 
   #   webapp <url> [nom]   récupère l'icône, demande le nom, crée l'appli, rebuild
@@ -113,7 +114,7 @@ in
 
   xdg.desktopEntries = lib.listToAttrs (map (a: lib.nameValuePair "webapp-${a.id}" {
     name = a.name;
-    comment = "Ouvrir ${a.name} (appli web)";
+    comment = a.comment or "Ouvrir ${a.name} (appli web)";
     # % doit être doublé dans une ligne Exec= de .desktop
     exec = ''brave "--app=${lib.replaceStrings [ "%" ] [ "%%" ] a.url}"'';
     terminal = false;
@@ -121,6 +122,6 @@ in
     # Chemin absolu dans le store : pas de collision possible avec une icône Papirus
     icon = "${./webapps/icons + "/${a.icon}"}";
     startupNotify = true;
-    categories = [ "Network" ];
+    categories = a.categories or [ "Network" ];
   }) apps);
 }
