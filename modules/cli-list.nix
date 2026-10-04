@@ -147,7 +147,6 @@ let
       "wpctl|Contrôle audio PipeWire" \
       "awww|Fond d'écran" \
       "rofi|Lanceur / menus" \
-      "wofi|Lanceur / menus" \
       "notify-send|Envoyer une notification" \
       "swaync-client|Centre de notifications" \
       "magick|ImageMagick" \

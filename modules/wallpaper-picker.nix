@@ -76,7 +76,7 @@ let
   '';
 in
 {
-  # --- Theme Rofi pour le sélecteur de secours (style Wofi/app-launcher) ---
+  # --- Theme Rofi pour le sélecteur de secours ---
   xdg.configFile."rofi/wallpaper.rasi".text = ''
     configuration {
       show-icons: true;

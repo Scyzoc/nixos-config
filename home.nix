@@ -249,9 +249,6 @@ let notionTodo = ./modules/notion-todo.nix; in
     fsearch            # Recherche de fichiers instantanee (equivalent Everything)
     trash-cli          # Corbeille en CLI (trash-put, trash-list, trash-restore, trash-empty)
 
-    # --- Lanceurs d'applications ---
-    wofi
-
     # --- Fond d'ecran ---
     awww
     imagemagick
@@ -857,8 +854,6 @@ let notionTodo = ./modules/notion-todo.nix; in
         "blur on, match:namespace swaync-control-center"
         "ignore_alpha 0.1, match:namespace swaync-control-center"
         "blur on, match:namespace launcher"
-        "blur on, match:namespace wofi"
-        "ignore_alpha 0.1, match:namespace wofi"
         "blur on, match:namespace rofi"
         "ignore_alpha 0.1, match:namespace rofi"
         "animation fade, match:namespace rofi"
