@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "id": "rustdesk",
+    "name": "RustDesk",
+    "url": "https://rustdesk.com/web/",
+    "icon": "rustdesk.svg"
+  }
+]
