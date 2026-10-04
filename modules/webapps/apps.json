@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "id": "excalidraw",
+    "name": "Excalidraw",
+    "url": "https://excalidraw.com",
+    "icon": "excalidraw.png"
+  }
+]
