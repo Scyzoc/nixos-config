@@ -187,18 +187,6 @@ let notionTodo = ./modules/notion-todo.nix; in
     brave
     google-chrome
     (pkgs.discord.override { withOpenASAR = true; })
-    # rustdesk forcé en X11/XWayland (clavier mort sous Wayland natif), garde l'entrée du menu
-    (pkgs.symlinkJoin {
-      name = "rustdesk-x11";
-      paths = [ pkgs.rustdesk ];
-      buildInputs = [ pkgs.makeWrapper ];
-      postBuild = ''
-        wrapProgram $out/bin/rustdesk \
-          --set GDK_BACKEND x11 \
-          --set QT_QPA_PLATFORM xcb \
-          --unset WAYLAND_DISPLAY
-      '';
-    })
     remmina
     localsend
 
