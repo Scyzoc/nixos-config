@@ -22,6 +22,12 @@
     ]
   },
   {
+    "id": "nextcloud",
+    "name": "Nextcloud",
+    "url": "https://nextcloud.lan/apps/files/files",
+    "icon": "nextcloud.png"
+  },
+  {
     "id": "rustdesk",
     "name": "RustDesk",
     "url": "https://rustdesk.com/web/",
