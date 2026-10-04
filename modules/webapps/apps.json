@@ -55,5 +55,11 @@
       "Network",
       "InstantMessaging"
     ]
+  },
+  {
+    "id": "youtube",
+    "name": "YouTube",
+    "url": "https://www.youtube.com/",
+    "icon": "youtube.png"
   }
 ]
