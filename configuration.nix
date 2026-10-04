@@ -149,6 +149,7 @@
     gnome-font-viewer
     simple-scan
     seahorse
+    gnome-music
   ];
 
   # GNOME services that might have been removed
