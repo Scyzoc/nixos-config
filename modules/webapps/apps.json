@@ -34,6 +34,12 @@
     "icon": "rustdesk.svg"
   },
   {
+    "id": "snapchat",
+    "name": "Snapchat",
+    "url": "https://www.snapchat.com/web",
+    "icon": "snapchat.svg"
+  },
+  {
     "id": "soundcloud",
     "name": "SoundCloud",
     "url": "https://soundcloud.com",
