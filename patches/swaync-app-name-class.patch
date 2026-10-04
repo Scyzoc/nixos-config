@@ -1,0 +1,66 @@
+--- a/src/notification/notification.vala
++++ b/src/notification/notification.vala
+@@ -54,6 +54,7 @@
+ 
+         private bool default_action_down = false;
+         private bool default_action_in = false;
++        private string? current_app_css_class = null;
+ 
+         private int notification_body_image_height {
+             get;
+@@ -293,6 +294,7 @@
+             set_inline_reply ();
+             set_actions ();
+             set_style_urgency ();
++            set_style_app_name ();
+ 
+             Idle.add_once (() => {
+                 revealer.set_reveal_child (true);
+@@ -504,6 +506,47 @@
+             }
+         }
+ 
++        /** Sanitizes an app-name into a lowercase, dash-separated CSS class token. */
++        private string sanitize_app_name (string name) {
++            var builder = new StringBuilder ();
++            bool last_was_dash = true;
++            unichar c;
++            int index = 0;
++            while (name.get_next_char (ref index, out c)) {
++                if (c.isalnum ()) {
++                    builder.append_unichar (c.tolower ());
++                    last_was_dash = false;
++                } else if (!last_was_dash) {
++                    builder.append_c ('-');
++                    last_was_dash = true;
++                }
++            }
++            string result = builder.str;
++            if (result.has_suffix ("-")) {
++                result = result.substring (0, result.length - 1);
++            }
++            return result;
++        }
++
++        /** Adds an `app-<slug>` CSS class derived from the notification's app-name,
++          * so style.css can target notifications per source application. */
++        private void set_style_app_name () {
++            if (current_app_css_class != null) {
++                base_box.remove_css_class (current_app_css_class);
++                current_app_css_class = null;
++            }
++            string app_name = param.app_name ?? "";
++            if (app_name.length == 0) {
++                return;
++            }
++            string slug = sanitize_app_name (app_name);
++            if (slug.length == 0) {
++                return;
++            }
++            current_app_css_class = "app-%s".printf (slug);
++            base_box.add_css_class (current_app_css_class);
++        }
++
+         private void set_inline_reply () {
+             // Reset state
+             inline_reply_box.hide ();
