@@ -171,7 +171,8 @@ let
     fi
   '';
 
-  # Commande `uninstall` : liste les paquets simples (une ligne) de home.packages,
+  # Commande `uninstall` : liste les paquets de home.packages (lignes simples et
+  # blocs enveloppés type override/symlinkJoin ; scripts maison exclus),
   # sélection fzf (filtre optionnel en argument), retire la ligne + son commentaire
   # juste au-dessus, puis rebuild. Rebuild raté → home.nix restauré.
   nixuninstall = pkgs.writeShellScriptBin "uninstall" ''
@@ -184,17 +185,49 @@ let
     # Catégories dont les paquets servent au bureau (barre, captures, verrouillage…)
     SENSIBLES="|Lanceurs d'applications|Barre de statut et fond d'ecran|Capture d'ecran|Presse-papiers|Verrouillage|Emoji picker|Audio et luminosite|"
 
-    # numéro de ligne, attribut, marque, catégorie, commentaire en fin de ligne
+    # ligne (ou plage début-fin pour un bloc), attribut, marque, catégorie, commentaire
     LISTE=$($AWK -v sens="$SENSIBLES" '
+      function emit(pos, nom, com,   cat, m) {
+        cat = (c == "") ? "Autres" : c
+        m = (index(sens, "|" c "|") || nom == "polkit_gnome") ? "⚠" : " "
+        printf "%s\t%s\t%s\t%s\t%s\n", pos, nom, m, cat, com
+      }
+      # Paquet enveloppé : attribut en tête (pkgs.discord.override → discord), sinon
+      # premier pkgs.X hors outils de construction (symlinkJoin rustdesk → rustdesk).
+      # Scripts maison (writeShellScriptBin…) → "" = ignorés.
+      function nom_bloc(texte,   t, x) {
+        t = texte; sub(/^[[:space:]]*\(/, "", t); sub(/^pkgs\./, "", t)
+        match(t, /^[A-Za-z_][A-Za-z0-9_-]*/); x = substr(t, 1, RLENGTH)
+        if (x ~ /^write(Shell)?Script(Bin)?$/) return ""
+        if (x !~ /^(symlinkJoin|buildEnv|runCommand)$/) return x
+        t = texte
+        while (match(t, /pkgs\.[A-Za-z_][A-Za-z0-9_-]*/)) {
+          x = substr(t, RSTART + 5, RLENGTH - 5); t = substr(t, RSTART + RLENGTH)
+          if (x !~ /^(symlinkJoin|buildEnv|runCommand|makeWrapper|lib|stdenv)$/) return x
+        }
+        return ""
+      }
       /home\.packages = with pkgs; \[/ { p = 1; next }
-      p && /^  \];/ { exit }
-      p && /^    # --- .* ---$/ { c = $0; sub(/^    # --- /, "", c); sub(/ ---$/, "", c) }
-      p && /^    [A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*(#.*)?$/ {
+      !p { next }
+      # Dans un bloc multi-lignes : il se ferme sur la première ligne indentée de 4
+      debut && /^    [^ ]/ {
+        bloc = bloc "\n" $0; nom = nom_bloc(bloc)
+        if (nom != "") emit(debut "-" NR, nom, "(bloc de " (NR - debut + 1) " lignes)")
+        debut = 0; next
+      }
+      debut { bloc = bloc "\n" $0; next }
+      /^  \];/ { exit }
+      /^    # --- .* ---$/ { c = $0; sub(/^    # --- /, "", c); sub(/ ---$/, "", c) }
+      /^    [A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*(#.*)?$/ {
         com = ""
         if (match($0, /#.*/)) com = substr($0, RSTART)
-        cat = (c == "") ? "Autres" : c
-        m = (index(sens, "|" c "|") || $1 == "polkit_gnome") ? "⚠" : " "
-        printf "%d\t%s\t%s\t%s\t%s\n", NR, $1, m, cat, com
+        emit(NR, $1, com)
+      }
+      # Expression entre parenthèses : sur une ligne si équilibrée, sinon début de bloc
+      /^    \(/ {
+        s = $0; o = gsub(/\(/, "(", s); f = gsub(/\)/, ")", s)
+        if (o == f) { nom = nom_bloc($0); if (nom != "") emit(NR, nom, "(enveloppé)") }
+        else { debut = NR; bloc = $0 }
       }
     ' "$HOME_NIX")
 
@@ -224,7 +257,13 @@ let
 
     # Supprime les lignes choisies + les lignes de commentaire collées juste au-dessus
     $AWK -v cibles="$(printf '%s\n' "$LIGNES" | tr '\n' ',')" '
-      BEGIN { n = split(cibles, t, ","); for (i = 1; i <= n; i++) if (t[i] != "") del[t[i]] = 1 }
+      BEGIN {
+        n = split(cibles, t, ",")
+        for (i = 1; i <= n; i++) if (t[i] != "") {
+          if (split(t[i], r, "-") == 1) r[2] = r[1]
+          for (k = r[1] + 0; k <= r[2] + 0; k++) del[k] = 1
+        }
+      }
       { l[NR] = $0 }
       END {
         for (i = NR; i >= 1; i--) if (i in del) {
