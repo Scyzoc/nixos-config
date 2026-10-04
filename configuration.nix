@@ -131,10 +131,20 @@
   # GNOME Desktop Environment
   services.desktopManager.gnome.enable = true; # Re-enabled as Nautilus requires GNOME components
 
+  # IBus (méthode de saisie CJK) activé d'office par GNOME : inutile ici
+  i18n.inputMethod.enable = lib.mkForce false;
+
   # Applis GNOME de base retirées (commande `uninstall`)
   environment.gnome.excludePackages = with pkgs; [
     gnome-calculator
     gnome-contacts
+    gnome-characters
+    yelp
+    gnome-calendar
+    gnome-disk-utility
+    gnome-characters
+    gnome-clocks
+    gnome-weather
   ];
 
   # GNOME services that might have been removed
