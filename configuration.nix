@@ -147,6 +147,8 @@
     gnome-weather
     gnome-maps
     gnome-font-viewer
+    simple-scan
+    seahorse
   ];
 
   # GNOME services that might have been removed

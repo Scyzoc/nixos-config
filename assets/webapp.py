@@ -59,6 +59,11 @@ def taille(sizes):
     return max((int(w) for w, _ in re.findall(r"(\d+)x(\d+)", sizes or "")), default=0)
 
 
+def est_masque(u):
+    """Silhouette monochrome (favicon-mask.svg…) : illisible sur fond sombre."""
+    return "mask" in urllib.parse.urlparse(u).path.lower().rsplit("/", 1)[-1]
+
+
 def est_svg(u, typ=""):
     return "svg" in typ or urllib.parse.urlparse(u).path.lower().endswith(".svg")
 
@@ -78,10 +83,14 @@ def candidats(base, page):
                     if "monochrome" in i.get("purpose", "") or not i.get("src"):
                         continue
                     iu = urllib.parse.urljoin(mu, i["src"])
+                    if est_masque(iu):
+                        continue
                     t = SVG if est_svg(iu, i.get("type", "")) else taille(i.get("sizes"))
                     c.append((t - ("maskable" in i.get("purpose", "")), iu))
             except Exception:
                 pass
+        elif est_masque(u):
+            continue
         elif "icon" in rel or any(r.startswith("apple-touch-icon") for r in rel):
             t = SVG if est_svg(u, lien.get("type", "")) else taille(lien.get("sizes"))
             if not t:
@@ -121,11 +130,19 @@ def nom_suggere(page, base):
 
 def fetch(url, dest):
     page = Page()
-    try:
-        base, _, html = get(url, 2_000_000)
-        page.feed(html.decode("utf-8", "replace"))
-    except OSError as e:  # page bloquée (anti-bot…) : on tente quand même favicon.ico / Google
-        print(f"page illisible ({e}), repli sur favicon.ico", file=sys.stderr)
+    p = urllib.parse.urlparse(url)
+    racine = f"{p.scheme}://{p.netloc}/"
+    # Page protégée (401 hors connexion, ex. Nextcloud) : la racine du site redirige
+    # en général vers une page de connexion lisible qui déclare les icônes
+    for essai in dict.fromkeys((url, racine)):
+        try:
+            base, _, html = get(essai, 2_000_000)
+            page.feed(html.decode("utf-8", "replace"))
+            break
+        except OSError as e:
+            print(f"page illisible ({e}) : {essai}", file=sys.stderr)
+    else:  # site bloqué (anti-bot…) : on tente quand même favicon.ico / Google
+        print("repli sur favicon.ico", file=sys.stderr)
         base = url
     for _, u in candidats(base, page):
         try:
