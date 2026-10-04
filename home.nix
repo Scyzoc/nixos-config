@@ -49,6 +49,7 @@ let notionTodo = ./modules/notion-todo.nix; in
     ./modules/driver-update.nix
     ./modules/cli-list.nix
     ./modules/nixinstall.nix
+    ./modules/webapps.nix
   ];
 
   # ==========================================================================
