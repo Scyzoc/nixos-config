@@ -48,7 +48,7 @@ PanelWindow {
         { value: "terminee", label: "Terminée", icon: 0xf05e0, color: Theme.green }
     ]
     readonly property var priorityOptions: [
-        { value: "auto", label: "Auto", icon: 0xf0068, color: Theme.mauve },
+        { value: "auto", label: "Auto", icon: 0xf0068, color: Theme.text },
         { value: "basse", label: "Basse", icon: 0xf0140, color: Theme.blue },
         { value: "normale", label: "Normale", icon: 0xf01fc, color: Theme.subtext },
         { value: "haute", label: "Haute", icon: 0xf0143, color: Theme.peach },
@@ -66,8 +66,8 @@ PanelWindow {
         { value: "controle", label: "Contrôle", icon: 0xf0dc9, color: Theme.yellow },
         { value: "epreuve", label: "Épreuve", icon: 0xf002a, color: Theme.red }
     ]
-    // Couleur de matière : « var(--accent) » (CSS de l'appli) → mauve
-    function courseColor(c) { return /^#[0-9a-f]{3,8}$/i.test(c ?? "") ? c : Theme.mauve; }
+    // Couleur de matière : « var(--accent) » (CSS de l'appli) → blanc
+    function courseColor(c) { return /^#[0-9a-f]{3,8}$/i.test(c ?? "") ? c : Theme.text; }
     readonly property var courseOptions: courses.map(c => ({
         value: c.id, label: c.name, icon: 0xf0b64, color: courseColor(c.color)
     }))
@@ -382,7 +382,7 @@ PanelWindow {
     }
 
     // --- Éléments réutilisés -----------------------------------------------------------
-    readonly property color focusBorder: Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.6)
+    readonly property color focusBorder: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.6)
 
     component FormLabel: Text {
         color: Theme.subtext
@@ -416,7 +416,7 @@ PanelWindow {
         radius: 9
         color: sbMa.containsMouse ? Theme.rowHover : Theme.pill
         border.width: 1
-        border.color: activeFocus || sb.menuOpen ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.6) : Theme.pillBorder
+        border.color: activeFocus || sb.menuOpen ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.6) : Theme.pillBorder
         activeFocusOnTab: true
         Behavior on color { ColorAnimation { duration: 120 } }
         Keys.onPressed: event => {
@@ -476,7 +476,7 @@ PanelWindow {
         radius: 9
         color: Theme.pill
         border.width: 1
-        border.color: ti.activeFocus ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.6) : Theme.pillBorder
+        border.color: ti.activeFocus ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.6) : Theme.pillBorder
         Behavior on border.color { ColorAnimation { duration: 150 } }
         BarText {
             visible: tb.icon !== 0
@@ -494,7 +494,7 @@ PanelWindow {
             anchors.rightMargin: 12
             verticalAlignment: TextInput.AlignVCenter
             color: Theme.text
-            selectionColor: Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.4)
+            selectionColor: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.4)
             font.family: Theme.labelFont
             font.pixelSize: 14
             clip: true
@@ -521,10 +521,10 @@ PanelWindow {
         implicitWidth: 38
         implicitHeight: 38
         radius: 10
-        color: hb.active ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.18)
+        color: hb.active ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.18)
              : hbMa.containsMouse ? Theme.pillHover : Theme.pill
         border.width: 1
-        border.color: hb.active ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.6) : Theme.pillBorder
+        border.color: hb.active ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.6) : Theme.pillBorder
         Behavior on color { ColorAnimation { duration: 120 } }
         scale: hbMa.pressed ? 0.9 : 1
         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutBack } }
@@ -532,7 +532,7 @@ PanelWindow {
             anchors.centerIn: parent
             text: Theme.ic(hb.icon)
             font.pixelSize: 18
-            color: hb.active ? Theme.mauve : hbMa.containsMouse ? Theme.text : Theme.subtext
+            color: hb.active ? Theme.text : hbMa.containsMouse ? Theme.text : Theme.subtext
         }
         MouseArea {
             id: hbMa
@@ -947,7 +947,7 @@ PanelWindow {
                                 id: notesEdit
                                 width: notesFlick.width
                                 color: Theme.text
-                                selectionColor: Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.4)
+                                selectionColor: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.4)
                                 font.family: Theme.labelFont
                                 font.pixelSize: 14
                                 wrapMode: TextEdit.Wrap
@@ -1030,8 +1030,8 @@ PanelWindow {
                         // Devoir incomplet (matière, prof, date) : bouton estompé, comme dans l'appli
                         opacity: win.homework && !win.hwReady ? 0.45 : 1
                         Behavior on opacity { NumberAnimation { duration: 150 } }
-                        color: win.busy ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.5)
-                             : createMa.containsMouse ? Qt.lighter(Theme.mauve, 1.08) : Theme.mauve
+                        color: win.busy ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.5)
+                             : createMa.containsMouse ? Qt.lighter(Theme.text, 1.08) : Theme.text
                         Behavior on color { ColorAnimation { duration: 120 } }
                         scale: createMa.pressed ? 0.95 : 1
                         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutBack } }
@@ -1183,7 +1183,7 @@ PanelWindow {
                             visible: row.modelData.value === win.menuValue
                             text: Theme.ic(0xf012c)    // md-check
                             font.pixelSize: 15
-                            color: Theme.mauve
+                            color: Theme.text
                         }
                     }
                     MouseArea {
@@ -1314,9 +1314,9 @@ PanelWindow {
                             width: grid.cell
                             height: 32
                             radius: 8
-                            color: chosen ? Theme.mauve : cursor || dayMa.containsMouse ? Theme.rowHover : "transparent"
+                            color: chosen ? Theme.text : cursor || dayMa.containsMouse ? Theme.rowHover : "transparent"
                             border.width: today && !chosen ? 1 : 0
-                            border.color: Theme.mauve
+                            border.color: Theme.text
                             Text {
                                 anchors.centerIn: parent
                                 text: day.d.getDate()
