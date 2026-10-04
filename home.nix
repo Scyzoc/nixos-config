@@ -209,7 +209,6 @@ let notionTodo = ./modules/notion-todo.nix; in
     vscode
     opencode
     claude-code
-    claude-desktop-with-fhs
     openssl
 
 

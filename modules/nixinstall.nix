@@ -431,6 +431,15 @@ let
       }
     ' "$SAUVEGARDE" > "$HOME_NIX.tmp" && cat "$HOME_NIX.tmp" > "$HOME_NIX" && rm -f "$HOME_NIX.tmp"
 
+    # Rebuild maintenant ou plus tard (modifs gardées dans les fichiers)
+    read -r -p "Rebuild maintenant ? [O/n] " rep
+    if [[ "$rep" =~ ^[nN]$ ]]; then
+      rm -rf "$SAUVEGARDE" "$SYS_SAUVEGARDE" "$WEB_SAUVEGARDE"
+      echo "''${Y}󰔟''${R} Retiré de la config : $NOMS— effectif au prochain rebuild"
+      echo "   sudo nixos-rebuild switch --flake /etc/nixos#pc1"
+      exit 0
+    fi
+
     echo "''${C}󰑓''${R} Rebuild en cours..."
     if sudo /run/current-system/sw/bin/nixos-rebuild switch --flake /etc/nixos#pc1; then
       rm -rf "$SAUVEGARDE" "$SYS_SAUVEGARDE" "$WEB_SAUVEGARDE"
