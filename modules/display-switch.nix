@@ -1,7 +1,9 @@
-{ pkgs, lib, ... }:
+{ config, pkgs, lib, ... }:
 
 let
   HYPR   = "${pkgs.hyprland}/bin/hyprctl";
+  # Script de wallpaper-picker.nix (réaffiche le dernier fond sur tous les écrans)
+  WALLPAPER_RESTORE = "${config.home.profileDirectory}/bin/wallpaper-restore";
   JQ     = "${pkgs.jq}/bin/jq";
   NOTIFY = "${pkgs.libnotify}/bin/notify-send";
   ROFI   = "${pkgs.rofi}/bin/rofi";
@@ -493,10 +495,11 @@ let
     # Laisse Hyprland finir d'appliquer les écrans avant de lire leur état.
     sleep 1
     ${workspace-bind}/bin/workspace-bind
+    # Écrans renommés / reconfigurés : sans ça, un écran branché peut rester sans fond
+    ${WALLPAPER_RESTORE}
 
     # Horodatage de fin : la fenêtre anti-rafale part de la fin réelle.
     date +%s > "$STAMP_FILE"
-
   '';
 
   # ==========================================================================
@@ -711,6 +714,9 @@ let
       case "$ETYPE" in
 
         monitoradded)
+          # Fond d'écran réappliqué dans tous les cas, même quand display-apply
+          # n'est pas lancé (verrou, nwg-displays, anti-rafale)
+          ( sleep 4; ${WALLPAPER_RESTORE} ) >/dev/null 2>&1 &
           [ -f "${LOCK_FILE}" ] && continue
           # nwg-displays déclenche lui-même des events monitoradded/removed
           # en interne quand on applique un changement (sans débranchement
