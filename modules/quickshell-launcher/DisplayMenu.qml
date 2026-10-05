@@ -194,7 +194,7 @@ PanelWindow {
         id: panel
         anchors.centerIn: parent
         width: Math.min(760, parent.width - 80)
-        height: 440
+        height: 520
         radius: 20
         color: Qt.rgba(22 / 255, 22 / 255, 22 / 255, 0.88)
         border.color: Theme.border
@@ -381,7 +381,7 @@ PanelWindow {
             Rectangle {
                 id: map
                 Layout.fillWidth: true
-                Layout.preferredHeight: 150
+                Layout.preferredHeight: 210
                 radius: 14
                 color: Theme.pill
                 border.color: Theme.pillBorder
