@@ -496,37 +496,36 @@ PanelWindow {
                 }
             }
 
-                        // Écrans désactivés (absents de la carte) : sélectionnables ici
-                        Flow {
-                            Layout.fillWidth: true
-                            visible: win.monitors.some(m => m.disabled)
-                            spacing: 6
-                            Repeater {
-                                model: win.monitors.filter(m => m.disabled)
-                                Chip {
-                                    required property var modelData
-                                    label: win.monLabel(modelData)
-                                    glyph: modelData.name === "eDP-1" ? 0xf0322 : 0xf0379
-                                    active: modelData.name === win.selected
-                                    opacity: 0.6
-                                    onClicked: win.selected = modelData.name
-                                }
-                            }
-                        }
-
-                        // Activer / désactiver (écrans externes)
+                        // Écrans désactivés (absents de la carte) : sélectionnables ici ;
+                        // à droite, bouton on/off de l'écran externe sélectionné
                         RowLayout {
                             Layout.fillWidth: true
-                            visible: win.sel !== null && win.sel.name !== "eDP-1"
+                            visible: win.monitors.some(m => m.disabled) || (win.sel !== null && win.sel.name !== "eDP-1")
+                            spacing: 6
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Repeater {
+                                    model: win.monitors.filter(m => m.disabled)
+                                    Chip {
+                                        required property var modelData
+                                        label: win.monLabel(modelData)
+                                        glyph: modelData.name === "eDP-1" ? 0xf0322 : 0xf0379
+                                        active: modelData.name === win.selected
+                                        opacity: 0.6
+                                        onClicked: win.selected = modelData.name
+                                    }
+                                }
+                            }
                             Chip {
+                                visible: win.sel !== null && win.sel.name !== "eDP-1"
                                 glyph: 0xf0425    // md-power
-                                label: win.sel && win.sel.disabled ? "On" : "Off"
+                                label: ""
                                 accent: win.sel && win.sel.disabled ? Theme.green : Theme.red
                                 active: true
                                 onClicked: win.apply("set-mon", win.sel.name,
                                                      win.sel.disabled ? "preferred,auto,1" : "disable")
                             }
-                            Item { Layout.fillWidth: true }
                         }
 
                         // Résolution
