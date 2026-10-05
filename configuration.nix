@@ -505,6 +505,9 @@
   # `nix-collect-garbage` ne sait pas compter les générations, donc on supprime
   # d'abord les anciennes avec `nix-env --delete-generations +5` (système et
   # home-manager), puis le GC nettoie les chemins devenus inutilisés.
+  # Limiter la taille du journal systemd
+  services.journald.settings.Journal.SystemMaxUse = "200M";
+
   nix.gc = {
     automatic = true;
     dates = "weekly";
