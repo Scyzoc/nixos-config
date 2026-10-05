@@ -58,7 +58,7 @@ PanelWindow {
     property bool cursorSet: false
     property int tab: 0             // 0 affichage, 1 réglages, 2 dispositions
     property real pos: 0            // position animée (transitions entre onglets)
-    onTabChanged: { pos = tab; if (tab !== 2) dd.opened = false; }
+    onTabChanged: { pos = tab; if (tab !== 2) { dd.opened = false; dd.endEdit(true); } }
     Behavior on pos { NumberAnimation { duration: 340; easing.type: Easing.OutCubic } }
     property string selLayout: ""   // signature (nom de fichier) de la disposition éditée
     property bool confirmDel: false
@@ -645,6 +645,21 @@ PanelWindow {
                             implicitHeight: 38
                             z: 10
                             property bool opened: false
+                            property bool editing: false
+                            function startEdit() {
+                                opened = false;
+                                editing = true;
+                                ddInput.text = win.layout ? win.layout.name : "";
+                                ddInput.forceActiveFocus();
+                                ddInput.selectAll();
+                            }
+                            function endEdit(save) {
+                                if (!editing) return;
+                                editing = false;
+                                if (save && win.layout && ddInput.text.trim() !== "" && ddInput.text !== win.layout.name)
+                                    win.edit("rename", win.layout.file, ddInput.text);
+                                keys.forceActiveFocus();
+                            }
                             readonly property real rowH: 34
 
                             Rectangle {
@@ -658,7 +673,14 @@ PanelWindow {
                                 border.width: 1
                                 Behavior on color { ColorAnimation { duration: 120 } }
                                 Behavior on border.color { ColorAnimation { duration: 150 } }
-                                RowLayout {
+                                MouseArea {
+                                    id: ddMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    enabled: win.layouts.length > 0 && !dd.editing
+                                    onClicked: dd.opened = !dd.opened
+                                    RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: 12
                                     anchors.rightMargin: 12
@@ -670,11 +692,53 @@ PanelWindow {
                                     }
                                     BarText {
                                         Layout.fillWidth: true
+                                        visible: !dd.editing
                                         text: win.layout ? win.layout.name : "…"
                                         font.pixelSize: 12
                                         elide: Text.ElideRight
                                     }
+                                    TextInput {
+                                        id: ddInput
+                                        Layout.fillWidth: true
+                                        visible: dd.editing
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        color: Theme.text
+                                        font.family: Theme.font
+                                        font.pixelSize: 12
+                                        clip: true
+                                        selectByMouse: true
+                                        onAccepted: dd.endEdit(true)
+                                        onActiveFocusChanged: if (!activeFocus) dd.endEdit(true)
+                                        Keys.onEscapePressed: dd.endEdit(false)
+                                    }
+                                    // Modifier le nom / valider
+                                    Item {
+                                        visible: win.layout !== null
+                                        implicitWidth: 26
+                                        implicitHeight: 26
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 13
+                                            color: editMa.containsMouse ? Theme.pillHover : "transparent"
+                                            Behavior on color { ColorAnimation { duration: 120 } }
+                                        }
+                                        BarText {
+                                            anchors.centerIn: parent
+                                            text: Theme.ic(dd.editing ? 0xf012c : 0xf0455)    // md-check / md-pencil
+                                            font.pixelSize: 14
+                                            color: dd.editing ? Theme.green : Theme.subtext
+                                        }
+                                        MouseArea {
+                                            id: editMa
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onPressed: mouse => mouse.accepted = true
+                                            onClicked: dd.editing ? dd.endEdit(true) : dd.startEdit()
+                                        }
+                                    }
                                     BarText {
+                                        visible: !dd.editing
                                         text: Theme.ic(0xf0140)    // md-chevron-down
                                         font.pixelSize: 16
                                         color: Theme.subtext
@@ -682,14 +746,7 @@ PanelWindow {
                                         Behavior on rotation { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                                     }
                                 }
-                                MouseArea {
-                                    id: ddMa
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    enabled: win.layouts.length > 0
-                                    onClicked: dd.opened = !dd.opened
-                                }
+                            }
                             }
 
                             // Liste déroulante : se déplie en hauteur, clippée pendant l'animation
@@ -765,16 +822,6 @@ PanelWindow {
                             text: Theme.ic(0xf056e)
                             font.pixelSize: 40
                             color: Theme.muted
-                        }
-
-                        // Nom
-                        Field {
-                            Layout.fillWidth: true
-                            visible: win.layout !== null
-                            glyph: 0xf0455    // md-pencil
-                            placeholder: "…"
-                            value: win.layout ? win.layout.name : ""
-                            onSubmitted: t => win.edit("rename", win.layout.file, t)
                         }
 
                         // Groupes de workspaces (vide = auto)
