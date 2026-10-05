@@ -845,14 +845,14 @@ PanelWindow {
                         }
                         Field {
                             Layout.fillWidth: true
-                            visible: win.layout !== null
+                            visible: win.layout !== null && win.liveMons.some(m => m.name === "eDP-1")
                             glyph: 0xf0322
                             placeholder: "auto"
                             value: win.layout ? win.layout.internal : ""
                             onSubmitted: t => win.edit("groups", win.layout.file, "internal", t)
                         }
                         Repeater {
-                            model: win.layout ? win.layout.monitors : []
+                            model: win.layout ? win.layout.monitors.filter(lm => win.liveMons.some(m => m.description === lm.description)) : []
                             Field {
                                 required property var modelData
                                 Layout.fillWidth: true
