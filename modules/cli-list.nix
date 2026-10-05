@@ -169,7 +169,7 @@ let
       "portail|Portail" \
       "theme|Changer de thème" \
       "wallpaper-picker|Choisir un fond d'écran" \
-      "display-switch|Changer de configuration écran" \
+      "display-menu|Menu des écrans (SUPER+P)" \
       "extract-here|Extraire une archive" \
       "emoji-picker|Sélecteur d'emoji" \
       "clipboard-manager|Gestionnaire presse-papier" \

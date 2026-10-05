@@ -13,6 +13,7 @@ let
     Singleton {
         readonly property string kitty: "${pkgs.kitty}/bin/kitty"
         readonly property string brave: "${pkgs.brave}/bin/brave"
+        readonly property string nwgDisplays: "${pkgs.nwg-displays}/bin/nwg-displays"
         readonly property string userBin: "${config.home.profileDirectory}/bin"
         readonly property string stateDir: "${launcherState}"
         readonly property string usageFile: "${launcherState}/usage.json"

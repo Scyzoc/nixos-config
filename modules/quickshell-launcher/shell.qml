@@ -4,7 +4,7 @@ import Quickshell
 import Quickshell.Io
 
 // Menus plein écran : applications (SUPER+R), fonds d'écran (SUPER+W), presse-papiers
-// (SUPER+V), emojis (SUPER+;), assistant (SUPER+K) et tâche Atlas (SUPER+SHIFT+T). Config Quickshell séparée de la barre : un bug ici ne la fait pas tomber.
+// (SUPER+V), emojis (SUPER+;), assistant (SUPER+K) tâche Atlas (SUPER+SHIFT+T) et écrans (SUPER+P). Config Quickshell séparée de la barre : un bug ici ne la fait pas tomber.
 // Reste chargée en arrière-plan, menus affichés par IPC (un seul à la fois) :
 //   quickshell ipc -c launcher call launcher toggle
 //   quickshell ipc -c launcher call wallpaper toggle
@@ -12,6 +12,7 @@ import Quickshell.Io
 //   quickshell ipc -c launcher call emoji toggle
 //   quickshell ipc -c launcher call assistant toggle
 //   quickshell ipc -c launcher call atlas toggle
+//   quickshell ipc -c launcher call display toggle
 ShellRoot {
     id: root
 
@@ -21,9 +22,10 @@ ShellRoot {
     EmojiPicker { id: emoji }
     AssistantPrompt { id: assistant }
     AtlasTask { id: atlas }
+    DisplayMenu { id: display }
 
     function toggleOnly(menu) {
-        for (const m of [launcher, wallpaper, clipboard, emoji, assistant, atlas])
+        for (const m of [launcher, wallpaper, clipboard, emoji, assistant, atlas, display])
             if (m !== menu && m.open) m.hide();
         menu.toggle();
     }
@@ -51,5 +53,9 @@ ShellRoot {
     IpcHandler {
         target: "atlas"
         function toggle(): void { root.toggleOnly(atlas); }
+    }
+    IpcHandler {
+        target: "display"
+        function toggle(): void { root.toggleOnly(display); }
     }
 }

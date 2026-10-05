@@ -280,7 +280,7 @@ let
     # Anti-rafale : même mode redemandé moins de 10 s après la dernière
     # application → on ne refait rien (donc aucune notif en boucle), même si
     # un event Hyprland a échappé au verrou.
-    if [ "$MODE" = "$PREV_MODE" ] && [ $(( NOW_TS - LAST_TS )) -lt 10 ]; then
+    if [ "$MODE" != "set-mon" ] && [ "$MODE" = "$PREV_MODE" ] && [ $(( NOW_TS - LAST_TS )) -lt 10 ]; then
       exit 0
     fi
     echo "$NOW_TS" > "$STAMP_FILE"
@@ -436,6 +436,13 @@ let
         sleep 1
         place_unknown
         notify_display "Mode étendu"
+        ;;
+
+      set-mon)
+        # Réglage d'un écran depuis le menu Quickshell : display-apply set-mon <nom> <règle>
+        # (règle = "WxH@RR,XxY,scale" ou "disable"). Le mode courant n'est pas modifié.
+        set_mon "$2" "$3"
+        sleep 1
         ;;
 
       save-layout)
@@ -662,37 +669,32 @@ let
   '';
 
   # ==========================================================================
-  # MENU ROFI : sélecteur manuel Super+P
+  # DISPLAY-STATE : état complet en une ligne JSON pour le menu Quickshell
+  # (SUPER+P) : { mode, sig, monitors (hyprctl), layouts [{file,name,count,current}] }
   # ==========================================================================
-  display-switch = pkgs.writeShellScriptBin "display-switch" ''
-    if pgrep -x rofi > /dev/null; then
-      pkill -x rofi
-      exit 0
+  display-state = pkgs.writeShellScriptBin "display-state" ''
+    DIR="${LAYOUT_DIR}"
+    SIG=$(${layout-sig} 2>/dev/null || true)
+    MODE=$(cat "${MODE_FILE}" 2>/dev/null || echo "")
+    LAYOUTS="[]"
+    if ls "$DIR"/*.json >/dev/null 2>&1; then
+      # Fichiers avec leur signature (nom de fichier) pour marquer l'actuelle
+      LAYOUTS=$(for f in "$DIR"/*.json; do
+        ${JQ} -c --arg f "$(basename "$f" .json)" --arg sig "$SIG" '${NORM}
+          | select((.monitors | length) > 0)
+          | {file: $f, current: ($f == $sig), count: (.monitors | length),
+             name: (.name // (.monitors | map(.description) | join(" + ")))}' "$f" 2>/dev/null
+      done | ${JQ} -cs '.')
     fi
+    ${HYPR} monitors all -j | ${JQ} -c --arg mode "$MODE" --arg sig "$SIG" --argjson layouts "$LAYOUTS" '
+      {mode: $mode, sig: $sig, layouts: $layouts,
+       monitors: map({name, description, x, y, width, height, refreshRate, scale,
+                      mirrorOf, disabled, availableModes})}'
+  '';
 
-    HAS_EXT=$(${HYPR} monitors all -j | ${JQ} -r '.[] | select(.name != "eDP-1") | .name' | head -1)
-
-    if [ -z "$HAS_EXT" ]; then
-      OPTIONS="󰌢  PC uniquement\n󰕮  Dispositions"
-    else
-      OPTIONS="󰌢  PC uniquement\n󰍺  Externe uniquement\n󰆑  Miroir\n󰊓  Étendu\n󰕮  Dispositions"
-    fi
-
-    CHOICE=$(printf "$OPTIONS" | ${ROFI} \
-      -dmenu \
-      -p "󰍹  Affichage" \
-      -theme ~/.config/rofi/display-switch.rasi \
-      -no-custom)
-
-    [ -z "$CHOICE" ] && exit 0
-
-    case "$CHOICE" in
-      *"PC uniquement"*)      ${display-apply}/bin/display-apply pc-only ;;
-      *"Externe uniquement"*) ${display-apply}/bin/display-apply external-only ;;
-      *"Miroir"*)             ${display-apply}/bin/display-apply mirror ;;
-      *"Étendu"*)             ${display-apply}/bin/display-apply extend ;;
-      *"Dispositions"*)       ${display-layouts}/bin/display-layouts ;;
-    esac
+  # SUPER+P : affiche / masque le menu Quickshell des écrans (modules/quickshell-launcher/DisplayMenu.qml)
+  display-menu = pkgs.writeShellScriptBin "display-menu" ''
+    ${config.programs.quickshell.package}/bin/quickshell ipc -c launcher call display toggle >/dev/null 2>&1
   '';
 
   # ==========================================================================
@@ -853,7 +855,6 @@ in
   # --------------------------------------------------------------------------
   # Thèmes Rofi
   # --------------------------------------------------------------------------
-  xdg.configFile."rofi/display-switch.rasi".text  = rofiTheme { width = "260px"; };
   xdg.configFile."rofi/display-layouts.rasi".text = rofiTheme { width = "520px"; };
   xdg.configFile."rofi/display-input.rasi".text   = rofiTheme { width = "520px"; input = true; };
 
@@ -870,7 +871,7 @@ in
   # --------------------------------------------------------------------------
   # Packages
   # --------------------------------------------------------------------------
-  home.packages = [ display-apply display-switch display-layouts monitor-watcher lid-watcher workspace-bind ];
+  home.packages = [ display-apply display-state display-menu display-layouts monitor-watcher lid-watcher workspace-bind ];
 
   # --------------------------------------------------------------------------
   # Services systemd user
@@ -904,10 +905,10 @@ in
   };
 
   # --------------------------------------------------------------------------
-  # Keybindings : Super+P menu, Super+Maj+P enregistrer, Super+Ctrl+P dispositions
+  # Keybindings : Super+P menu Quickshell, Super+Maj+P enregistrer, Super+Ctrl+P dispositions
   # --------------------------------------------------------------------------
   wayland.windowManager.hyprland.settings.bind = [
-    "$mainMod, P, exec, display-switch"
+    "$mainMod, P, exec, display-menu"
     "$mainMod SHIFT, P, exec, display-apply save-layout"
     "$mainMod CTRL, P, exec, display-layouts"
   ];

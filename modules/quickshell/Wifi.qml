@@ -255,10 +255,7 @@ Pill {
         ]
     }
 
-    onClicked: event => {
-        if (event.button === Qt.RightButton) Hyprland.dispatch("exec network-menu");
-        else popup.toggle();
-    }
+    onClicked: popup.toggle()
 
     BarPopup {
         id: popup
@@ -382,16 +379,6 @@ Pill {
                 accent: Theme.green
                 highlighted: VpnState.active
                 onClicked: if (!VpnState.busy) VpnState.toggle()
-            }
-            // Réglages avancés (network-menu)
-            ActionButton {
-                Layout.fillWidth: true
-                Layout.preferredWidth: 1
-                icon: Theme.ic(0xf0493)
-                onClicked: {
-                    popup.visible = false;
-                    Hyprland.dispatch("exec network-menu");
-                }
             }
         }
 

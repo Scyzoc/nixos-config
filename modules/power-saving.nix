@@ -50,61 +50,6 @@ let
   '';
 
   # ============================================================
-  # MENU ROFI : popup dépliant depuis la Waybar
-  # ============================================================
-  power-menu = pkgs.writeShellScriptBin "bat-menu" ''
-    if pgrep -x rofi > /dev/null; then
-      pkill -x rofi
-      exit 0
-    fi
-
-    STATE_FILE="/tmp/waybar_power_mode"
-    [ ! -f "$STATE_FILE" ] && echo "normal" > "$STATE_FILE"
-    MODE=$(cat "$STATE_FILE")
-
-    # Indicateur sur le mode actif
-    mark_eco=""; mark_normal=""; mark_perf=""
-    case "$MODE" in
-      eco)         mark_eco="  " ;;
-      performance) mark_perf="  " ;;
-      *)           mark_normal="  " ;;
-    esac
-
-    OPTIONS="󱠰  Éco$mark_eco\n⚡  Normal$mark_normal\n󰓅  Performance$mark_perf"
-
-    case "$MODE" in
-      eco)         SEL=0 ;;
-      normal)      SEL=1 ;;
-      performance) SEL=2 ;;
-      *)           SEL=1 ;;
-    esac
-
-    MENU_W=180
-    MENU_Y=43   # juste sous la Waybar (margin-top 5 + height 34 + gap 4)
-
-    # Injecter position et taille dans le thème Rofi (layer shell natif, pas de -normal-window)
-    # Ancré en haut à droite, avec un décalage de 10px depuis le bord droit et sous la Waybar
-    THEME_POS=$(printf 'window { location: north east; anchor: north east; x-offset: -10px; y-offset: %dpx; width: %dpx; }' \
-      "$MENU_Y" "$MENU_W")
-
-    CHOICE=$(printf "$OPTIONS" | ${pkgs.rofi}/bin/rofi \
-      -dmenu \
-      -p "" \
-      -selected-row "$SEL" \
-      -theme ~/.config/rofi/power-menu.rasi \
-      -theme-str "$THEME_POS" \
-      -no-custom)
-
-    [ -z "$CHOICE" ] && exit 0
-
-    case "$CHOICE" in
-      *Éco*)         ${apply-power-mode}/bin/apply-power-mode eco ;;
-      *Normal*)      ${apply-power-mode}/bin/apply-power-mode normal ;;
-      *Performance*) ${apply-power-mode}/bin/apply-power-mode performance ;;
-    esac
-  '';
-
-  # ============================================================
   # SCRIPT PRINCIPAL : affichage batterie + mode énergie (JSON)
   # ============================================================
   battery-status = pkgs.writeShellScriptBin "battery-status" ''
@@ -168,63 +113,5 @@ let
 
 in
 {
-  # ============================================================
-  # THEME ROFI — MENU POPUP POWER (dépliant depuis Waybar)
-  # ============================================================
-  xdg.configFile."rofi/power-menu.rasi".text = ''
-    configuration {
-      show-icons: false;
-      font: "JetBrainsMono Nerd Font 13";
-      disable-history: true;
-      kb-mode-next: "";
-      kb-mode-previous: "";
-      me-select-entry: "";
-      me-accept-entry: "MousePrimary";
-    }
-    * {
-      background-color: transparent;
-      text-color: #ffffff;
-    }
-    window {
-      width: 180px;
-      border: 2px;
-      border-color: rgba(255, 255, 255, 0.2);
-      border-radius: 0px 0px 15px 15px;
-      background-color: rgba(0, 0, 0, 0.25);
-      padding: 4px;
-    }
-    mainbox {
-      spacing: 4px;
-      children: [listview];
-    }
-    inputbar { enabled: false; height: 0; min-height: 0; }
-    listview {
-      lines: 3;
-      spacing: 4px;
-      scrollbar: false;
-      padding: 2px;
-      fixed-height: false;
-    }
-    element {
-      padding: 8px 12px;
-      border-radius: 10px;
-      orientation: horizontal;
-    }
-    element-text {
-      background-color: transparent;
-      text-color: #ffffff;
-      font: "JetBrainsMono Nerd Font 13";
-      vertical-align: 0.5;
-    }
-    element selected {
-      background-color: rgba(255, 255, 255, 0.1);
-      border: 2px;
-      border-color: rgba(255, 255, 255, 0.9);
-    }
-    element-text selected {
-      text-color: #ffffff;
-    }
-  '';
-
-  home.packages = [ apply-power-mode battery-status power-menu ];
+  home.packages = [ apply-power-mode battery-status ];
 }

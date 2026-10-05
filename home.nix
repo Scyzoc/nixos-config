@@ -20,7 +20,6 @@ let notionTodo = ./modules/notion-todo.nix; in
   imports = lib.optional (builtins.pathExists notionTodo) notionTodo ++ [
     ./modules/quickshell.nix
     ./modules/swaync.nix
-    ./modules/networkmenu.nix
     ./modules/emoji.nix
     ./modules/voice-transcription.nix
     ./modules/assistant.nix
@@ -31,7 +30,6 @@ let notionTodo = ./modules/notion-todo.nix; in
     ./modules/workspace-compact.nix
     ./modules/special-zoom.nix
     ./modules/clipboard.nix
-    ./modules/bluetooth-menu.nix
     ./modules/airpods-monitor.nix
     ./modules/airpods-ear.nix
     ./modules/power-saving.nix
@@ -455,7 +453,7 @@ let notionTodo = ./modules/notion-todo.nix; in
   # ==========================================================================
   programs.home-manager.enable = true;
 
-  # nm-applet : pas de notif "Connexion établie" (garde celle de networkmenu)
+  # nm-applet : pas de notif "Connexion établie" (Quickshell gère le réseau)
   dconf.settings."org/gnome/nm-applet".disable-connected-notifications = true;
   # nm-applet : pas de notif "Message d'identification VPN" à la connexion VPN
   dconf.settings."org/gnome/nm-applet".disable-vpn-notifications = true;
