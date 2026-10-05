@@ -13,7 +13,7 @@ Singleton {
     property bool connecting: false
     readonly property bool active: ip !== ""
 
-    function refresh() { check.running = true; }
+    function refresh() { check.running = true; unit.running = true; }
     function toggle() {
         busy = true;
         connecting = !active;
@@ -38,6 +38,22 @@ Singleton {
                 root.ip = m ? m[1] : "";
                 // État visé atteint (IP obtenue / tunnel tombé) → fin de l'effet
                 if (root.busy && root.active === root.connecting) root.done();
+            }
+        }
+    }
+    // Connexion lancée hors de la barre (commande `homelab`) : l'unité est « activating »
+    // tant que le tunnel n'est pas monté (Type=notify) → même effet que le clic
+    Process {
+        id: unit
+        command: [Paths.systemctl, "is-active", "openvpn-maison"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.trim() === "activating" && !root.busy && !root.active) {
+                    root.busy = true;
+                    root.connecting = true;
+                    settle.restart();
+                    poll.start();
+                }
             }
         }
     }
