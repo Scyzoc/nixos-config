@@ -401,6 +401,13 @@ let notionTodo = ./modules/notion-todo.nix; in
     };
   };
 
+  # vim (sans GUI) installe gvim.desktop alors que gvim n'existe pas : on masque
+  xdg.desktopEntries.gvim = {
+    name = "GVim";
+    exec = "gvim";
+    noDisplay = true;
+  };
+
   xdg.desktopEntries."Claude Code" = {
     name = "Claude Code";
     exec = "claude %U";
