@@ -194,7 +194,7 @@ PanelWindow {
         id: panel
         anchors.centerIn: parent
         width: Math.min(760, parent.width - 80)
-        height: 500
+        height: 440
         radius: 20
         color: Qt.rgba(22 / 255, 22 / 255, 22 / 255, 0.88)
         border.color: Theme.border
