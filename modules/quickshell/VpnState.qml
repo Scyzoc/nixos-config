@@ -41,14 +41,14 @@ Singleton {
             }
         }
     }
-    // Connexion lancée hors de la barre (commande `homelab`) : l'unité est « activating »
-    // tant que le tunnel n'est pas monté (Type=notify) → même effet que le clic
+    // Connexion lancée hors de la barre (commande `homelab`) : l'unité démarre vite mais
+    // le tunnel n'a pas encore d'IP (DHCP) → unité activating/active sans IP = connexion en cours
     Process {
         id: unit
         command: [Paths.systemctl, "is-active", "openvpn-maison"]
         stdout: StdioCollector {
             onStreamFinished: {
-                if (text.trim() === "activating" && !root.busy && !root.active) {
+                if (["activating", "active"].indexOf(text.trim()) >= 0 && !root.busy && !root.active) {
                     root.busy = true;
                     root.connecting = true;
                     settle.restart();
