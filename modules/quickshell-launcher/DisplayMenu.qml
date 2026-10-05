@@ -5,11 +5,11 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 
-// Menu des écrans (SUPER+P) : carte live des écrans, modes (PC / externe / miroir /
-// étendu), réglages de l'écran sélectionné (résolution, fréquence, échelle, on/off) et
-// dispositions enregistrées. Les données viennent de `display-state` (JSON), les actions
+// Menu des écrans (SUPER+P), en trois onglets : affichage (carte live des écrans et modes
+// PC / externe / miroir / étendu), réglages de l'écran sélectionné (résolution, fréquence,
+// échelle, on/off) et dispositions enregistrées (nom, groupes de workspaces). Les données viennent de `display-state` (JSON), les actions
 // passent par `display-apply` (modules/display-switch.nix) qui pose le verrou anti-boucle.
-// Touches : 1-4 modes, Tab écran suivant, Échap fermer.
+// Touches : ← → onglets, 1-4 modes, Tab écran suivant, Échap fermer.
 PanelWindow {
     id: win
 
@@ -35,7 +35,8 @@ PanelWindow {
         closeTimer.stop();
         visible = true;
         open = true;
-        managing = false;
+        tab = 0;
+        pos = 0;
         confirmDel = false;
         refresh();
         keys.forceActiveFocus();
@@ -52,7 +53,9 @@ PanelWindow {
     property var layouts: []
     property string mode: ""
     property string selected: ""    // nom du connecteur sélectionné
-    property bool managing: false   // vue de gestion des dispositions
+    property int tab: 0             // 0 affichage, 1 réglages, 2 dispositions
+    property real pos: tab          // position animée (transitions entre onglets)
+    Behavior on pos { NumberAnimation { duration: 340; easing.type: Easing.OutCubic } }
     property string selLayout: ""   // signature (nom de fichier) de la disposition éditée
     property bool confirmDel: false
     readonly property var layout: layouts.find(l => l.file === selLayout) ?? null
@@ -174,6 +177,8 @@ PanelWindow {
             event.accepted = true;
             switch (event.key) {
             case Qt.Key_Escape: win.hide(); break;
+            case Qt.Key_Left: win.tab = Math.max(0, win.tab - 1); break;
+            case Qt.Key_Right: win.tab = Math.min(2, win.tab + 1); break;
             case Qt.Key_Tab: win.nextMonitor(); break;
             case Qt.Key_1: win.setMode("pc-only"); break;
             case Qt.Key_2: win.setMode("external-only"); break;
@@ -187,8 +192,8 @@ PanelWindow {
     Rectangle {
         id: panel
         anchors.centerIn: parent
-        width: Math.min(780, parent.width - 80)
-        height: content.implicitHeight + 40
+        width: Math.min(760, parent.width - 80)
+        height: 500
         radius: 20
         color: Qt.rgba(22 / 255, 22 / 255, 22 / 255, 0.88)
         border.color: Theme.border
@@ -202,38 +207,98 @@ PanelWindow {
         MouseArea { anchors.fill: parent }    // le clic dans le panneau ne ferme pas
 
         ColumnLayout {
-            id: content
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
+            anchors.fill: parent
             anchors.margins: 20
             spacing: 16
 
-            // --- En-tête ---
+            // --- Barre d'onglets : icônes, pastille qui glisse sous l'onglet actif ---
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
-                BarText { text: Theme.ic(0xf0379); font.pixelSize: 22; color: Theme.mauve }    // md-monitor
-                BarText { text: "Affichage"; font.family: Theme.titleFont; font.pixelSize: 20; color: Theme.text }
+                spacing: 12
+
+                Rectangle {
+                    id: tabBar
+                    implicitWidth: 3 * 56 + 8
+                    implicitHeight: 44
+                    radius: 22
+                    color: Theme.pill
+                    border.color: Theme.pillBorder
+                    border.width: 1
+
+                    // Pastille mobile, suit `pos` (donc fluide, même si on change vite d'onglet)
+                    Rectangle {
+                        x: 4 + win.pos * 56
+                        y: 4
+                        width: 56
+                        height: 36
+                        radius: 18
+                        color: Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.25)
+                        border.color: Theme.mauve
+                        border.width: 1
+                    }
+                    Repeater {
+                        model: [0xf0379, 0xf0493, 0xf056e]    // moniteur, réglages, dispositions
+                        Item {
+                            required property int modelData
+                            required property int index
+                            x: 4 + index * 56
+                            y: 4
+                            width: 56
+                            height: 36
+                            readonly property real near: Math.max(0, 1 - Math.abs(win.pos - index))
+                            BarText {
+                                anchors.centerIn: parent
+                                text: Theme.ic(modelData)
+                                font.pixelSize: 19
+                                color: Theme.lerpColor(Theme.subtext, Theme.mauve, near)
+                                scale: 1 + 0.15 * near
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: win.tab = index
+                            }
+                        }
+                    }
+                }
+
                 BarText {
-                    text: win.liveMons.length + (win.liveMons.length > 1 ? " écrans actifs" : " écran actif")
-                    font.pixelSize: 12
+                    text: win.liveMons.length + "  " + Theme.ic(0xf0379)
+                    font.pixelSize: 13
                     color: Theme.muted
-                    Layout.leftMargin: 6
                 }
                 Item { Layout.fillWidth: true }
                 Chip {
-                    label: "Avancé"
-                    glyph: 0xf0493    // md-cog
+                    glyph: 0xf0493    // md-cog : nwg-displays
+                    label: ""
                     onClicked: { win.hide(); Quickshell.execDetached([Paths.nwgDisplays]); }
                 }
             }
 
+            // --- Pages : fondu + glissement selon `pos` ---
+            Item {
+                id: host
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+
+                // Page 0 : affichage
+                Item {
+                    id: page0
+                    readonly property real d: 0 - win.pos
+                    width: host.width
+                    height: host.height
+                    x: d * 70
+                    opacity: Math.max(0, 1 - Math.abs(d) * 1.6)
+                    visible: opacity > 0.01
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 16
             // --- Carte des écrans ---
             Rectangle {
                 id: map
                 Layout.fillWidth: true
-                implicitHeight: 190
+                Layout.fillHeight: true
                 radius: 14
                 color: Theme.pill
                 border.color: Theme.pillBorder
@@ -333,7 +398,7 @@ PanelWindow {
                         readonly property bool current: win.curMode === modelData.id
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
-                        implicitHeight: 92
+                        implicitHeight: 84
                         radius: 14
                         opacity: enabled ? 1 : 0.35
                         color: current ? Qt.rgba(modelData.color.r, modelData.color.g, modelData.color.b, 0.18)
@@ -350,7 +415,7 @@ PanelWindow {
                             BarText {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: Theme.ic(modelData.icon)
-                                font.pixelSize: 24
+                                font.pixelSize: 28
                                 color: modelData.color
                             }
                             BarText {
@@ -358,12 +423,6 @@ PanelWindow {
                                 text: modelData.label
                                 font.pixelSize: 13
                                 color: Theme.text
-                            }
-                            BarText {
-                                Layout.alignment: Qt.AlignHCenter
-                                text: modelData.sub
-                                font.pixelSize: 10
-                                color: Theme.muted
                             }
                         }
                         // Raccourci clavier
@@ -390,116 +449,22 @@ PanelWindow {
                 }
             }
 
-            // --- Réglages de l'écran sélectionné ---
-            Rectangle {
-                Layout.fillWidth: true
-                visible: win.sel !== null && !win.managing
-                implicitHeight: detail.implicitHeight + 24
-                radius: 14
-                color: Theme.pill
-                border.color: Theme.pillBorder
-                border.width: 1
-
-                ColumnLayout {
-                    id: detail
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    spacing: 10
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        BarText {
-                            text: win.sel ? win.sel.name + " — " + win.shortDesc(win.sel.description) : ""
-                            font.pixelSize: 13
-                            color: Theme.text
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        // Activer / désactiver un écran externe
-                        Chip {
-                            visible: win.sel !== null && win.sel.name !== "eDP-1"
-                            label: win.sel && win.sel.disabled ? "Activer" : "Désactiver"
-                            glyph: 0xf0425    // md-power
-                            accent: win.sel && win.sel.disabled ? Theme.green : Theme.red
-                            onClicked: win.apply("set-mon", win.sel.name,
-                                                 win.sel.disabled ? "preferred,auto,1" : "disable")
-                        }
                     }
+                }
 
-                    // Résolution
-                    RowLayout {
-                        Layout.fillWidth: true
-                        visible: win.sel !== null && !win.sel.disabled
-                        spacing: 8
-                        BarText { text: "Résolution"; font.pixelSize: 11; color: Theme.muted; Layout.preferredWidth: 80 }
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            Repeater {
-                                model: win.sel && !win.sel.disabled ? win.resolutions(win.sel) : []
-                                Chip {
-                                    required property string modelData
-                                    readonly property string curRes: win.sel.width + "x" + win.sel.height
-                                    label: modelData
-                                    active: modelData === curRes
-                                    onClicked: {
-                                        const r = win.rates(win.sel, modelData);
-                                        win.setRule(win.sel, modelData, r.length ? r[0].raw : Math.round(win.sel.refreshRate), win.sel.scale);
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Fréquence
-                    RowLayout {
-                        Layout.fillWidth: true
-                        visible: win.sel !== null && !win.sel.disabled
-                        spacing: 8
-                        BarText { text: "Fréquence"; font.pixelSize: 11; color: Theme.muted; Layout.preferredWidth: 80 }
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            Repeater {
-                                model: win.sel && !win.sel.disabled ? win.rates(win.sel, win.sel.width + "x" + win.sel.height) : []
-                                Chip {
-                                    required property var modelData
-                                    label: modelData.n + " Hz"
-                                    active: Math.round(win.sel.refreshRate) === modelData.n
-                                    onClicked: win.setRule(win.sel, win.sel.width + "x" + win.sel.height, modelData.raw, win.sel.scale)
-                                }
-                            }
-                        }
-                    }
-
-                    // Échelle
-                    RowLayout {
-                        Layout.fillWidth: true
-                        visible: win.sel !== null && !win.sel.disabled
-                        spacing: 8
-                        BarText { text: "Échelle"; font.pixelSize: 11; color: Theme.muted; Layout.preferredWidth: 80 }
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            Repeater {
-                                model: [1, 1.25, 1.5, 1.75, 2]
-                                Chip {
-                                    required property real modelData
-                                    label: Math.round(modelData * 100) + " %"
-                                    active: win.sel && Math.abs(win.sel.scale - modelData) < 0.01
-                                    onClicked: win.setRule(win.sel, win.sel.width + "x" + win.sel.height, Math.round(win.sel.refreshRate), modelData)
-                                }
-                            }
-                        }
-                    }
-
-                    // Sélecteur d'écran (si plusieurs, y compris désactivés)
-                    RowLayout {
-                        Layout.fillWidth: true
-                        visible: win.monitors.length > 1
-                        spacing: 8
-                        BarText { text: "Écran"; font.pixelSize: 11; color: Theme.muted; Layout.preferredWidth: 80 }
+                // Page 1 : réglages
+                Item {
+                    id: page1
+                    readonly property real d: 1 - win.pos
+                    width: host.width
+                    height: host.height
+                    x: d * 70
+                    opacity: Math.max(0, 1 - Math.abs(d) * 1.6)
+                    visible: opacity > 0.01
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 14
+                        // Écran à régler
                         Flow {
                             Layout.fillWidth: true
                             spacing: 6
@@ -507,167 +472,216 @@ PanelWindow {
                                 model: win.monitors
                                 Chip {
                                     required property var modelData
-                                    label: modelData.name + (modelData.disabled ? " (off)" : "")
+                                    label: modelData.name === "eDP-1" ? "PC" : modelData.name
                                     glyph: modelData.name === "eDP-1" ? 0xf0322 : 0xf0379
                                     active: modelData.name === win.selected
+                                    opacity: modelData.disabled ? 0.5 : 1
                                     onClicked: win.selected = modelData.name
                                 }
                             }
                         }
-                    }
-                }
-            }
 
-            // --- Dispositions enregistrées ---
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-                    BarText { text: "Dispositions"; font.pixelSize: 11; color: Theme.muted; Layout.fillWidth: true }
-                    Chip {
-                        visible: win.hasExternal
-                        label: "Enregistrer"
-                        glyph: 0xf0193    // md-content-save
-                        onClicked: win.apply("save-layout")
-                    }
-                    Chip {
-                        label: "Gérer"
-                        glyph: 0xf0493
-                        active: win.managing
-                        onClicked: { win.managing = !win.managing; win.confirmDel = false; }
-                    }
-                }
-                Flow {
-                    Layout.fillWidth: true
-                    spacing: 6
-                    Repeater {
-                        model: win.layouts
-                        Chip {
-                            required property var modelData
-                            label: modelData.name
-                            maxLabel: 330
-                            glyph: 0xf056e    // md-view-dashboard
-                            active: win.managing ? modelData.file === win.selLayout : modelData.current
-                            enabled: win.managing || modelData.current
-                            onClicked: {
-                                if (win.managing) { win.selLayout = modelData.file; win.confirmDel = false; }
-                                else win.apply("restore-layout");
+                        // Activer / désactiver (écrans externes)
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: win.sel !== null && win.sel.name !== "eDP-1"
+                            Chip {
+                                glyph: 0xf0425    // md-power
+                                label: win.sel && win.sel.disabled ? "On" : "Off"
+                                accent: win.sel && win.sel.disabled ? Theme.green : Theme.red
+                                active: true
+                                onClicked: win.apply("set-mon", win.sel.name,
+                                                     win.sel.disabled ? "preferred,auto,1" : "disable")
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        // Résolution
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: win.sel !== null && !win.sel.disabled
+                            spacing: 10
+                            BarText { text: Theme.ic(0xf0293); font.pixelSize: 20; color: Theme.mauve; Layout.preferredWidth: 28 }
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Repeater {
+                                    model: win.sel && !win.sel.disabled ? win.resolutions(win.sel) : []
+                                    Chip {
+                                        required property string modelData
+                                        readonly property string curRes: win.sel.width + "x" + win.sel.height
+                                        label: modelData
+                                        active: modelData === curRes
+                                        onClicked: {
+                                            const r = win.rates(win.sel, modelData);
+                                            win.setRule(win.sel, modelData, r.length ? r[0].raw : Math.round(win.sel.refreshRate), win.sel.scale);
+                                        }
+                                    }
+                                }
                             }
                         }
+
+                        // Fréquence
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: win.sel !== null && !win.sel.disabled
+                            spacing: 10
+                            BarText { text: Theme.ic(0xf04c5); font.pixelSize: 20; color: Theme.teal; Layout.preferredWidth: 28 }
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Repeater {
+                                    model: win.sel && !win.sel.disabled ? win.rates(win.sel, win.sel.width + "x" + win.sel.height) : []
+                                    Chip {
+                                        required property var modelData
+                                        label: modelData.n + " Hz"
+                                        accent: Theme.teal
+                                        active: Math.round(win.sel.refreshRate) === modelData.n
+                                        onClicked: win.setRule(win.sel, win.sel.width + "x" + win.sel.height, modelData.raw, win.sel.scale)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Échelle
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: win.sel !== null && !win.sel.disabled
+                            spacing: 10
+                            BarText { text: Theme.ic(0xf0349); font.pixelSize: 20; color: Theme.peach; Layout.preferredWidth: 28 }
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Repeater {
+                                    model: [1, 1.25, 1.5, 1.75, 2]
+                                    Chip {
+                                        required property real modelData
+                                        label: Math.round(modelData * 100) + " %"
+                                        accent: Theme.peach
+                                        active: win.sel && Math.abs(win.sel.scale - modelData) < 0.01
+                                        onClicked: win.setRule(win.sel, win.sel.width + "x" + win.sel.height, Math.round(win.sel.refreshRate), modelData)
+                                    }
+                                }
+                            }
+                        }
+                        Item { Layout.fillHeight: true }
                     }
                 }
-                BarText {
-                    visible: win.layouts.length === 0
-                    text: "Aucune enregistrée"
-                    font.pixelSize: 11
-                    color: Theme.muted
-                }
-            }
 
-            // --- Gestion de la disposition sélectionnée ---
-            Rectangle {
-                Layout.fillWidth: true
-                visible: win.managing && win.layout !== null
-                implicitHeight: mgr.implicitHeight + 24
-                radius: 14
-                color: Theme.pill
-                border.color: Theme.pillBorder
-                border.width: 1
+                // Page 2 : dispositions
+                Item {
+                    id: page2
+                    readonly property real d: 2 - win.pos
+                    width: host.width
+                    height: host.height
+                    x: d * 70
+                    opacity: Math.max(0, 1 - Math.abs(d) * 1.6)
+                    visible: opacity > 0.01
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 14
+                        // Barre d'actions : enregistrer l'état actuel, appliquer, supprimer
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Item { Layout.fillWidth: true }
+                            Chip {
+                                visible: win.hasExternal
+                                glyph: 0xf0193    // md-content-save
+                                label: ""
+                                accent: Theme.blue
+                                onClicked: win.apply("save-layout")
+                            }
+                            Chip {
+                                visible: win.layout !== null && win.layout.current
+                                glyph: 0xf0e1e    // md-check
+                                label: ""
+                                accent: Theme.green
+                                onClicked: win.apply("restore-layout")
+                            }
+                            Chip {
+                                visible: win.layout !== null
+                                glyph: win.confirmDel ? 0xf0e1e : 0xf01b4    // md-check / md-delete
+                                label: ""
+                                accent: Theme.red
+                                active: win.confirmDel
+                                onClicked: {
+                                    if (!win.confirmDel) { win.confirmDel = true; confirmTimer.restart(); return; }
+                                    win.confirmDel = false;
+                                    win.edit("delete", win.layout.file);
+                                }
+                            }
+                        }
 
-                ColumnLayout {
-                    id: mgr
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    spacing: 10
+                        // Dispositions enregistrées
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Repeater {
+                                model: win.layouts
+                                Chip {
+                                    required property var modelData
+                                    label: modelData.name
+                                    maxLabel: 300
+                                    glyph: modelData.current ? 0xf0e1e : 0xf056e
+                                    active: modelData.file === win.selLayout
+                                    onClicked: { win.selLayout = modelData.file; win.confirmDel = false; }
+                                }
+                            }
+                        }
+                        BarText {
+                            visible: win.layouts.length === 0
+                            Layout.alignment: Qt.AlignHCenter
+                            text: Theme.ic(0xf056e)
+                            font.pixelSize: 40
+                            color: Theme.muted
+                        }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
+                        // Nom
                         Field {
                             Layout.fillWidth: true
+                            visible: win.layout !== null
                             glyph: 0xf0455    // md-pencil
-                            placeholder: "Nom de la disposition"
+                            placeholder: "…"
                             value: win.layout ? win.layout.name : ""
                             onSubmitted: t => win.edit("rename", win.layout.file, t)
                         }
-                        Chip {
-                            visible: win.layout !== null && win.layout.current
-                            label: "Appliquer"
-                            glyph: 0xf0e1e    // md-check
-                            accent: Theme.green
-                            onClicked: win.apply("restore-layout")
-                        }
-                        Chip {
-                            label: win.confirmDel ? "Confirmer ?" : "Supprimer"
-                            glyph: 0xf01b4    // md-delete
-                            accent: Theme.red
-                            active: win.confirmDel
-                            onClicked: {
-                                if (!win.confirmDel) { win.confirmDel = true; confirmTimer.restart(); return; }
-                                win.confirmDel = false;
-                                win.edit("delete", win.layout.file);
+
+                        // Groupes de workspaces (vide = auto)
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: win.layout !== null
+                            BarText { text: Theme.ic(0xf056e); font.pixelSize: 16; color: Theme.mauve }
+                            Item { Layout.fillWidth: true }
+                            Chip {
+                                glyph: 0xf0450    // md-refresh : tout en auto
+                                label: "auto"
+                                onClicked: win.edit("reset-groups", win.layout.file)
                             }
                         }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        BarText { text: "Groupes de workspaces"; font.pixelSize: 11; color: Theme.muted; Layout.fillWidth: true }
-                        BarText { text: "ex : 11-20 ou 1,3,5-7 ; vide = auto"; font.pixelSize: 10; color: Theme.muted }
-                        Chip {
-                            label: "Tout en auto"
-                            glyph: 0xf0450    // md-refresh
-                            onClicked: win.edit("reset-groups", win.layout.file)
-                        }
-                    }
-
-                    Field {
-                        Layout.fillWidth: true
-                        glyph: 0xf0322
-                        prefix: "PC (eDP-1)"
-                        placeholder: "auto"
-                        value: win.layout ? win.layout.internal : ""
-                        onSubmitted: t => win.edit("groups", win.layout.file, "internal", t)
-                    }
-                    Repeater {
-                        model: win.layout ? win.layout.monitors : []
                         Field {
-                            required property var modelData
                             Layout.fillWidth: true
-                            glyph: 0xf0379
-                            prefix: win.shortDesc(modelData.description)
+                            visible: win.layout !== null
+                            glyph: 0xf0322
                             placeholder: "auto"
-                            value: modelData.workspaces
-                            onSubmitted: t => win.edit("groups", win.layout.file, modelData.description, t)
+                            value: win.layout ? win.layout.internal : ""
+                            onSubmitted: t => win.edit("groups", win.layout.file, "internal", t)
                         }
+                        Repeater {
+                            model: win.layout ? win.layout.monitors : []
+                            Field {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                glyph: 0xf0379
+                                prefix: win.shortDesc(modelData.description)
+                                placeholder: "auto"
+                                value: modelData.workspaces
+                                onSubmitted: t => win.edit("groups", win.layout.file, modelData.description, t)
+                            }
+                        }
+                        Item { Layout.fillHeight: true }
                     }
                 }
-            }
-
-            // --- Rappel des touches ---
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 14
-                Repeater {
-                    model: [["1-4", "mode"], ["Tab", "écran suivant"], ["Entrée", "valider un champ"], ["Échap", "fermer"]]
-                    RowLayout {
-                        required property var modelData
-                        spacing: 6
-                        Rectangle {
-                            implicitWidth: keyText.implicitWidth + 10
-                            implicitHeight: 18
-                            radius: 5
-                            color: Theme.pill
-                            border.color: Theme.pillBorder
-                            border.width: 1
-                            BarText { id: keyText; anchors.centerIn: parent; text: modelData[0]; font.pixelSize: 10; color: Theme.subtext }
-                        }
-                        BarText { text: modelData[1]; font.pixelSize: 11; color: Theme.muted }
-                    }
-                }
-                Item { Layout.fillWidth: true }
             }
         }
     }
