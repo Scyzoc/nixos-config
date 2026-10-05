@@ -161,6 +161,14 @@ PanelWindow {
             }
         return out;
     }
+    // Nom affiché d'un écran : « PC » pour l'interne, sinon la marque (1er mot de la description,
+    // numérotée si plusieurs écrans de la même marque)
+    function monLabel(m) {
+        if (m.name === "eDP-1") return "PC";
+        const brand = shortDesc(m.description).split(" ")[0] || m.name;
+        const same = externals.filter(e => (shortDesc(e.description).split(" ")[0] || e.name) === brand);
+        return same.length > 1 ? brand + " " + (same.findIndex(e => e.name === m.name) + 1) : brand;
+    }
     function shortDesc(d) {
         // "Vendor Model 0x1234" → on retire le suffixe hexadécimal
         return (d ?? "").replace(/\s+0x[0-9A-Fa-f]+$/, "");
@@ -461,7 +469,7 @@ PanelWindow {
                             }
                             BarText {
                                 Layout.alignment: Qt.AlignHCenter
-                                text: modelData.name === "eDP-1" ? "PC" : modelData.name
+                                text: win.monLabel(modelData)
                                 font.pixelSize: 12
                                 color: Theme.text
                             }
@@ -497,7 +505,7 @@ PanelWindow {
                                 model: win.monitors.filter(m => m.disabled)
                                 Chip {
                                     required property var modelData
-                                    label: modelData.name === "eDP-1" ? "PC" : modelData.name
+                                    label: win.monLabel(modelData)
                                     glyph: modelData.name === "eDP-1" ? 0xf0322 : 0xf0379
                                     active: modelData.name === win.selected
                                     opacity: 0.6
