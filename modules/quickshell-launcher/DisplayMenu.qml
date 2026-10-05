@@ -194,7 +194,12 @@ PanelWindow {
         id: panel
         anchors.centerIn: parent
         width: Math.min(760, parent.width - 80)
-        height: 520
+        // Hauteur par onglet, interpolée avec `pos` : le panneau s'adapte en glissant
+        readonly property var heights: [236, 520, 500]
+        height: {
+            const i = Math.max(0, Math.min(1.999, win.pos)), lo = Math.floor(i);
+            return heights[lo] + (heights[lo + 1] - heights[lo]) * (i - lo);
+        }
         radius: 20
         color: Qt.rgba(22 / 255, 22 / 255, 22 / 255, 0.88)
         border.color: Theme.border
@@ -298,9 +303,8 @@ PanelWindow {
             // --- Modes ---
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 200
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 12
+                Layout.alignment: Qt.AlignTop
+                spacing: 10
                 Repeater {
                     model: win.modes
                     Rectangle {
@@ -311,7 +315,7 @@ PanelWindow {
                         readonly property bool current: win.curMode === modelData.id
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
-                        Layout.fillHeight: true
+                        implicitHeight: 104
                         radius: 14
                         opacity: enabled ? 1 : 0.35
                         color: current ? Qt.rgba(modelData.color.r, modelData.color.g, modelData.color.b, 0.18)
@@ -328,7 +332,7 @@ PanelWindow {
                             BarText {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: Theme.ic(modelData.icon)
-                                font.pixelSize: 44
+                                font.pixelSize: 30
                                 color: modelData.color
                             }
                             BarText {
