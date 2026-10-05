@@ -55,7 +55,7 @@ PanelWindow {
     property string selected: ""    // nom du connecteur sélectionné
     property int tab: 0             // 0 affichage, 1 réglages, 2 dispositions
     property real pos: 0            // position animée (transitions entre onglets)
-    onTabChanged: pos = tab
+    onTabChanged: { pos = tab; if (tab !== 2) dd.opened = false; }
     Behavior on pos { NumberAnimation { duration: 340; easing.type: Easing.OutCubic } }
     property string selLayout: ""   // signature (nom de fichier) de la disposition éditée
     property bool confirmDel: false
@@ -621,19 +621,124 @@ PanelWindow {
                             }
                         }
 
-                        // Dispositions enregistrées
-                        Flow {
+                        // Dispositions enregistrées : menu de sélection
+                        Item {
+                            id: dd
                             Layout.fillWidth: true
-                            spacing: 6
-                            Repeater {
-                                model: win.layouts
-                                Chip {
-                                    required property var modelData
-                                    label: modelData.name
-                                    maxLabel: 300
-                                    glyph: modelData.current ? 0xf0e1e : 0xf056e
-                                    active: modelData.file === win.selLayout
-                                    onClicked: { win.selLayout = modelData.file; win.confirmDel = false; }
+                            implicitHeight: 38
+                            z: 10
+                            property bool opened: false
+                            readonly property real rowH: 34
+
+                            Rectangle {
+                                id: ddBtn
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                height: 38
+                                radius: 12
+                                color: ddMa.containsMouse ? Theme.pillHover : Theme.pill
+                                border.color: dd.opened ? Theme.mauve : Theme.pillBorder
+                                border.width: 1
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                                Behavior on border.color { ColorAnimation { duration: 150 } }
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 12
+                                    anchors.rightMargin: 12
+                                    spacing: 10
+                                    BarText {
+                                        text: Theme.ic(win.layout && win.layout.current ? 0xf0e1e : 0xf056e)
+                                        font.pixelSize: 16
+                                        color: win.layout && win.layout.current ? Theme.green : Theme.mauve
+                                    }
+                                    BarText {
+                                        Layout.fillWidth: true
+                                        text: win.layout ? win.layout.name : "…"
+                                        font.pixelSize: 12
+                                        elide: Text.ElideRight
+                                    }
+                                    BarText {
+                                        text: Theme.ic(0xf0140)    // md-chevron-down
+                                        font.pixelSize: 16
+                                        color: Theme.subtext
+                                        rotation: dd.opened ? 180 : 0
+                                        Behavior on rotation { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                                    }
+                                }
+                                MouseArea {
+                                    id: ddMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    enabled: win.layouts.length > 0
+                                    onClicked: dd.opened = !dd.opened
+                                }
+                            }
+
+                            // Liste déroulante : se déplie en hauteur, clippée pendant l'animation
+                            Rectangle {
+                                id: ddList
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                y: ddBtn.height + 4
+                                height: dd.opened ? Math.min(win.layouts.length, 6) * dd.rowH + 8 : 0
+                                visible: height > 1
+                                clip: true
+                                radius: 12
+                                color: Qt.rgba(30 / 255, 30 / 255, 30 / 255, 0.98)
+                                border.color: Theme.border
+                                border.width: 1
+                                opacity: dd.opened ? 1 : 0
+                                Behavior on height { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+                                Behavior on opacity { NumberAnimation { duration: 160 } }
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 4
+                                    Repeater {
+                                        model: win.layouts
+                                        Rectangle {
+                                            required property var modelData
+                                            width: parent.width
+                                            height: dd.rowH
+                                            radius: 8
+                                            color: rowMa.containsMouse ? Theme.rowHover : "transparent"
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 8
+                                                anchors.rightMargin: 8
+                                                spacing: 10
+                                                BarText {
+                                                    text: Theme.ic(modelData.current ? 0xf0e1e : 0xf056e)
+                                                    font.pixelSize: 14
+                                                    color: modelData.current ? Theme.green : Theme.subtext
+                                                }
+                                                BarText {
+                                                    Layout.fillWidth: true
+                                                    text: modelData.name
+                                                    font.pixelSize: 12
+                                                    elide: Text.ElideRight
+                                                    color: modelData.file === win.selLayout ? Theme.mauve : Theme.text
+                                                }
+                                                BarText {
+                                                    visible: modelData.file === win.selLayout
+                                                    text: Theme.ic(0xf012c)    // md-check
+                                                    font.pixelSize: 14
+                                                    color: Theme.mauve
+                                                }
+                                            }
+                                            MouseArea {
+                                                id: rowMa
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    win.selLayout = modelData.file;
+                                                    win.confirmDel = false;
+                                                    dd.opened = false;
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
