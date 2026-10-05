@@ -295,11 +295,93 @@ PanelWindow {
                     ColumnLayout {
                         anchors.fill: parent
                         spacing: 16
-            // --- Carte des écrans ---
+            // --- Modes ---
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 200
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 12
+                Repeater {
+                    model: win.modes
+                    Rectangle {
+                        id: card
+                        required property var modelData
+                        required property int index
+                        readonly property bool enabled: !modelData.ext || win.hasExternal
+                        readonly property bool current: win.curMode === modelData.id
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        Layout.fillHeight: true
+                        radius: 14
+                        opacity: enabled ? 1 : 0.35
+                        color: current ? Qt.rgba(modelData.color.r, modelData.color.g, modelData.color.b, 0.18)
+                                       : (ma.containsMouse && enabled ? Theme.pillHover : Theme.pill)
+                        border.color: current ? modelData.color : Theme.pillBorder
+                        border.width: current ? 2 : 1
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        scale: ma.pressed && enabled ? 0.95 : 1
+                        Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutBack } }
+
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            spacing: 4
+                            BarText {
+                                Layout.alignment: Qt.AlignHCenter
+                                text: Theme.ic(modelData.icon)
+                                font.pixelSize: 44
+                                color: modelData.color
+                            }
+                            BarText {
+                                Layout.alignment: Qt.AlignHCenter
+                                text: modelData.label
+                                font.pixelSize: 13
+                                color: Theme.text
+                            }
+                        }
+                        // Raccourci clavier
+                        Rectangle {
+                            anchors.top: parent.top
+                            anchors.right: parent.right
+                            anchors.margins: 8
+                            implicitWidth: 18
+                            implicitHeight: 18
+                            radius: 5
+                            color: Theme.pill
+                            border.color: Theme.pillBorder
+                            border.width: 1
+                            BarText { anchors.centerIn: parent; text: card.index + 1; font.pixelSize: 10; color: Theme.subtext }
+                        }
+                        MouseArea {
+                            id: ma
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: card.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: win.setMode(modelData.id)
+                        }
+                    }
+                }
+            }
+
+                    }
+                }
+
+                // Page 1 : réglages
+                Item {
+                    id: page1
+                    readonly property real d: 1 - win.pos
+                    width: host.width
+                    height: host.height
+                    x: d * 70
+                    opacity: Math.max(0, 1 - Math.abs(d) * 1.6)
+                    visible: opacity > 0.01
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 14
+                        // --- Carte des écrans ---
             Rectangle {
                 id: map
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                Layout.preferredHeight: 150
                 radius: 14
                 color: Theme.pill
                 border.color: Theme.pillBorder
@@ -385,98 +467,19 @@ PanelWindow {
                 }
             }
 
-            // --- Modes ---
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-                Repeater {
-                    model: win.modes
-                    Rectangle {
-                        id: card
-                        required property var modelData
-                        required property int index
-                        readonly property bool enabled: !modelData.ext || win.hasExternal
-                        readonly property bool current: win.curMode === modelData.id
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: 1
-                        implicitHeight: 84
-                        radius: 14
-                        opacity: enabled ? 1 : 0.35
-                        color: current ? Qt.rgba(modelData.color.r, modelData.color.g, modelData.color.b, 0.18)
-                                       : (ma.containsMouse && enabled ? Theme.pillHover : Theme.pill)
-                        border.color: current ? modelData.color : Theme.pillBorder
-                        border.width: current ? 2 : 1
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                        scale: ma.pressed && enabled ? 0.95 : 1
-                        Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutBack } }
-
-                        ColumnLayout {
-                            anchors.centerIn: parent
-                            spacing: 4
-                            BarText {
-                                Layout.alignment: Qt.AlignHCenter
-                                text: Theme.ic(modelData.icon)
-                                font.pixelSize: 28
-                                color: modelData.color
-                            }
-                            BarText {
-                                Layout.alignment: Qt.AlignHCenter
-                                text: modelData.label
-                                font.pixelSize: 13
-                                color: Theme.text
-                            }
-                        }
-                        // Raccourci clavier
-                        Rectangle {
-                            anchors.top: parent.top
-                            anchors.right: parent.right
-                            anchors.margins: 8
-                            implicitWidth: 18
-                            implicitHeight: 18
-                            radius: 5
-                            color: Theme.pill
-                            border.color: Theme.pillBorder
-                            border.width: 1
-                            BarText { anchors.centerIn: parent; text: card.index + 1; font.pixelSize: 10; color: Theme.subtext }
-                        }
-                        MouseArea {
-                            id: ma
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: card.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: win.setMode(modelData.id)
-                        }
-                    }
-                }
-            }
-
-                    }
-                }
-
-                // Page 1 : réglages
-                Item {
-                    id: page1
-                    readonly property real d: 1 - win.pos
-                    width: host.width
-                    height: host.height
-                    x: d * 70
-                    opacity: Math.max(0, 1 - Math.abs(d) * 1.6)
-                    visible: opacity > 0.01
-                    ColumnLayout {
-                        anchors.fill: parent
-                        spacing: 14
-                        // Écran à régler
+                        // Écrans désactivés (absents de la carte) : sélectionnables ici
                         Flow {
                             Layout.fillWidth: true
+                            visible: win.monitors.some(m => m.disabled)
                             spacing: 6
                             Repeater {
-                                model: win.monitors
+                                model: win.monitors.filter(m => m.disabled)
                                 Chip {
                                     required property var modelData
                                     label: modelData.name === "eDP-1" ? "PC" : modelData.name
                                     glyph: modelData.name === "eDP-1" ? 0xf0322 : 0xf0379
                                     active: modelData.name === win.selected
-                                    opacity: modelData.disabled ? 0.5 : 1
+                                    opacity: 0.6
                                     onClicked: win.selected = modelData.name
                                 }
                             }
