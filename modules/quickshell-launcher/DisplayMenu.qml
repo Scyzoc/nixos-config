@@ -35,6 +35,8 @@ PanelWindow {
         closeTimer.stop();
         visible = true;
         open = true;
+        managing = false;
+        confirmDel = false;
         refresh();
         keys.forceActiveFocus();
     }
@@ -50,6 +52,10 @@ PanelWindow {
     property var layouts: []
     property string mode: ""
     property string selected: ""    // nom du connecteur sélectionné
+    property bool managing: false   // vue de gestion des dispositions
+    property string selLayout: ""   // signature (nom de fichier) de la disposition éditée
+    property bool confirmDel: false
+    readonly property var layout: layouts.find(l => l.file === selLayout) ?? null
 
     readonly property var externals: monitors.filter(m => m.name !== "eDP-1")
     readonly property bool hasExternal: externals.length > 0
@@ -73,6 +79,8 @@ PanelWindow {
                     win.monitors = d.monitors;
                     win.layouts = d.layouts;
                     win.mode = d.mode;
+                    if (!d.layouts.some(l => l.file === win.selLayout))
+                        win.selLayout = (d.layouts.find(l => l.current) ?? d.layouts[0])?.file ?? "";
                     if (!d.monitors.some(m => m.name === win.selected))
                         win.selected = (d.monitors.find(m => !m.disabled) ?? d.monitors[0])?.name ?? "";
                 } catch (e) {}
@@ -90,6 +98,14 @@ PanelWindow {
                 later.restart();
         }
     }
+
+    // Édition d'une disposition (display-layout-edit) puis relecture rapide
+    Timer { id: quick; interval: 500; onTriggered: win.refresh() }
+    function edit(...args) {
+        Quickshell.execDetached([Paths.userBin + "/display-layout-edit", ...args]);
+        quick.restart();
+    }
+    Timer { id: confirmTimer; interval: 3000; onTriggered: win.confirmDel = false }
 
     function apply(...args) {
         Quickshell.execDetached([Paths.userBin + "/display-apply", ...args]);
@@ -377,7 +393,7 @@ PanelWindow {
             // --- Réglages de l'écran sélectionné ---
             Rectangle {
                 Layout.fillWidth: true
-                visible: win.sel !== null
+                visible: win.sel !== null && !win.managing
                 implicitHeight: detail.implicitHeight + 24
                 radius: 14
                 color: Theme.pill
@@ -503,10 +519,26 @@ PanelWindow {
             }
 
             // --- Dispositions enregistrées ---
-            RowLayout {
+            ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                BarText { text: "Dispositions"; font.pixelSize: 11; color: Theme.muted; Layout.preferredWidth: 80 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    BarText { text: "Dispositions"; font.pixelSize: 11; color: Theme.muted; Layout.fillWidth: true }
+                    Chip {
+                        visible: win.hasExternal
+                        label: "Enregistrer"
+                        glyph: 0xf0193    // md-content-save
+                        onClicked: win.apply("save-layout")
+                    }
+                    Chip {
+                        label: "Gérer"
+                        glyph: 0xf0493
+                        active: win.managing
+                        onClicked: { win.managing = !win.managing; win.confirmDel = false; }
+                    }
+                }
                 Flow {
                     Layout.fillWidth: true
                     spacing: 6
@@ -515,30 +547,102 @@ PanelWindow {
                         Chip {
                             required property var modelData
                             label: modelData.name
-                            maxLabel: 250
+                            maxLabel: 330
                             glyph: 0xf056e    // md-view-dashboard
-                            active: modelData.current
-                            enabled: modelData.current
-                            onClicked: win.apply("restore-layout")
+                            active: win.managing ? modelData.file === win.selLayout : modelData.current
+                            enabled: win.managing || modelData.current
+                            onClicked: {
+                                if (win.managing) { win.selLayout = modelData.file; win.confirmDel = false; }
+                                else win.apply("restore-layout");
+                            }
                         }
                     }
-                    BarText {
-                        visible: win.layouts.length === 0
-                        text: "Aucune enregistrée"
-                        font.pixelSize: 11
-                        color: Theme.muted
+                }
+                BarText {
+                    visible: win.layouts.length === 0
+                    text: "Aucune enregistrée"
+                    font.pixelSize: 11
+                    color: Theme.muted
+                }
+            }
+
+            // --- Gestion de la disposition sélectionnée ---
+            Rectangle {
+                Layout.fillWidth: true
+                visible: win.managing && win.layout !== null
+                implicitHeight: mgr.implicitHeight + 24
+                radius: 14
+                color: Theme.pill
+                border.color: Theme.pillBorder
+                border.width: 1
+
+                ColumnLayout {
+                    id: mgr
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 10
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Field {
+                            Layout.fillWidth: true
+                            glyph: 0xf0455    // md-pencil
+                            placeholder: "Nom de la disposition"
+                            value: win.layout ? win.layout.name : ""
+                            onSubmitted: t => win.edit("rename", win.layout.file, t)
+                        }
+                        Chip {
+                            visible: win.layout !== null && win.layout.current
+                            label: "Appliquer"
+                            glyph: 0xf0e1e    // md-check
+                            accent: Theme.green
+                            onClicked: win.apply("restore-layout")
+                        }
+                        Chip {
+                            label: win.confirmDel ? "Confirmer ?" : "Supprimer"
+                            glyph: 0xf01b4    // md-delete
+                            accent: Theme.red
+                            active: win.confirmDel
+                            onClicked: {
+                                if (!win.confirmDel) { win.confirmDel = true; confirmTimer.restart(); return; }
+                                win.confirmDel = false;
+                                win.edit("delete", win.layout.file);
+                            }
+                        }
                     }
-                }
-                Chip {
-                    visible: win.hasExternal
-                    label: "Enregistrer"
-                    glyph: 0xf0193    // md-content-save
-                    onClicked: win.apply("save-layout")
-                }
-                Chip {
-                    label: "Gérer"
-                    glyph: 0xf0493
-                    onClicked: { win.hide(); Quickshell.execDetached([Paths.userBin + "/display-layouts"]); }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        BarText { text: "Groupes de workspaces"; font.pixelSize: 11; color: Theme.muted; Layout.fillWidth: true }
+                        BarText { text: "ex : 11-20 ou 1,3,5-7 ; vide = auto"; font.pixelSize: 10; color: Theme.muted }
+                        Chip {
+                            label: "Tout en auto"
+                            glyph: 0xf0450    // md-refresh
+                            onClicked: win.edit("reset-groups", win.layout.file)
+                        }
+                    }
+
+                    Field {
+                        Layout.fillWidth: true
+                        glyph: 0xf0322
+                        prefix: "PC (eDP-1)"
+                        placeholder: "auto"
+                        value: win.layout ? win.layout.internal : ""
+                        onSubmitted: t => win.edit("groups", win.layout.file, "internal", t)
+                    }
+                    Repeater {
+                        model: win.layout ? win.layout.monitors : []
+                        Field {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            glyph: 0xf0379
+                            prefix: win.shortDesc(modelData.description)
+                            placeholder: "auto"
+                            value: modelData.workspaces
+                            onSubmitted: t => win.edit("groups", win.layout.file, modelData.description, t)
+                        }
+                    }
                 }
             }
 
@@ -547,7 +651,7 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: 14
                 Repeater {
-                    model: [["1-4", "mode"], ["Tab", "écran suivant"], ["Échap", "fermer"]]
+                    model: [["1-4", "mode"], ["Tab", "écran suivant"], ["Entrée", "valider un champ"], ["Échap", "fermer"]]
                     RowLayout {
                         required property var modelData
                         spacing: 6
@@ -564,6 +668,63 @@ PanelWindow {
                     }
                 }
                 Item { Layout.fillWidth: true }
+            }
+        }
+    }
+
+    // Champ de saisie : Entrée ou perte du focus enregistre ; Échap rend le focus aux raccourcis
+    component Field: Rectangle {
+        id: fld
+        property string value: ""
+        property string placeholder: ""
+        property string prefix: ""
+        property int glyph: 0
+        signal submitted(string text)
+        implicitHeight: 34
+        radius: 10
+        color: Theme.pill
+        border.color: inp.activeFocus ? Theme.mauve : Theme.pillBorder
+        border.width: 1
+        Behavior on border.color { ColorAnimation { duration: 150 } }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            spacing: 8
+            BarText {
+                visible: fld.glyph !== 0
+                text: Theme.ic(fld.glyph)
+                font.pixelSize: 14
+                color: Theme.subtext
+            }
+            BarText {
+                visible: fld.prefix !== ""
+                text: fld.prefix
+                font.pixelSize: 11
+                color: Theme.subtext
+                elide: Text.ElideRight
+                Layout.preferredWidth: 300
+            }
+            TextInput {
+                id: inp
+                Layout.fillWidth: true
+                verticalAlignment: TextInput.AlignVCenter
+                color: Theme.text
+                font.family: Theme.font
+                font.pixelSize: 12
+                clip: true
+                selectByMouse: true
+                text: fld.value
+                onAccepted: { fld.submitted(text); keys.forceActiveFocus(); }
+                onActiveFocusChanged: if (!activeFocus && text !== fld.value) fld.submitted(text)
+                Keys.onEscapePressed: { text = fld.value; keys.forceActiveFocus(); }
+                BarText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: inp.text === ""
+                    text: fld.placeholder
+                    font.pixelSize: 12
+                    color: Theme.muted
+                }
             }
         }
     }

@@ -683,13 +683,76 @@ let
         ${JQ} -c --arg f "$(basename "$f" .json)" --arg sig "$SIG" '${NORM}
           | select((.monitors | length) > 0)
           | {file: $f, current: ($f == $sig), count: (.monitors | length),
-             name: (.name // (.monitors | map(.description) | join(" + ")))}' "$f" 2>/dev/null
+             name: (.name // (.monitors | map(.description) | join(" + "))),
+             internal: (.internal.workspaces // ""),
+             monitors: (.monitors | map({description, workspaces: (.workspaces // "")}))}' "$f" 2>/dev/null
       done | ${JQ} -cs '.')
     fi
     ${HYPR} monitors all -j | ${JQ} -c --arg mode "$MODE" --arg sig "$SIG" --argjson layouts "$LAYOUTS" '
       {mode: $mode, sig: $sig, layouts: $layouts,
        monitors: map({name, description, x, y, width, height, refreshRate, scale,
                       mirrorOf, disabled, availableModes})}'
+  '';
+
+  # ==========================================================================
+  # DISPLAY-LAYOUT-EDIT : gestion non interactive d'une disposition (menu Quickshell)
+  #   display-layout-edit rename <sig> <nom>
+  #   display-layout-edit groups <sig> <internal|description> <spec>   (vide = auto)
+  #   display-layout-edit reset-groups <sig>
+  #   display-layout-edit delete <sig>
+  # ==========================================================================
+  display-layout-edit = pkgs.writeShellScriptBin "display-layout-edit" ''
+    ACTION="$1"; SIG="$2"
+    case "$SIG" in *[!0-9a-f]*|"") exit 1 ;; esac
+    FILE="${LAYOUT_DIR}/$SIG.json"
+    [ -f "$FILE" ] || exit 1
+
+    notify() {
+      ${NOTIFY} -h string:x-canonical-private-synchronous:display-layouts \
+        "Dispositions" "$1" -i video-display -t 2500
+    }
+    write_json() {
+      local filter="$1"; shift
+      ${JQ} "$@" '${NORM} | '"$filter" "$FILE" > "$FILE.tmp" && mv "$FILE.tmp" "$FILE"
+    }
+    # Disposition des écrans branchés : on réapplique les groupes de workspaces
+    rebind_if_current() {
+      if [ "$(${layout-sig})" = "$SIG" ]; then
+        ${workspace-bind}/bin/workspace-bind
+      fi
+    }
+
+    case "$ACTION" in
+      rename)
+        [ -n "$3" ] && write_json '.name = $n' --arg n "$3"
+        ;;
+      groups)
+        spec=$(printf '%s' "$4" | tr -d ' ')
+        [ "$spec" = "auto" ] && spec=""
+        if [ -n "$spec" ] && ! printf '%s' "$spec" | grep -qE '^[1-9][0-9]*(-[1-9][0-9]*)?(,[1-9][0-9]*(-[1-9][0-9]*)?)*$'; then
+          notify "Format invalide : « $spec »"
+          exit 1
+        fi
+        if [ -z "$spec" ]; then v=null; else v="\"$spec\""; fi
+        if [ "$3" = "internal" ]; then
+          write_json '.internal.workspaces = $v' --argjson v "$v"
+        else
+          write_json '.monitors |= map(if .description == $d then .workspaces = $v else . end)' \
+            --argjson v "$v" --arg d "$3"
+        fi
+        rebind_if_current
+        ;;
+      reset-groups)
+        write_json '.internal.workspaces = null | .monitors |= map(.workspaces = null)'
+        rebind_if_current
+        notify "Groupes remis en auto"
+        ;;
+      delete)
+        rm -f "$FILE"
+        notify "Disposition supprimée"
+        rebind_if_current
+        ;;
+    esac
   '';
 
   # SUPER+P : affiche / masque le menu Quickshell des écrans (modules/quickshell-launcher/DisplayMenu.qml)
@@ -871,7 +934,7 @@ in
   # --------------------------------------------------------------------------
   # Packages
   # --------------------------------------------------------------------------
-  home.packages = [ display-apply display-state display-menu display-layouts monitor-watcher lid-watcher workspace-bind ];
+  home.packages = [ display-apply display-state display-layout-edit display-menu display-layouts monitor-watcher lid-watcher workspace-bind ];
 
   # --------------------------------------------------------------------------
   # Services systemd user
