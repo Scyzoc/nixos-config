@@ -570,6 +570,23 @@
     '';
   };
 
+  # Dispatcher NM : coupe les VPN (proton + maison) quand le Wi-Fi tombe
+  environment.etc."NetworkManager/dispatcher.d/98-vpn-wifi-down" = {
+    mode = "0755";
+    text = ''
+      #!/bin/sh
+      IFACE="$1"
+      ACTION="$2"
+      case "$IFACE" in
+        wl*)
+          if [ "$ACTION" = "down" ]; then
+            ${pkgs.systemd}/bin/systemctl stop wg-quick-proton.service openvpn-maison.service || true
+          fi
+          ;;
+      esac
+    '';
+  };
+
   # OpenVPN — VPN maison (routeur, IP fixe)
   services.openvpn.servers.maison = {
     config = ''
