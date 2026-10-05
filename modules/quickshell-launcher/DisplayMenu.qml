@@ -195,7 +195,7 @@ PanelWindow {
         anchors.centerIn: parent
         width: Math.min(760, parent.width - 80)
         // Hauteur par onglet, interpolée avec `pos` : le panneau s'adapte en glissant
-        readonly property var heights: [236, 520, 500]
+        readonly property var heights: [236, 450, 500]
         height: {
             const i = Math.max(0, Math.min(1.999, win.pos)), lo = Math.floor(i);
             return heights[lo] + (heights[lo + 1] - heights[lo]) * (i - lo);
