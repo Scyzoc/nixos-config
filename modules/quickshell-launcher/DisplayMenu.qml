@@ -9,7 +9,7 @@ import Quickshell.Hyprland
 // PC / externe / miroir / étendu), réglages de l'écran sélectionné (résolution, fréquence,
 // échelle, on/off) et dispositions enregistrées (nom, groupes de workspaces). Les données viennent de `display-state` (JSON), les actions
 // passent par `display-apply` (modules/display-switch.nix) qui pose le verrou anti-boucle.
-// Touches : Tab section suivante, 1-4 modes, Échap fermer.
+// Touches : Tab section suivante, ← → choisir un mode (onglet Écran), Entrée valider, 1-4 modes, Échap fermer.
 PanelWindow {
     id: win
 
@@ -37,6 +37,7 @@ PanelWindow {
         open = true;
         tab = 0;
         pos = 0;
+        cursorSet = false;
         confirmDel = false;
         refresh();
         keys.forceActiveFocus();
@@ -53,6 +54,8 @@ PanelWindow {
     property var layouts: []
     property string mode: ""
     property string selected: ""    // nom du connecteur sélectionné
+    property int cursor: 0          // carte de mode sélectionnée au clavier (onglet Écran)
+    property bool cursorSet: false
     property int tab: 0             // 0 affichage, 1 réglages, 2 dispositions
     property real pos: 0            // position animée (transitions entre onglets)
     onTabChanged: { pos = tab; if (tab !== 2) dd.opened = false; }
@@ -83,6 +86,10 @@ PanelWindow {
                     win.monitors = d.monitors;
                     win.layouts = d.layouts;
                     win.mode = d.mode;
+                    if (!win.cursorSet) {
+                        win.cursor = Math.max(0, win.modes.findIndex(m => m.id === win.curMode));
+                        win.cursorSet = true;
+                    }
                     if (!d.layouts.some(l => l.file === win.selLayout))
                         win.selLayout = (d.layouts.find(l => l.current) ?? d.layouts[0])?.file ?? "";
                     if (!d.monitors.some(m => m.name === win.selected))
@@ -114,6 +121,11 @@ PanelWindow {
     function apply(...args) {
         Quickshell.execDetached([Paths.userBin + "/display-apply", ...args]);
         later.restart();
+    }
+    // Déplace la sélection clavier vers la prochaine carte utilisable (d = ±1)
+    function moveCursor(d) {
+        for (let i = cursor + d; i >= 0 && i < modes.length; i += d)
+            if (!modes[i].ext || hasExternal) { cursor = i; return; }
     }
     function setMode(m) {
         if (m !== "pc-only" && !hasExternal) return;
@@ -178,6 +190,10 @@ PanelWindow {
             event.accepted = true;
             switch (event.key) {
             case Qt.Key_Escape: win.hide(); break;
+            case Qt.Key_Left: if (win.tab === 0) win.moveCursor(-1); else event.accepted = false; break;
+            case Qt.Key_Right: if (win.tab === 0) win.moveCursor(1); else event.accepted = false; break;
+            case Qt.Key_Return:
+            case Qt.Key_Enter: if (win.tab === 0) win.setMode(win.modes[win.cursor].id); else event.accepted = false; break;
             case Qt.Key_Tab: win.cycleTab(1); break;
             case Qt.Key_Backtab: win.cycleTab(-1); break;
             case Qt.Key_1: win.setMode("pc-only"); break;
@@ -312,15 +328,16 @@ PanelWindow {
                         required property int index
                         readonly property bool enabled: !modelData.ext || win.hasExternal
                         readonly property bool current: win.curMode === modelData.id
+                        readonly property bool focused: win.cursor === index && enabled
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         implicitHeight: 104
                         radius: 14
                         opacity: enabled ? 1 : 0.35
                         color: current ? Qt.rgba(modelData.color.r, modelData.color.g, modelData.color.b, 0.18)
-                                       : (ma.containsMouse && enabled ? Theme.pillHover : Theme.pill)
-                        border.color: current ? modelData.color : Theme.pillBorder
-                        border.width: current ? 2 : 1
+                                       : (focused ? Theme.pillHover : Theme.pill)
+                        border.color: current ? modelData.color : (focused ? Qt.rgba(1, 1, 1, 0.55) : Theme.pillBorder)
+                        border.width: current || focused ? 2 : 1
                         Behavior on color { ColorAnimation { duration: 120 } }
                         scale: ma.pressed && enabled ? 0.95 : 1
                         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutBack } }
@@ -358,6 +375,7 @@ PanelWindow {
                             id: ma
                             anchors.fill: parent
                             hoverEnabled: true
+                            onEntered: if (card.enabled) win.cursor = card.index
                             cursorShape: card.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                             onClicked: win.setMode(modelData.id)
                         }
