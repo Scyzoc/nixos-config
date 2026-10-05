@@ -72,116 +72,14 @@ let
     $AWWW img "$F" --transition-type none
   '';
 
-  # Ancien sélecteur (rofi), gardé en secours si le menu Quickshell ne répond pas
-  wallpaper-picker-rofi = pkgs.writeShellScriptBin "wallpaper-picker-rofi" ''
-    if pgrep -x rofi > /dev/null; then
-      pkill -x rofi
-      exit 0
-    fi
-    export WALL_DIR="$HOME/Pictures/Wallpapers"
-
-    if [ ! -d "$WALL_DIR" ]; then
-      ${pkgs.libnotify}/bin/notify-send "Erreur" "Dossier $WALL_DIR introuvable."
-      exit 1
-    fi
-
-    SELECTION=$(
-      for file in "$WALL_DIR"/*; do
-        [ -f "$file" ] || continue
-        filename=$(basename "$file")
-        echo -en "$filename\0icon\x1f$file\n"
-      done | ${pkgs.rofi}/bin/rofi -dmenu -i -p "󰋩 " -theme ~/.config/rofi/wallpaper.rasi
-    )
-
-    if [ -n "$SELECTION" ]; then
-      ${wallpaper-apply}/bin/wallpaper-apply "$WALL_DIR/$SELECTION"
-    fi
-  '';
 
   # SUPER+W : affiche / masque le sélecteur Quickshell (config « launcher », voir app-launcher.nix)
   wallpaper-picker = pkgs.writeShellScriptBin "wallpaper-picker" ''
-    ${quickshell}/bin/quickshell ipc -c launcher call wallpaper toggle >/dev/null 2>&1 \
-      || exec ${wallpaper-picker-rofi}/bin/wallpaper-picker-rofi
+    ${quickshell}/bin/quickshell ipc -c launcher call wallpaper toggle >/dev/null 2>&1
   '';
 in
 {
-  # --- Theme Rofi pour le sélecteur de secours ---
-  xdg.configFile."rofi/wallpaper.rasi".text = ''
-    configuration {
-      show-icons: true;
-      font: "Inter 11";
-      hover-select: true;
-      me-select-entry: "";
-      me-accept-entry: "MousePrimary";
-    }
-    * {
-      background-color: transparent;
-      text-color: #ffffff;
-    }
-    window {
-      width: 1000px;
-      height: 800px;
-      border: 2px;
-      border-color: rgba(255, 255, 255, 0.2);
-      border-radius: 15px;
-      background-color: rgba(0, 0, 0, 0.25);
-    }
-    listview {
-      columns: 3;
-      lines: 3;
-      spacing: 20px;
-      padding: 20px;
-      cycle: true;
-      scrollbar: true;
-      fixed-columns: true;
-    }
-    element {
-      orientation: vertical;
-      padding: 10px;
-      border-radius: 10px;
-    }
-    element selected {
-      background-color: rgba(255, 255, 255, 0.15);
-      border: 2px;
-      border-color: #ffffff;
-    }
-    element-icon {
-      size: 250px;
-      horizontal-align: 0.5;
-    }
-    element-text {
-      enabled: false;
-    }
-    inputbar {
-      padding: 8px 12px;
-      margin: 10px;
-      border-radius: 10px;
-      background-color: rgba(255, 255, 255, 0.05);
-      border: 1px;
-      border-color: rgba(255, 255, 255, 0.1);
-      children: [prompt, textbox-prompt-sep, entry];
-    }
-    prompt {
-      color: rgba(255, 255, 255, 0.7);
-      font: "JetBrainsMono Nerd Font 14";
-      vertical-align: 0.5;
-      padding: 0px 4px 0px 0px;
-    }
-    textbox-prompt-sep {
-      str: "│";
-      expand: false;
-      color: rgba(255, 255, 255, 0.2);
-      vertical-align: 0.5;
-      padding: 0px 8px;
-    }
-    entry {
-      color: #ffffff;
-      placeholder: "Rechercher...";
-      placeholder-color: rgba(255, 255, 255, 0.3);
-      vertical-align: 0.5;
-    }
-  '';
 
-  # --- Scripts : sélecteur (SUPER+W), secours rofi, index et application ---
-  home.packages = [ wallpaper-picker wallpaper-picker-rofi wallpaper-index wallpaper-apply wallpaper-restore ];
+  # --- Scripts : sélecteur (SUPER+W), index et application ---
+  home.packages = [ wallpaper-picker wallpaper-index wallpaper-apply wallpaper-restore ];
 }

@@ -40,27 +40,10 @@ let
     ${pkgs.wtype}/bin/wtype -M ctrl -k v -m ctrl
   '';
 
-  # Ancien menu (rofi), gardé en secours si le menu Quickshell ne répond pas
-  emoji-picker-rofi = pkgs.writeShellScriptBin "emoji-picker-rofi" ''
-    if pgrep -x rofi > /dev/null; then
-      pkill -x rofi
-      exit 0
-    fi
-    EMOJI=$(${pkgs.rofi}/bin/rofi -dmenu -i -separator "	" -columns 2 -display-columns 1 -p "󰞅 " -theme ~/.config/rofi/emoji.rasi < ${emojiData}/emoji.tsv | cut -f1)
-    if [ -n "$EMOJI" ]; then
-      printf '%s' "$EMOJI" | ${pkgs.wl-clipboard}/bin/wl-copy
-      while pgrep -x rofi > /dev/null; do
-        sleep 0.05
-      done
-      sleep 0.2
-      ${pkgs.wtype}/bin/wtype -M ctrl -k v -m ctrl
-    fi
-  '';
 
   # SUPER+; : affiche / masque le menu Quickshell (config « launcher », voir app-launcher.nix)
   emoji-picker = pkgs.writeShellScriptBin "emoji-picker" ''
-    ${quickshell}/bin/quickshell ipc -c launcher call emoji toggle >/dev/null 2>&1 \
-      || exec ${emoji-picker-rofi}/bin/emoji-picker-rofi
+    ${quickshell}/bin/quickshell ipc -c launcher call emoji toggle >/dev/null 2>&1
   '';
 in
 {
@@ -69,81 +52,6 @@ in
   # Nouvelles données → menus rechargés (images gardées en cache sinon)
   systemd.user.services.quickshell-launcher.Unit.X-Restart-Triggers = [ "${emojiData}" ];
 
-  # --- Theme Rofi pour le selecteur de secours ---
-  xdg.configFile."rofi/emoji.rasi".text = ''
-    configuration {
-        show-icons: false;
-        font: "Inter 12";
-        me-select-entry: "";
-        me-accept-entry: "MousePrimary";
-        pango-markup: true;
-    }
-    * {
-        background-color: transparent;
-        text-color: #ffffff;
-    }
-    window {
-        width: 600px;
-        border: 2px;
-        border-color: rgba(255, 255, 255, 0.2);
-        border-radius: 15px;
-        background-color: rgba(0, 0, 0, 0.25);
-        padding: 10px;
-    }
-    mainbox { spacing: 10px; }
-    inputbar {
-        padding: 8px 12px;
-        margin: 0px 0px 4px 0px;
-        background-color: rgba(255, 255, 255, 0.05);
-        border: 1px;
-        border-color: rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
-        children: [prompt, textbox-prompt-sep, entry];
-    }
-    prompt {
-        color: rgba(255, 255, 255, 0.7);
-        font: "JetBrainsMono Nerd Font 14";
-        vertical-align: 0.5;
-        padding: 0px 4px 0px 0px;
-    }
-    textbox-prompt-sep {
-        str: "│";
-        expand: false;
-        color: rgba(255, 255, 255, 0.2);
-        vertical-align: 0.5;
-        padding: 0px 8px;
-    }
-    entry {
-        color: #ffffff;
-        placeholder: "Rechercher un emoji...";
-        placeholder-color: rgba(255, 255, 255, 0.3);
-        vertical-align: 0.5;
-    }
-    listview {
-        columns: 6;
-        lines: 10;
-        spacing: 8px;
-        scrollbar: false;
-        padding: 10px;
-    }
-    element {
-        padding: 8px;
-        border-radius: 10px;
-        vertical-align: 0.5;
-        horizontal-align: 0.5;
-    }
-    element-text {
-        background-color: transparent;
-        text-color: #ffffff;
-        font: "JetBrainsMono Nerd Font 22";
-        horizontal-align: 0.5;
-    }
-    element selected {
-        background-color: rgba(255, 255, 255, 0.1);
-        border: 2px;
-        border-color: #ffffff;
-    }
-  '';
 
-  home.packages = [ emoji-picker emoji-picker-rofi emoji-paste ];
+  home.packages = [ emoji-picker emoji-paste ];
 }
