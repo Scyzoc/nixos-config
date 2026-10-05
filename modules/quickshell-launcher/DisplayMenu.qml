@@ -865,7 +865,7 @@ PanelWindow {
         property color accent: Theme.mauve
         property int maxLabel: 9999
         signal clicked()
-        implicitWidth: chipRow.implicitWidth + 20
+        implicitWidth: chip.label === "" ? 34 : chipRow.implicitWidth + 20
         implicitHeight: 28
         radius: 14
         opacity: enabled ? 1 : 0.55
@@ -886,6 +886,7 @@ PanelWindow {
                 color: chip.active ? chip.accent : Theme.subtext
             }
             BarText {
+                visible: chip.label !== ""
                 text: chip.label
                 elide: Text.ElideRight
                 Layout.maximumWidth: chip.maxLabel
