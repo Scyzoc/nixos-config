@@ -9,7 +9,7 @@ import Quickshell.Hyprland
 // PC / externe / miroir / étendu), réglages de l'écran sélectionné (résolution, fréquence,
 // échelle, on/off) et dispositions enregistrées (nom, groupes de workspaces). Les données viennent de `display-state` (JSON), les actions
 // passent par `display-apply` (modules/display-switch.nix) qui pose le verrou anti-boucle.
-// Touches : ← → onglets, 1-4 modes, Tab écran suivant, Échap fermer.
+// Touches : Tab section suivante, 1-4 modes, Échap fermer.
 PanelWindow {
     id: win
 
@@ -119,10 +119,10 @@ PanelWindow {
         if (m !== "pc-only" && !hasExternal) return;
         apply(m);
     }
-    function nextMonitor() {
-        if (monitors.length === 0) return;
-        const i = monitors.findIndex(m => m.name === selected);
-        selected = monitors[(i + 1) % monitors.length].name;
+    // Tab / Maj+Tab : section suivante / précédente (le champ éventuellement en cours valide sa saisie)
+    function cycleTab(d) {
+        keys.forceActiveFocus();
+        tab = (tab + d + 3) % 3;
     }
 
     // Règle "WxH@RR,XxY,scale" pour l'écran sélectionné avec des valeurs modifiées
@@ -178,9 +178,8 @@ PanelWindow {
             event.accepted = true;
             switch (event.key) {
             case Qt.Key_Escape: win.hide(); break;
-            case Qt.Key_Left: win.tab = Math.max(0, win.tab - 1); break;
-            case Qt.Key_Right: win.tab = Math.min(2, win.tab + 1); break;
-            case Qt.Key_Tab: win.nextMonitor(); break;
+            case Qt.Key_Tab: win.cycleTab(1); break;
+            case Qt.Key_Backtab: win.cycleTab(-1); break;
             case Qt.Key_1: win.setMode("pc-only"); break;
             case Qt.Key_2: win.setMode("external-only"); break;
             case Qt.Key_3: win.setMode("mirror"); break;
