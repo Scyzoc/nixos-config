@@ -515,6 +515,7 @@ PanelWindow {
                         Chip {
                             required property var modelData
                             label: modelData.name
+                            maxLabel: 250
                             glyph: 0xf056e    // md-view-dashboard
                             active: modelData.current
                             enabled: modelData.current
@@ -574,6 +575,7 @@ PanelWindow {
         property int glyph: 0
         property bool active: false
         property color accent: Theme.mauve
+        property int maxLabel: 9999
         signal clicked()
         implicitWidth: chipRow.implicitWidth + 20
         implicitHeight: 28
@@ -597,6 +599,8 @@ PanelWindow {
             }
             BarText {
                 text: chip.label
+                elide: Text.ElideRight
+                Layout.maximumWidth: chip.maxLabel
                 font.pixelSize: 11
                 color: chip.active || cma.containsMouse ? Theme.text : Theme.subtext
             }
