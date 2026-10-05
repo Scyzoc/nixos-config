@@ -508,12 +508,13 @@
   nix.gc = {
     automatic = true;
     dates = "weekly";
-    options = "--delete-older-than 0d";
+    # Vide : le tri des générations est fait par ExecStartPre ("0d" est refusé par nix-collect-garbage)
+    options = "";
   };
 
+  # home-manager est un module NixOS : ses générations sont incluses dans celles du système
   systemd.services.nix-gc.serviceConfig.ExecStartPre = [
     "-${pkgs.nix}/bin/nix-env --profile /nix/var/nix/profiles/system --delete-generations +5"
-    "-${pkgs.nix}/bin/nix-env --profile /home/user/.local/state/nix/profiles/home-manager --delete-generations +5"
   ];
 
   # Ne garder que 5 entrées dans le menu de démarrage
