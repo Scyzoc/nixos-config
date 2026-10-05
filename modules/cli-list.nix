@@ -93,8 +93,7 @@ let
       "wg-quick|WireGuard" \
       "openvpn|Client OpenVPN" \
       "tshark|Wireshark en CLI" \
-      "kdeconnect-cli|KDE Connect" \
-      "signal-cli|Signal en CLI"
+      "kdeconnect-cli|KDE Connect"
 
     section "Cyber" \
       "dirb|Brute-force de répertoires web" \

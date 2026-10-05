@@ -151,6 +151,7 @@
     seahorse
     gnome-music
     gnome-tour
+    epiphany
   ];
 
   # GNOME services that might have been removed
@@ -450,7 +451,6 @@
     swaynotificationcenter
 
     # --- Capture d'écran ---
-    swappy
 
     # --- Réseau ---
     networkmanagerapplet

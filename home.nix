@@ -157,7 +157,6 @@ let notionTodo = ./modules/notion-todo.nix; in
     github-cli
     dnsutils
     (python3.withPackages (ps: [ ps.requests ]))
-    signal-cli
     signal-desktop
     telegram-desktop
     parabolic
@@ -229,7 +228,6 @@ let notionTodo = ./modules/notion-todo.nix; in
     gdu
     baobab
     lazydocker
-    wine
     nwg-displays
     unrar
     fsearch            # Recherche de fichiers instantanee (equivalent Everything)
