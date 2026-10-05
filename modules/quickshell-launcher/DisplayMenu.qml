@@ -54,7 +54,8 @@ PanelWindow {
     property string mode: ""
     property string selected: ""    // nom du connecteur sélectionné
     property int tab: 0             // 0 affichage, 1 réglages, 2 dispositions
-    property real pos: tab          // position animée (transitions entre onglets)
+    property real pos: 0            // position animée (transitions entre onglets)
+    onTabChanged: pos = tab
     Behavior on pos { NumberAnimation { duration: 340; easing.type: Easing.OutCubic } }
     property string selLayout: ""   // signature (nom de fichier) de la disposition éditée
     property bool confirmDel: false
