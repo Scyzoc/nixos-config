@@ -34,6 +34,12 @@
     "icon": "nextcloud.png"
   },
   {
+    "id": "pinterest",
+    "name": "Pinterest",
+    "url": "https://fr.pinterest.com/",
+    "icon": "pinterest.png"
+  },
+  {
     "id": "rustdesk",
     "name": "RustDesk",
     "url": "https://rustdesk.com/web/",
