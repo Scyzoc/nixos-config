@@ -10,6 +10,7 @@ Rectangle {
     property url iconImage: ""             // image à la place de l'icône (ex. logo AirPods)
     property color iconColor: Theme.text
     property string label: ""
+    property string labelFont: Theme.font
     property string detail: ""
     property bool active: false
     property bool busy: false
@@ -96,6 +97,7 @@ Rectangle {
             text: row.label
             Layout.fillWidth: true
             elide: Text.ElideRight
+            font.family: row.labelFont
             font.bold: row.active
         }
         Rectangle {

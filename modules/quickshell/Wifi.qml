@@ -441,6 +441,7 @@ Pill {
                             icon: root.sigIcon(root.strength(entry.modelData))
                             iconColor: entry.modelData.connected ? Theme.green : Theme.subtext
                             label: entry.modelData.name
+                            labelFont: Theme.labelFont
                             detail: root.secured(entry.modelData) ? Theme.ic(0xf033e) : ""
                             active: entry.modelData.connected
                             busy: entry.modelData.stateChanging
