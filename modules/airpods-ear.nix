@@ -1,33 +1,31 @@
 { config, pkgs, lib, ... }:
 
-# Détection d'oreille AirPods : pause quand on retire un écouteur, reprise
-# quand on le remet. Parle le protocole Apple AAP (L2CAP PSM 0x1001), pas de root.
+# Pause/reprise (avec fondu) des lecteurs quand on retire/remet un AirPod.
+#   airpods-ear pause    met en pause ce qui joue, mémorise les lecteurs
+#   airpods-ear resume   relance les lecteurs mis en pause
+# La détection d'oreille vient de airpods-anc (quickshell.nix) : les AirPods
+# n'acceptent qu'UNE connexion AAP, une seconde ne reçoit rien.
 
 let
   airpods-ear = pkgs.writeScriptBin "airpods-ear" ''
     #!${pkgs.python3}/bin/python3
 
+    import fcntl
     import json
-    import select
-    import socket
+    import os
     import subprocess
+    import sys
     import time
 
-    BLUETOOTHCTL = "${pkgs.bluez}/bin/bluetoothctl"
     PLAYERCTL = "${pkgs.playerctl}/bin/playerctl"
     WPCTL = "${pkgs.wireplumber}/bin/wpctl"
     PW_DUMP = "${pkgs.pipewire}/bin/pw-dump"
     FADE_OUT = 0.25        # durée du fondu à la pause (s)
     FADE_IN = 0.35         # durée du fondu à la reprise (s)
     FADE_STEPS = 8
-    AAP_PSM = 0x1001
-    APPLE_MODALIAS = "bluetooth:v004C"
-
-    HANDSHAKE = bytes.fromhex("00000400010002000000000000000000")
-    FEATURES = bytes.fromhex("040004004d00ff00000000000000")
-    NOTIFY = bytes.fromhex("040004000f00ffffffff")
-    EAR_PREFIX = bytes.fromhex("040004000600")
-    IN_EAR = 0x00
+    RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+    STATE = RUNTIME + "/airpods-ear-paused"
+    LOCK = RUNTIME + "/airpods-ear.lock"
 
 
     def run(*args):
@@ -35,15 +33,6 @@ let
             return subprocess.run(args, capture_output=True, text=True, timeout=5).stdout
         except Exception:
             return ""
-
-
-    def find_airpods():
-        # Premier appareil Apple connecté (Modalias vendeur 004C)
-        for line in run(BLUETOOTHCTL, "devices", "Connected").splitlines():
-            parts = line.split()
-            if len(parts) >= 2 and APPLE_MODALIAS in run(BLUETOOTHCTL, "info", parts[1]):
-                return parts[1]
-        return None
 
 
     def playing_players():
@@ -142,56 +131,25 @@ let
             restore(vols)
 
 
-    def listen(mac):
-        s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP)
-        s.settimeout(10)
-        s.connect((mac, AAP_PSM))
-        s.settimeout(None)
-        for pkt in (HANDSHAKE, FEATURES, NOTIFY):
-            s.send(pkt)
-
-        in_ear = None          # nombre d'écouteurs dans les oreilles
-        paused = []            # lecteurs mis en pause par nous
-        count_before = 0       # nombre d'écouteurs avant la pause
-
-        try:
-            while True:
-                r, _, _ = select.select([s], [], [], 30)
-                if not r:
-                    continue
-                data = s.recv(1024)
-                if not data:
-                    return
-                if not data.startswith(EAR_PREFIX) or len(data) < 8:
-                    continue
-
-                count = (data[6] == IN_EAR) + (data[7] == IN_EAR)
-                if in_ear is None:
-                    in_ear = count
-                    continue
-
-                if count < in_ear and not paused:
-                    # Écouteur retiré : pause ce qui joue
-                    paused = pause_all()
-                    count_before = in_ear
-                elif count >= count_before and paused:
-                    # Écouteur(s) remis : reprise
-                    resume(paused)
-                    paused = []
-                in_ear = count
-        finally:
-            s.close()
-
-
     def main():
-        while True:
-            mac = find_airpods()
-            if mac:
+        if len(sys.argv) != 2 or sys.argv[1] not in ("pause", "resume"):
+            sys.exit("usage : airpods-ear pause|resume")
+        # Un seul appel à la fois : un « resume » rapide attend la fin du fondu
+        with open(LOCK, "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if sys.argv[1] == "pause":
+                players = pause_all()
+                if players:
+                    with open(STATE, "w") as f:
+                        json.dump(players, f)
+            else:
                 try:
-                    listen(mac)
-                except OSError:
-                    pass
-            time.sleep(5)
+                    with open(STATE) as f:
+                        players = json.load(f)
+                    os.remove(STATE)
+                except (OSError, ValueError):
+                    return
+                resume(players)
 
 
     if __name__ == "__main__":
@@ -201,20 +159,4 @@ let
 in
 {
   home.packages = [ airpods-ear ];
-
-  systemd.user.services.airpods-ear-detection = {
-    Unit = {
-      Description = "AirPods : pause/reprise selon détection d'oreille";
-      After = [ "hyprland-session.target" ];
-      PartOf = [ "hyprland-session.target" ];
-    };
-    Service = {
-      ExecStart = "${airpods-ear}/bin/airpods-ear";
-      Restart = "on-failure";
-      RestartSec = "10s";
-    };
-    Install = {
-      WantedBy = [ "hyprland-session.target" ];
-    };
-  };
 }

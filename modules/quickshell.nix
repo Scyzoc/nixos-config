@@ -103,7 +103,7 @@ let
   #     « B L=85,0 R=90,1 C=40,0 »  (niveau %, 1 = en charge ; « L=- » : absent)
   airpods-anc = pkgs.writeScript "airpods-anc" ''
     #!${pkgs.python3}/bin/python3
-    import select, socket, sys
+    import select, signal, socket, subprocess, sys
 
     HANDSHAKE = bytes.fromhex("00000400010002000000000000000000")
     # Toutes les notifications (masque complet : sans le bit de « fffffeff », pas de batterie)
@@ -112,6 +112,13 @@ let
     BATTERY = bytes.fromhex("040004000400")
     # Élément : type, 01, niveau, état (1 en charge, 2 sur batterie, 4 absent), 01
     PARTS = {0x04: "L", 0x02: "R", 0x08: "C", 0x01: "S"}
+    # Détection d'oreille : pause/reprise des lecteurs via airpods-ear (airpods-ear.nix)
+    EAR = bytes.fromhex("040004000600")
+    EAR_CMD = "${config.home.profileDirectory}/bin/airpods-ear"
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+    in_ear = None          # nombre d'écouteurs dans les oreilles
+    paused = False
+    count_before = 0
 
     s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP)
     s.settimeout(10)
@@ -133,7 +140,17 @@ let
                 break
             if not p:
                 break
-            if p[:7] == NOISE and len(p) > 7:
+            if p[:6] == EAR and len(p) >= 8:
+                count = (p[6] == 0) + (p[7] == 0)
+                if in_ear is not None:
+                    if count < in_ear and not paused:
+                        paused, count_before = True, in_ear
+                        subprocess.Popen([EAR_CMD, "pause"])
+                    elif paused and count >= count_before:
+                        paused = False
+                        subprocess.Popen([EAR_CMD, "resume"])
+                in_ear = count
+            elif p[:7] == NOISE and len(p) > 7:
                 print(p[7], flush=True)
             elif p[:6] == BATTERY and len(p) > 6:
                 out = []
