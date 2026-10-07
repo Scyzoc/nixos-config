@@ -124,7 +124,8 @@ Pill {
             const t = fmtDuration(dev?.timeToFull);
             return "En charge" + (t ? "  ·  pleine dans " + t : "");
         }
-        if (!UPower.onBattery) return (desktopMode ? "Mode bureau" : "Branchée") + "  ·  limite " + limit + " %";
+        // Secteur : indiqué par l'icône prise à côté du pourcentage (plugIcon)
+        if (!UPower.onBattery) return (desktopMode ? "Mode bureau  ·  " : "") + (limitOn ? "Limite " + limit + " %" : "");
         const t = fmtDuration(dev?.timeToEmpty);
         return "Sur batterie" + (t ? "  ·  " + t + " restantes" : "");
     }
@@ -197,10 +198,57 @@ Pill {
             BarText { text: root.glyph; font.family: "BatteryIcons"; font.pixelSize: 40; color: root.tint }
             ColumnLayout {
                 spacing: 2
-                BarText { text: root.cap + " %"; font.family: Theme.titleFont; font.pixelSize: 22; font.bold: true }
+                RowLayout {
+                    spacing: 8
+                    BarText { text: root.cap + " %"; font.family: Theme.titleFont; font.pixelSize: 22; font.bold: true }
+                    // Prise : PC branché. Bleue en charge ; verte + pastille pause qui
+                    // « respire » quand la limite de charge retient la batterie
+                    Item {
+                        id: plugIcon
+                        readonly property bool held: !root.charging && root.limitOn
+                        property real breath: 1
+                        visible: !UPower.onBattery
+                        implicitWidth: 22
+                        implicitHeight: 22
+                        SequentialAnimation on breath {
+                            running: plugIcon.visible && plugIcon.held && popup.visible
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.35; duration: 1400; easing.type: Easing.InOutSine }
+                            NumberAnimation { to: 1; duration: 1400; easing.type: Easing.InOutSine }
+                            onRunningChanged: if (!running) plugIcon.breath = 1
+                        }
+                        BarText {
+                            anchors.centerIn: parent
+                            text: Theme.ic(0xf06a5)    // md-power-plug
+                            font.pixelSize: 18
+                            color: plugIcon.held ? Theme.green : root.charging ? Theme.blue : Theme.text
+                            opacity: plugIcon.breath
+                            Behavior on color { ColorAnimation { duration: 300 } }
+                        }
+                        Rectangle {
+                            visible: plugIcon.held
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.rightMargin: -3
+                            anchors.bottomMargin: -2
+                            width: 12
+                            height: 12
+                            radius: 6
+                            color: Theme.popupBg
+                            BarText {
+                                anchors.centerIn: parent
+                                text: Theme.ic(0xf03e4)    // md-pause
+                                font.pixelSize: 9
+                                color: Theme.green
+                            }
+                        }
+                    }
+                }
                 BarText {
+                    visible: text !== ""
                     color: Theme.subtext
                     font.pixelSize: 12
+                    font.family: Theme.labelFont
                     text: root.statusText
                 }
                 BarText {
