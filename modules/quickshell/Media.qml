@@ -395,6 +395,7 @@ Pill {
         // Lecture au centre ; choix du lecteur (si plusieurs sont ouverts) sur la même ligne,
         // logos seuls répartis aux deux extrémités
         Item {
+            id: controls
             Layout.fillWidth: true
             implicitHeight: transport.implicitHeight
             readonly property int half: Math.ceil(root.livePlayers.length / 2)
@@ -404,7 +405,7 @@ Pill {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
                 visible: root.livePlayers.length > 1
-                Repeater { model: root.livePlayers.slice(0, parent.parent.half); delegate: playerBtn }
+                Repeater { model: root.livePlayers.slice(0, controls.half); delegate: playerBtn }
             }
 
             RowLayout {
@@ -435,7 +436,7 @@ Pill {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
                 visible: root.livePlayers.length > 1
-                Repeater { model: root.livePlayers.slice(parent.parent.half); delegate: playerBtn }
+                Repeater { model: root.livePlayers.slice(controls.half); delegate: playerBtn }
             }
         }
 
