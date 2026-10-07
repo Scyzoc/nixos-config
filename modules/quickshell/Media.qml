@@ -174,15 +174,15 @@ Pill {
     readonly property color albumColor: hasCover ? readable(vividColors[Math.min(1, vividColors.length - 1)], 0.62) : Theme.mauve
     // Titre de la barre : teinte la plus vive de la pochette (sinon couleur de la source),
     // éclaircie sur fond sombre / assombrie sur fond clair (Theme.barText noir = fond clair) ;
-    // gris (Theme.muted) en pause
+    // en pause : même teinte presque désaturée (Theme.muted était illisible sur la barre)
     function onBar(c) {
         const dark = Theme.barText.r < 0.5;
         return Qt.hsla(Math.max(0, c.hslHue), c.hslSaturation,
                        dark ? Math.min(c.hslLightness, 0.28) : Math.max(c.hslLightness, 0.72), 1);
     }
-    readonly property color titleColor: player?.isPlaying
-        ? (hasCover ? onBar(vividColors[0]) : accent)
-        : Theme.muted
+    readonly property color playColor: hasCover ? onBar(vividColors[0]) : accent
+    readonly property color titleColor: player?.isPlaying ? playColor
+        : onBar(Qt.hsla(Math.max(0, playColor.hslHue), playColor.hslSaturation * 0.25, playColor.hslLightness, 1))
 
     // Transition de morceau : glisse depuis la droite (suivant) ou la gauche (précédent)
     property int trackDir: 1
