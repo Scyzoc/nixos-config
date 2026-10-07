@@ -3,23 +3,34 @@
 
 let
   # Heures par défaut, écrites dans ~/.config/theme-automation/hours.conf au premier lancement.
-  # Modifiables sans rebuild via : theme hours 21:00 08:00
+  # Modifiables sans rebuild via : theme hours 21:00 08:00 (ou l'appli Crépuscule, crepuscule.nix)
+  # MODE : hours (heures fixes), sun (lever / coucher du soleil, calculés par Crépuscule
+  # dans sunConf), manual (le timer ne change plus rien, theme dark|light seulement)
   defaultDarkHour = "20:00";
   defaultLightHour = "08:00";
 
   confDir = "$HOME/.config/theme-automation";
   confFile = "${confDir}/hours.conf";
   stateFile = "${confDir}/last-mode";
+  sunConf = "$HOME/.config/crepuscule/sun.conf";
 
   # Bloc commun : charge la conf (et la crée si absente)
   loadConf = ''
     mkdir -p "${confDir}"
     if [ ! -f "${confFile}" ]; then
-      printf 'DARK_HOUR=%s\nLIGHT_HOUR=%s\n' "${defaultDarkHour}" "${defaultLightHour}" > "${confFile}"
+      printf 'MODE=hours\nDARK_HOUR=%s\nLIGHT_HOUR=%s\n' "${defaultDarkHour}" "${defaultLightHour}" > "${confFile}"
     fi
+    MODE=hours
     . "${confFile}"
-    DARK_MIN=$(( 10#''${DARK_HOUR%%:*} * 60 + 10#''${DARK_HOUR##*:} ))
-    LIGHT_MIN=$(( 10#''${LIGHT_HOUR%%:*} * 60 + 10#''${LIGHT_HOUR##*:} ))
+    EFF_DARK=$DARK_HOUR
+    EFF_LIGHT=$LIGHT_HOUR
+    if [ "$MODE" = sun ] && [ -f "${sunConf}" ]; then
+      . "${sunConf}"
+      EFF_DARK=$SUNSET
+      EFF_LIGHT=$SUNRISE
+    fi
+    DARK_MIN=$(( 10#''${EFF_DARK%%:*} * 60 + 10#''${EFF_DARK##*:} ))
+    LIGHT_MIN=$(( 10#''${EFF_LIGHT%%:*} * 60 + 10#''${EFF_LIGHT##*:} ))
   '';
 
   # Détermine le mode attendu à l'instant présent : écrit "dark" ou "light" dans $WANTED
@@ -72,6 +83,7 @@ let
   themeAuto = pkgs.writeShellScript "theme-auto" ''
     set -eu
     ${loadConf}
+    [ "$MODE" = manual ] && exit 0
     ${computeMode}
 
     LAST=""
@@ -115,8 +127,9 @@ let
       hours)
         ${loadConf}
         if [ $# -eq 1 ]; then
-          echo "Mode sombre  : $DARK_HOUR"
-          echo "Mode clair   : $LIGHT_HOUR"
+          echo "Mode         : $MODE"
+          echo "Mode sombre  : $EFF_DARK"
+          echo "Mode clair   : $EFF_LIGHT"
           echo "Modifier     : theme hours <dark HH:MM> [light HH:MM]"
           exit 0
         fi
@@ -129,14 +142,25 @@ let
           esac
           if [ $(( 10#''${H%%:*} )) -gt 23 ]; then echo "Heure invalide : $H"; exit 1; fi
         done
-        printf 'DARK_HOUR=%s\nLIGHT_HOUR=%s\n' "$NEW_DARK" "$NEW_LIGHT" > "${confFile}"
+        printf 'MODE=%s\nDARK_HOUR=%s\nLIGHT_HOUR=%s\n' "$MODE" "$NEW_DARK" "$NEW_LIGHT" > "${confFile}"
         rm -f "${stateFile}"
         ${themeAuto}
-        $NOTIFY "Thème" "Sombre à $NEW_DARK, clair à $NEW_LIGHT" -u low
         echo "Sombre à $NEW_DARK, clair à $NEW_LIGHT"
         ;;
+      mode)
+        ${loadConf}
+        NEW_MODE="''${2:-}"
+        case "$NEW_MODE" in
+          hours|sun|manual) ;;
+          "") echo "Mode : $MODE (hours|sun|manual)"; exit 0 ;;
+          *) echo "Mode invalide : $NEW_MODE (hours|sun|manual)"; exit 1 ;;
+        esac
+        printf 'MODE=%s\nDARK_HOUR=%s\nLIGHT_HOUR=%s\n' "$NEW_MODE" "$DARK_HOUR" "$LIGHT_HOUR" > "${confFile}"
+        rm -f "${stateFile}"
+        ${themeAuto}
+        ;;
       *)
-        echo "Usage: theme dark|light|auto|hours [HH:MM] [HH:MM]"
+        echo "Usage: theme dark|light|auto|hours [HH:MM] [HH:MM]|mode [hours|sun|manual]"
         exit 1
         ;;
     esac

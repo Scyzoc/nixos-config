@@ -679,9 +679,8 @@ Pill {
                     text: {
                         if (!root.powered) return root.blocked ? "Mode avion ou rfkill : l'interrupteur le débloque" : "";
                         if (!root.main) return "";
-                        if (root.isAirpods && root.airpods.left !== undefined)
-                            return "G " + (root.airpods.left ?? "?") + " %  ·  D " + (root.airpods.right ?? "?")
-                                   + " %  ·  Boîtier " + (root.airpods.case ?? "?") + " %";
+                        // AirPods : batteries seulement dans le menu AirPods (airpodsPopup)
+                        if (root.isAirpods) return "";
                         if (root.main.batteryAvailable) return "Batterie " + Math.round(root.main.battery * 100) + " %";
                         return "";
                     }
