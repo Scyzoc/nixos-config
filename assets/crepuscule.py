@@ -26,6 +26,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
@@ -179,50 +180,111 @@ def target(cfg, now_min):
     f = night_factor(cfg, now_min)
     temp = 6500 - (6500 - int(cfg["filter"]["temp"])) * f
     bright = 1 - (1 - int(cfg["filter"]["brightness"]) / 100) * f
-    return int(round(temp / 50) * 50), round(bright, 2)
+    return temp, bright
 
+
+def target_rgb(cfg, now_min):
+    """Multiplicateurs (r, g, b) du shader ; NEUTRAL = pas de filtre."""
+    temp, bright = target(cfg, now_min)
+    ref = kelvin_rgb(6500)
+    return tuple(round(c / w * bright, 3) for c, w in zip(kelvin_rgb(temp), ref))
+
+
+NEUTRAL = (1.0, 1.0, 1.0)
+FPS = 40             # images par seconde pendant un fondu
 
 SHADER = """#version 300 es
-// Crépuscule : filtre %(temp)d K, luminosité %(bright).2f (généré par crepuscule.py)
+// Crépuscule : filtre lumière bleue (généré par crepuscule.py)
 precision highp float;
 in vec2 v_texcoord;
 uniform sampler2D tex;
 out vec4 fragColor;
 void main() {
     vec4 c = texture(tex, v_texcoord);
-    fragColor = vec4(c.rgb * vec3(%(r).4f, %(g).4f, %(b).4f), c.a);
+    fragColor = vec4(c.rgb * vec3(%.3f, %.3f, %.3f), c.a);
 }
 """
 
 
-def shader_path(temp, bright):
-    """Fichier shader pour ces valeurs (un nom par valeur : Hyprland recompile à chaque changement)."""
-    path = os.path.join(SHADER_DIR, "filtre-%d-%d.frag" % (temp, round(bright * 100)))
+def shader_path(rgb):
+    """Fichier shader pour ces multiplicateurs (un nom par valeur : Hyprland recompile à chaque
+    changement de chemin). Les valeurs sont dans le nom, relues par shader_rgb()."""
+    path = os.path.join(SHADER_DIR, "filtre-%.3f-%.3f-%.3f.frag" % rgb)
     if not os.path.exists(path):
-        ref = kelvin_rgb(6500)
-        rgb = [c / w * bright for c, w in zip(kelvin_rgb(temp), ref)]
-        write_if_changed(path, SHADER % {"temp": temp, "bright": bright, "r": rgb[0], "g": rgb[1], "b": rgb[2]})
+        write_if_changed(path, SHADER % rgb)
     return path
 
 
-def hypr(*args):
-    return subprocess.run([HYPRCTL, *args], capture_output=True, text=True).stdout
+def shader_rgb(path):
+    """Multiplicateurs d'un shader Crépuscule, NEUTRAL si vide, None si shader étranger."""
+    if not path or path == "[[EMPTY]]":
+        return NEUTRAL
+    name = os.path.basename(path)
+    if not path.startswith(SHADER_DIR) or not name.startswith("filtre-"):
+        return None
+    try:
+        return tuple(float(x) for x in name[len("filtre-"):-len(".frag")].split("-"))
+    except ValueError:
+        return NEUTRAL
+
+
+def hypr(cmd):
+    """Requête sur le socket de commande d'Hyprland (bien plus rapide que lancer hyprctl :
+    un fondu enchaîne des dizaines de requêtes). Repli sur hyprctl si le socket manque."""
+    path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", ""), "hypr",
+                        os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", ""), ".socket.sock")
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(2)
+            sock.connect(path)
+            sock.sendall(cmd.encode())
+            out = b""
+            while chunk := sock.recv(4096):
+                out += chunk
+            return out.decode(errors="replace")
+    except OSError:
+        flags, _, rest = cmd.partition("/") if cmd.startswith("j/") else ("", "", cmd)
+        args = rest.split(" ", 2) if rest.startswith("keyword") else rest.split()
+        return subprocess.run([HYPRCTL, *args, *(["-j"] if flags else [])],
+                              capture_output=True, text=True).stdout
 
 
 def current_shader():
     try:
-        return json.loads(hypr("getoption", "decoration:screen_shader", "-j")).get("str", "")
+        return json.loads(hypr("j/getoption decoration:screen_shader")).get("str", "")
     except ValueError:
         return None
 
 
-def set_shader(path):
-    hypr("keyword", "decoration:screen_shader", path or "[[EMPTY]]")
+def set_rgb(rgb):
+    hypr("keyword decoration:screen_shader " + ("[[EMPTY]]" if rgb == NEUTRAL else shader_path(rgb)))
 
 
-def clear_shader():
-    if (current_shader() or "").startswith(SHADER_DIR):
-        set_shader("")
+def fade(frm, to):
+    """Fondu de frm à to (courbe douce), durée selon l'écart : ~0,5 s pour un petit réglage,
+    ~2 s pour allumer / éteindre le filtre."""
+    gap = max(abs(a - b) for a, b in zip(frm, to))
+    duration = max(0.5, min(2.0, 0.4 + 2.6 * gap))
+    steps = max(1, int(duration * FPS))
+    t0 = time.monotonic()
+    last = frm
+    for i in range(1, steps + 1):
+        x = i / steps
+        e = x * x * (3 - 2 * x)
+        rgb = tuple(round(a + (b - a) * e, 3) for a, b in zip(frm, to))
+        if rgb != last:
+            set_rgb(rgb)
+            last = rgb
+        delay = t0 + i * duration / steps - time.monotonic()
+        if delay > 0:
+            time.sleep(delay)
+    if last != to:
+        set_rgb(to)
+    # Garde seulement le shader affiché
+    keep = "" if to == NEUTRAL else shader_path(to)
+    for old in glob.glob(os.path.join(SHADER_DIR, "filtre-*.frag")):
+        if old != keep:
+            os.remove(old)
 
 
 def watch_reload():
@@ -240,27 +302,28 @@ def watch_reload():
 
 
 def daemon():
-    """Applique le shader voulu toutes les TICK s, ou tout de suite sur SIGUSR1 (réglage
-    modifié). Réapplique aussi si un rechargement de la config Hyprland l'a effacé."""
+    """Applique le shader voulu (en fondu) toutes les TICK s, ou tout de suite sur SIGUSR1
+    (réglage modifié). Réapplique aussi si un rechargement de la config Hyprland l'a effacé.
+    À l'arrêt (filtre désactivé, fin de session), fondu vers l'écran normal."""
     signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGUSR1, signal.SIGTERM, signal.SIGINT})
     threading.Thread(target=watch_reload, daemon=True).start()
     os.makedirs(SHADER_DIR, exist_ok=True)
     while True:
         cfg = load()
         now = datetime.now()
-        temp, bright = target(cfg, now.hour * 60 + now.minute + now.second / 60)
-        want = "" if temp >= 6500 and bright >= 1 else shader_path(temp, bright)
-        cur = current_shader()
-        if cur is not None and cur.replace("[[EMPTY]]", "") != want:
-            # Ne pas écraser un shader posé par autre chose que Crépuscule
-            if want or cur.startswith(SHADER_DIR):
-                set_shader(want)
-            for old in glob.glob(os.path.join(SHADER_DIR, "filtre-*.frag")):
-                if old != want:
-                    os.remove(old)
+        want = target_rgb(cfg, now.hour * 60 + now.minute + now.second / 60)
+        cur = shader_rgb(current_shader())
+        # None : Hyprland injoignable, ou shader posé par autre chose (on n'y touche pas
+        # tant que le filtre est éteint)
+        if cur is None and want != NEUTRAL:
+            cur = NEUTRAL
+        if cur is not None and max(abs(a - b) for a, b in zip(cur, want)) > 0.002:
+            fade(cur, want)
         sig = signal.sigtimedwait({signal.SIGUSR1, signal.SIGTERM, signal.SIGINT}, TICK)
         if sig is not None and sig.si_signo != signal.SIGUSR1:
-            clear_shader()
+            cur = shader_rgb(current_shader())
+            if cur is not None and cur != NEUTRAL:
+                fade(cur, NEUTRAL)
             return
 
 
@@ -326,6 +389,7 @@ def state():
     sun = sun_times(cfg["city"]["lat"], cfg["city"]["lon"], date.today())
     win = filter_window(cfg)
     temp, bright = target(cfg, now.hour * 60 + now.minute + now.second / 60)
+    temp, bright = int(round(temp / 50) * 50), round(bright, 2)
     out = {
         "city": cfg["city"],
         "filter": cfg["filter"],
