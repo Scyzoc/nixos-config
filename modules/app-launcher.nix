@@ -26,7 +26,7 @@ let
   # + thème partagé avec la barre
   launcherConfig = pkgs.runCommand "quickshell-launcher" { } ''
     mkdir $out
-    cp ${./quickshell}/Theme.qml ${./quickshell}/BarText.qml ${./quickshell}/ClickFx.qml $out/
+    cp ${./quickshell}/Theme.qml ${./quickshell}/ClickFx.qml $out/
     cp ${./quickshell-launcher}/*.qml $out/
     cp ${launcher-paths} $out/Paths.qml
   '';

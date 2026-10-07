@@ -710,7 +710,7 @@ PanelWindow {
                                         visible: dd.editing
                                         verticalAlignment: TextInput.AlignVCenter
                                         color: Theme.text
-                                        font.family: Theme.font
+                                        font.family: Theme.labelFont
                                         font.pixelSize: 12
                                         clip: true
                                         selectByMouse: true
@@ -908,7 +908,7 @@ PanelWindow {
                 Layout.fillWidth: true
                 verticalAlignment: TextInput.AlignVCenter
                 color: Theme.text
-                font.family: Theme.font
+                font.family: Theme.labelFont
                 font.pixelSize: 12
                 clip: true
                 selectByMouse: true

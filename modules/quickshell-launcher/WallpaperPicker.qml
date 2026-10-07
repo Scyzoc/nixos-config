@@ -331,7 +331,7 @@ PanelWindow {
                             Layout.fillWidth: true
                             verticalAlignment: TextInput.AlignVCenter
                             color: Theme.text
-                            font.family: Theme.font
+                            font.family: Theme.labelFont
                             font.pixelSize: 13
                             clip: true
                             selectByMouse: true
@@ -453,7 +453,7 @@ PanelWindow {
                                         anchors.bottom: parent.bottom
                                         anchors.margins: 9
                                         text: win.title(cell.it.name)
-                                        font.family: Theme.trackFont
+                                        font.family: Theme.labelFont
                                         font.pixelSize: 12
                                         font.bold: true
                                         elide: Text.ElideRight
