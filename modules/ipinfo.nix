@@ -290,7 +290,7 @@ let
 ''${b}''${c}OPTIONS''${r}
     ''${b}-a, --actif''${r}   ajoute des sondes envoyées directement à la cible :
                   ping, certificat TLS, serveur web, bannière SSH.
-                    ''${x}La cible voit alors ton IP''${r} (à éviter sur une IP hostile).
+                  ''${x}La cible voit alors ton IP''${r} (à éviter sur une IP hostile).
     ''${b}-j, --json''${r}    sortie JSON brute de toutes les sources, pour jq / scripts.
     ''${b}-h, --help''${r}    affiche cette aide.
 
