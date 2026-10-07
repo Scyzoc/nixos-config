@@ -22,8 +22,10 @@ import json
 import math
 import os
 import signal
+import socket
 import subprocess
 import sys
+import threading
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
@@ -223,10 +225,25 @@ def clear_shader():
         set_shader("")
 
 
+def watch_reload():
+    """Rechargement de la config Hyprland (rebuild…) = shader effacé : SIGUSR1 pour le reposer."""
+    path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", ""), "hypr",
+                        os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", ""), ".socket2.sock")
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(path)
+        for line in sock.makefile(encoding="utf-8", errors="replace"):
+            if line.startswith("configreloaded>>"):
+                os.kill(os.getpid(), signal.SIGUSR1)
+    except OSError:
+        pass    # sans le socket, le tick de TICK s rattrape
+
+
 def daemon():
     """Applique le shader voulu toutes les TICK s, ou tout de suite sur SIGUSR1 (réglage
     modifié). Réapplique aussi si un rechargement de la config Hyprland l'a effacé."""
     signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGUSR1, signal.SIGTERM, signal.SIGINT})
+    threading.Thread(target=watch_reload, daemon=True).start()
     os.makedirs(SHADER_DIR, exist_ok=True)
     while True:
         cfg = load()
