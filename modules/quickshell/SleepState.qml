@@ -164,7 +164,7 @@ Singleton {
         function nudge(): string { root.nudge(); return root.bubble.title + " — " + root.bubble.body; }
         function status(): string {
             return root.wake === "" ? "désactivé"
-                : `réveil ${root.hm(root.wakeDate)}, reste ${root.fmt(root.minutesLeft)}, niveau ${root.level}`;
+                : `réveil ${root.hm(root.wakeDate)}, reste ${root.fmt(root.minutesLeft)}, niveau ${root.level}, bulle ${root.bubble ? root.bubble.title : "aucune"}`;
         }
     }
 }
