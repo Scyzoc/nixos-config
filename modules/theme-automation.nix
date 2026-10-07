@@ -90,6 +90,14 @@ let
     [ -f "${stateFile}" ] && LAST=$(cat "${stateFile}") || true
     [ "$WANTED" = "$LAST" ] && exit 0
 
+    # Déjà dans le bon mode (réglage modifié depuis Crépuscule) : pas de notification
+    CUR=light
+    [ "$(${pkgs.glib}/bin/gsettings get org.gnome.desktop.interface color-scheme)" = "'prefer-dark'" ] && CUR=dark
+    if [ "$WANTED" = "$CUR" ]; then
+      printf '%s' "$WANTED" > "${stateFile}"
+      exit 0
+    fi
+
     if [ "$WANTED" = "dark" ]; then
       ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
       ${pkgs.libnotify}/bin/notify-send "Thème" "Passage en mode sombre" -u low

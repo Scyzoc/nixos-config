@@ -38,7 +38,7 @@ let notionTodo = ./modules/notion-todo.nix; in
     ./modules/netfix.nix
     ./modules/ethernet-menu.nix
     ./modules/display-switch.nix
-    ./modules/gammastep.nix
+    ./modules/crepuscule.nix
     ./modules/update-check.nix
     ./modules/nixfix.nix
     ./modules/bedtime.nix

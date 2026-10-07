@@ -4,7 +4,7 @@ Lancé par le wrapper `crepuscule-ctl` (modules/crepuscule.nix), qui fournit les
 des binaires par variables d'environnement. Sous-commandes :
 
   state                       état complet en JSON (lu par Crepuscule.qml)
-  apply                       régénère la config gammastep + les heures du soleil, relance le filtre si besoin
+  apply                       régénère la config gammastep + les heures du soleil, relance le filtre s'il tourne
   gen                         régénère seulement les fichiers (ExecStartPre du service)
   enabled                     code 0 si le filtre doit tourner (ExecCondition du service)
   set <clé> <valeur>          filter.mode / filter.start / filter.end / filter.offset / filter.temp / filter.brightness
@@ -189,12 +189,16 @@ def systemctl(*args):
                           stderr=subprocess.DEVNULL).returncode
 
 
-def apply(cfg):
+def apply(cfg, start=True):
+    """start=False (timer quotidien) : ne démarre pas le filtre s'il ne tourne pas — au boot,
+    le timer peut passer avant la session graphique (gammastep sans Wayland)."""
     changed = generate(cfg)
     if cfg["filter"]["mode"] == "off":
         systemctl("stop", UNIT)
-    elif changed or systemctl("is-active", "--quiet", UNIT) != 0:
+    elif start and (changed or systemctl("is-active", "--quiet", UNIT) != 0):
         systemctl("restart", UNIT)
+    elif changed:
+        systemctl("try-restart", UNIT)
     # Le mode sombre « soleil » relit sun.conf
     systemctl("start", "--no-block", "theme-auto.service")
 
@@ -299,7 +303,7 @@ def main():
     elif cmd == "apply":
         cfg = load()
         if valid(cfg) is None:
-            apply(cfg)
+            apply(cfg, start=False)
     elif cmd == "gen":
         generate(load())
     elif cmd == "enabled":
