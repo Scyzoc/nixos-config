@@ -14,7 +14,7 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: 3
 
-    BarText { text: root.label; color: Theme.subtext; font.pixelSize: 11; visible: root.label !== "" }
+    BarText { text: root.label; color: Theme.subtext; font.pixelSize: 11; visible: root.label !== ""; font.family: Theme.labelFont }
 
     Rectangle {
         Layout.fillWidth: true

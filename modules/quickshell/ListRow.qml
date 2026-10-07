@@ -112,6 +112,7 @@ Rectangle {
             text: row.detail
             color: Theme.subtext
             font.pixelSize: 12
+            font.family: Theme.labelFont
         }
         // Connexion en cours : icône de chargement qui tourne en boucle
         Spinner {

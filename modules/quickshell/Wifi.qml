@@ -291,6 +291,7 @@ Pill {
                     font.bold: true
                 }
                 BarText {
+                    font.family: Theme.labelFont
                     visible: root.current !== null
                     text: "Connecté  ·  " + (root.ip || "N/A")
                     color: Theme.subtext
@@ -300,7 +301,7 @@ Pill {
                     visible: VpnState.active
                     spacing: 4
                     BarText { text: Theme.ic(0xf0582); color: Theme.green; font.pixelSize: 11 }
-                    BarText { text: "VPN  ·  " + VpnState.ip; color: Theme.green; font.pixelSize: 11 }
+                    BarText { text: "VPN  ·  " + VpnState.ip; color: Theme.green; font.pixelSize: 11; font.family: Theme.labelFont }
                 }
             }
             // Recherche de réseaux en cours : icône de chargement qui tourne
@@ -337,6 +338,7 @@ Pill {
                 spacing: 8
                 BarText { text: Theme.ic(0xf0026); color: Theme.red; font.pixelSize: 16 }    // md-alert
                 BarText {
+                    font.family: Theme.labelFont
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
                     color: Theme.red
@@ -385,6 +387,7 @@ Pill {
         Separator { visible: root.enabled_ }
 
         BarText {
+            font.family: Theme.labelFont
             visible: root.errorText !== ""
             text: root.errorText
             color: Theme.red

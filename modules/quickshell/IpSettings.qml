@@ -160,6 +160,7 @@ Rectangle {
 
         // Statut : seulement quand il y a quelque chose à dire
         BarText {
+            font.family: Theme.labelFont
             visible: root.status !== "" || root.confirmForget
             Layout.fillWidth: true
             text: root.confirmForget ? "Recliquer pour oublier" : root.status

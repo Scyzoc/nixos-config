@@ -75,6 +75,7 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 6
             BarText {
+                font.family: Theme.labelFont
                 Layout.fillWidth: true
                 text: root.device.address
                 color: Theme.muted
@@ -110,6 +111,7 @@ Rectangle {
         }
 
         BarText {
+            font.family: Theme.labelFont
             visible: root.confirmForget
             text: "Recliquer pour oublier"
             color: Theme.red

@@ -351,8 +351,8 @@ Pill {
                     font.family: toast.iconFont
                     color: toast.on ? Theme.bluetooth : Theme.subtext
                 }
-                BarText { text: toast.name; font.bold: true; elide: Text.ElideRight; Layout.maximumWidth: 220 }
-                BarText { text: toast.on ? "connecté" : "déconnecté"; color: Theme.subtext; font.family: Theme.trackFont }
+                BarText { text: toast.name; font.bold: true; elide: Text.ElideRight; Layout.maximumWidth: 220; font.family: Theme.labelFont }
+                BarText { text: toast.on ? "connecté" : "déconnecté"; color: Theme.subtext; font.family: Theme.labelFont }
                 // Point vert / rouge + halo qui pulse
                 Item {
                     Layout.leftMargin: 2
@@ -440,6 +440,7 @@ Pill {
                     font.bold: true
                 }
                 BarText {
+                    font.family: Theme.labelFont
                     text: AncState.mode > 0 ? AncState.label : "Connexion aux AirPods…"
                     color: AncState.modes.find(x => x.id === AncState.mode)?.color ?? Theme.muted
                     font.pixelSize: 12
@@ -578,7 +579,7 @@ Pill {
         }
 
         Separator {}
-        BarText { text: "Contrôle du bruit"; color: Theme.subtext; font.pixelSize: 12 }
+        BarText { text: "Contrôle du bruit"; color: Theme.subtext; font.pixelSize: 12; font.family: Theme.labelFont }
         // 4 boutons icône seule, de même largeur (comme les profils d'énergie)
         RowLayout {
             Layout.fillWidth: true
@@ -653,6 +654,7 @@ Pill {
                     font.bold: true
                 }
                 BarText {
+                    font.family: Theme.labelFont
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
                     color: Theme.subtext
@@ -669,6 +671,7 @@ Pill {
                     visible: text !== ""
                 }
                 BarText {
+                    font.family: Theme.labelFont
                     visible: root.powered && root.connected.length > 1
                     text: "+ " + (root.connected.length - 1) + " autre" + (root.connected.length > 2 ? "s appareils connectés" : " appareil connecté")
                     color: Theme.muted
@@ -729,6 +732,7 @@ Pill {
 
         Separator { visible: root.otherDevices.length > 0 }
         BarText {
+            font.family: Theme.labelFont
             visible: root.otherDevices.length > 0
             text: "Autres appareils"
             color: Theme.subtext
