@@ -658,10 +658,15 @@ PanelWindow {
                     BarText { text: Theme.ic(0xf050e); font.pixelSize: 18; color: Theme.mauve }    // md-theme_light_dark
                     BarText { text: "Mode sombre"; font.family: Theme.labelFont; font.pixelSize: 15; font.weight: Font.DemiBold }
                     Item { Layout.fillWidth: true }
-                    Badge {
-                        lit: win.th.current === "dark"
-                        accent: Theme.mauve
-                        label: lit ? "Sombre" : "Clair"
+                    // État : point blanc (thème clair) ou gris foncé (thème sombre)
+                    Rectangle {
+                        implicitWidth: 9
+                        implicitHeight: 9
+                        radius: 4.5
+                        color: win.th.current === "dark" ? "#3a3a3a" : "#ffffff"
+                        border.color: Qt.rgba(1, 1, 1, 0.35)
+                        border.width: win.th.current === "dark" ? 1 : 0
+                        Behavior on color { ColorAnimation { duration: 200 } }
                     }
                 }
                 Segmented {
@@ -746,29 +751,6 @@ PanelWindow {
             anchors.top: parent.top
             anchors.margins: 14
             spacing: 12
-        }
-    }
-
-    // Pastille d'état (actif / inactif)
-    component Badge: Rectangle {
-        id: badge
-        property bool lit: false
-        property color accent: Theme.mauve
-        property string label: ""
-        implicitWidth: badgeText.implicitWidth + 22
-        implicitHeight: 24
-        radius: 12
-        color: lit ? Qt.rgba(accent.r, accent.g, accent.b, 0.18) : "transparent"
-        border.color: lit ? accent : Theme.pillBorder
-        border.width: 1
-        Behavior on color { ColorAnimation { duration: 160 } }
-        BarText {
-            id: badgeText
-            font.family: Theme.labelFont
-            anchors.centerIn: parent
-            text: badge.label
-            font.pixelSize: 11
-            color: badge.lit ? badge.accent : Theme.muted
         }
     }
 
