@@ -41,7 +41,6 @@ let notionTodo = ./modules/notion-todo.nix; in
     ./modules/crepuscule.nix
     ./modules/update-check.nix
     ./modules/nixfix.nix
-    ./modules/bedtime.nix
     ./modules/archive-extract.nix
     ./modules/ipinfo.nix
     ./modules/driver-update.nix
@@ -830,8 +829,6 @@ let notionTodo = ./modules/notion-todo.nix; in
         "match:class notion-todo, animation popin"
       ];
       layerrule = [
-        "blur on, match:namespace bedtime"
-        "ignore_alpha 0.0, match:namespace bedtime"
         "blur on, match:namespace quickshell-bar"
         "ignore_alpha 0.1, match:namespace quickshell-bar"
         # Menus d'applications / presse-papiers : flou derrière le panneau seulement

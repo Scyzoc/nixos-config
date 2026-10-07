@@ -4,7 +4,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
 
-// Heure + météo ; clic : calendrier ; clic droit : calendrier Notion
+// Heure + météo + compte à rebours de sommeil ; clic : calendrier ; clic droit : calendrier Notion
 Pill {
     id: root
 
@@ -38,7 +38,8 @@ Pill {
     tooltip: {
         const d = clock.date.toLocaleDateString(Qt.locale("fr_FR"), "dddd d MMMM yyyy");
         const w = root.weatherCond ? root.weatherCond + "  ·  " + root.cleanTemp(root.weatherTemp) : "";
-        return d.charAt(0).toUpperCase() + d.slice(1) + (w ? "\n" + w : "");
+        return d.charAt(0).toUpperCase() + d.slice(1) + (w ? "\n" + w : "")
+             + (sleep.summary ? "\n" + sleep.summary : "");
     }
 
     Process {
@@ -72,6 +73,7 @@ Pill {
     BarText { text: Qt.formatDateTime(clock.date, "dd/MM"); color: Theme.subtext; font.family: Theme.labelFont; font.features: { "tnum": 1 } }
     BarText { text: "·"; color: Theme.muted; font.family: Theme.labelFont }
     BarText { text: Qt.formatDateTime(clock.date, "HH:mm"); font.family: Theme.labelFont; font.weight: Font.DemiBold; font.features: { "tnum": 1 } }
+    SleepCountdown { id: sleep; now: clock.date }
 
     onClicked: event => {
         if (event.button === Qt.RightButton)
