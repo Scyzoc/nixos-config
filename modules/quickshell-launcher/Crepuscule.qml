@@ -395,7 +395,7 @@ PanelWindow {
                     Badge {
                         lit: win.st ? win.st.active : false
                         accent: win.warm
-                        label: lit ? "Actif · " + win.flt.temp + " K" : "Inactif"
+                        label: lit ? "Actif · " + win.st.now.temp + " K" : "Inactif"
                     }
                 }
                 Segmented {

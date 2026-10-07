@@ -1,11 +1,15 @@
-"""Crépuscule — backend du filtre anti-lumière bleue (gammastep) et du mode sombre.
+"""Crépuscule — backend du filtre anti-lumière bleue et du mode sombre.
+
+Le filtre passe par un shader d'écran Hyprland (decoration:screen_shader) : ni gammastep
+(protocole gamma) ni hyprsunset (CTM) ne fonctionnent ici, AQ_NO_ATOMIC=1 (home.nix) met
+le KMS en mode legacy, sans gamma ni CTM (« No support for gamma on the legacy iface »).
 
 Lancé par le wrapper `crepuscule-ctl` (modules/crepuscule.nix), qui fournit les chemins
 des binaires par variables d'environnement. Sous-commandes :
 
   state                       état complet en JSON (lu par Crepuscule.qml)
-  apply                       régénère la config gammastep + les heures du soleil, relance le filtre s'il tourne
-  gen                         régénère seulement les fichiers (ExecStartPre du service)
+  daemon                      boucle du filtre (service crepuscule-filter) : applique le shader voulu
+  apply                       recalcule les heures du soleil et prévient le démon
   enabled                     code 0 si le filtre doit tourner (ExecCondition du service)
   set <clé> <valeur>          filter.mode / filter.start / filter.end / filter.offset / filter.temp / filter.brightness
   set-city <nom> <région> <lat> <lon>
@@ -13,9 +17,11 @@ des binaires par variables d'environnement. Sous-commandes :
   theme <mode|hours|dark|light> [...]   délégué à la commande `theme` (theme-automation.nix)
 """
 
+import glob
 import json
 import math
 import os
+import signal
 import subprocess
 import sys
 import urllib.parse
@@ -25,16 +31,18 @@ from datetime import date, datetime, timedelta, timezone
 HOME = os.path.expanduser("~")
 CONF_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config")), "crepuscule")
 CONF = os.path.join(CONF_DIR, "config.json")
-GAMMA_INI = os.path.join(CONF_DIR, "gammastep.ini")
 SUN_CONF = os.path.join(CONF_DIR, "sun.conf")    # lu par theme-auto (mode sombre « soleil »)
 THEME_CONF = os.path.join(HOME, ".config", "theme-automation", "hours.conf")
+SHADER_DIR = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "crepuscule")
 
 SYSTEMCTL = os.environ.get("CREPUSCULE_SYSTEMCTL", "systemctl")
 GSETTINGS = os.environ.get("CREPUSCULE_GSETTINGS", "gsettings")
+HYPRCTL = os.environ.get("CREPUSCULE_HYPRCTL", "hyprctl")
 THEME = os.environ.get("CREPUSCULE_THEME", "theme")
 UNIT = "crepuscule-filter.service"
 
 TRANSITION = 30      # minutes de fondu au début et à la fin du filtre
+TICK = 20            # secondes entre deux vérifications du démon
 
 DEFAULT = {
     "city": {"name": "Paris", "region": "Île-de-France, France", "lat": 48.8566, "lon": 2.3522},
@@ -132,55 +140,126 @@ def filter_window(cfg):
         if sun is None:
             return to_min(f["start"]), to_min(f["end"])
         rise, set_ = sun
-        return set_ - int(f["offset"]), rise
+        return (set_ - int(f["offset"])) % 1440, rise
     return None
 
 
-def in_window(now, start, end):
-    return (now >= start or now < end) if start > end else (start <= now < end)
-
-
-# --- Génération des fichiers -------------------------------------------------------------
-
-def gammastep_ini(cfg):
-    f = cfg["filter"]
-    temp = max(1000, min(6500, int(f["temp"])))
-    bright = max(0.3, min(1.0, int(f["brightness"]) / 100))
-    lines = ["[general]", "adjustment-method=wayland", "fade=1"]
+def night_factor(cfg, now_min):
+    """0 (jour, pas de filtre) → 1 (filtre complet), fondu de TRANSITION min au début et à la fin."""
+    mode = cfg["filter"]["mode"]
+    if mode == "off":
+        return 0.0
     win = filter_window(cfg)
     if win is None:
-        # Toujours actif : jour = nuit, l'horaire n'a plus d'effet
-        lines += ["temp-day=%d" % temp, "temp-night=%d" % temp,
-                  "brightness-day=%.2f" % bright, "brightness-night=%.2f" % bright,
-                  "dawn-time=06:00", "dusk-time=20:00"]
-    else:
-        start, end = win
-        # gammastep : fondu du soir (dusk) après celui du matin (dawn) dans la même journée
-        dusk_a, dusk_b = start, min(start + TRANSITION, 1439)
-        dawn_a, dawn_b = max(end - TRANSITION, 0), end
-        lines += ["temp-day=6500", "temp-night=%d" % temp,
-                  "brightness-day=1.0", "brightness-night=%.2f" % bright,
-                  "dawn-time=%s-%s" % (fmt(dawn_a), fmt(dawn_b)),
-                  "dusk-time=%s-%s" % (fmt(dusk_a), fmt(dusk_b))]
-    return "\n".join(lines) + "\n"
+        return 1.0
+    start, end = win
+    length = (end - start) % 1440
+    d = (now_min - start) % 1440
+    if length == 0 or d >= length:
+        return 0.0
+    ramp = min(TRANSITION, length / 2)
+    return max(0.0, min(1.0, d / ramp, (length - d) / ramp))
 
 
-def generate(cfg):
-    """Écrit gammastep.ini et sun.conf. Renvoie True si la config gammastep a changé."""
+# --- Shader ------------------------------------------------------------------------------
+
+def kelvin_rgb(k):
+    """Couleur d'un corps noir (approximation de Tanner Helland), composantes 0-1."""
+    t = k / 100
+    r = 255 if t <= 66 else 329.698727446 * (t - 60) ** -0.1332047592
+    g = 99.4708025861 * math.log(t) - 161.1195681661 if t <= 66 else 288.1221695283 * (t - 60) ** -0.0755148492
+    b = 255 if t >= 66 else (0 if t <= 19 else 138.5177312231 * math.log(t - 10) - 305.0447927307)
+    return [max(0.0, min(1.0, c / 255)) for c in (r, g, b)]
+
+
+def target(cfg, now_min):
+    """(température K, luminosité 0-1) voulues maintenant ; (6500, 1.0) = pas de filtre."""
+    f = night_factor(cfg, now_min)
+    temp = 6500 - (6500 - int(cfg["filter"]["temp"])) * f
+    bright = 1 - (1 - int(cfg["filter"]["brightness"]) / 100) * f
+    return int(round(temp / 50) * 50), round(bright, 2)
+
+
+SHADER = """#version 300 es
+// Crépuscule : filtre %(temp)d K, luminosité %(bright).2f (généré par crepuscule.py)
+precision highp float;
+in vec2 v_texcoord;
+uniform sampler2D tex;
+out vec4 fragColor;
+void main() {
+    vec4 c = texture(tex, v_texcoord);
+    fragColor = vec4(c.rgb * vec3(%(r).4f, %(g).4f, %(b).4f), c.a);
+}
+"""
+
+
+def shader_path(temp, bright):
+    """Fichier shader pour ces valeurs (un nom par valeur : Hyprland recompile à chaque changement)."""
+    path = os.path.join(SHADER_DIR, "filtre-%d-%d.frag" % (temp, round(bright * 100)))
+    if not os.path.exists(path):
+        ref = kelvin_rgb(6500)
+        rgb = [c / w * bright for c, w in zip(kelvin_rgb(temp), ref)]
+        write_if_changed(path, SHADER % {"temp": temp, "bright": bright, "r": rgb[0], "g": rgb[1], "b": rgb[2]})
+    return path
+
+
+def hypr(*args):
+    return subprocess.run([HYPRCTL, *args], capture_output=True, text=True).stdout
+
+
+def current_shader():
+    try:
+        return json.loads(hypr("getoption", "decoration:screen_shader", "-j")).get("str", "")
+    except ValueError:
+        return None
+
+
+def set_shader(path):
+    hypr("keyword", "decoration:screen_shader", path or "[[EMPTY]]")
+
+
+def clear_shader():
+    if (current_shader() or "").startswith(SHADER_DIR):
+        set_shader("")
+
+
+def daemon():
+    """Applique le shader voulu toutes les TICK s, ou tout de suite sur SIGUSR1 (réglage
+    modifié). Réapplique aussi si un rechargement de la config Hyprland l'a effacé."""
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGUSR1, signal.SIGTERM, signal.SIGINT})
+    os.makedirs(SHADER_DIR, exist_ok=True)
+    while True:
+        cfg = load()
+        now = datetime.now()
+        temp, bright = target(cfg, now.hour * 60 + now.minute + now.second / 60)
+        want = "" if temp >= 6500 and bright >= 1 else shader_path(temp, bright)
+        cur = current_shader()
+        if cur is not None and cur.replace("[[EMPTY]]", "") != want:
+            # Ne pas écraser un shader posé par autre chose que Crépuscule
+            if want or cur.startswith(SHADER_DIR):
+                set_shader(want)
+            for old in glob.glob(os.path.join(SHADER_DIR, "filtre-*.frag")):
+                if old != want:
+                    os.remove(old)
+        sig = signal.sigtimedwait({signal.SIGUSR1, signal.SIGTERM, signal.SIGINT}, TICK)
+        if sig is not None and sig.si_signo != signal.SIGUSR1:
+            clear_shader()
+            return
+
+
+# --- Application des réglages ------------------------------------------------------------
+
+def update_sun(cfg):
     sun = sun_times(cfg["city"]["lat"], cfg["city"]["lon"], date.today())
     if sun is not None:
         write_if_changed(SUN_CONF, "SUNRISE=%s\nSUNSET=%s\n" % (fmt(sun[0]), fmt(sun[1])))
-    return write_if_changed(GAMMA_INI, gammastep_ini(cfg))
 
 
 def valid(cfg):
-    """Message d'erreur si l'horaire n'est pas représentable par gammastep, sinon None."""
+    """Message d'erreur si l'horaire est vide, sinon None."""
     win = filter_window(cfg)
-    if win is None:
-        return None
-    start, end = win
-    if start <= end + 2 * TRANSITION:
-        return "Le début doit être le soir et la fin le matin (ex. 21:00 → 07:00)"
+    if win is not None and win[0] == win[1]:
+        return "Le début et la fin du filtre sont à la même heure"
     return None
 
 
@@ -191,14 +270,14 @@ def systemctl(*args):
 
 def apply(cfg, start=True):
     """start=False (timer quotidien) : ne démarre pas le filtre s'il ne tourne pas — au boot,
-    le timer peut passer avant la session graphique (gammastep sans Wayland)."""
-    changed = generate(cfg)
-    if cfg["filter"]["mode"] == "off":
+    le timer peut passer avant la session graphique (Hyprland pas encore lancé)."""
+    update_sun(cfg)
+    if cfg["filter"]["mode"] == "off" or valid(cfg) is not None:
         systemctl("stop", UNIT)
-    elif start and (changed or systemctl("is-active", "--quiet", UNIT) != 0):
-        systemctl("restart", UNIT)
-    elif changed:
-        systemctl("try-restart", UNIT)
+    elif systemctl("is-active", "--quiet", UNIT) == 0:
+        systemctl("kill", "--signal=USR1", UNIT)
+    elif start:
+        systemctl("start", UNIT)
     # Le mode sombre « soleil » relit sun.conf
     systemctl("start", "--no-block", "theme-auto.service")
 
@@ -227,17 +306,16 @@ def theme_state():
 def state():
     cfg = load()
     now = datetime.now()
-    now_min = now.hour * 60 + now.minute
     sun = sun_times(cfg["city"]["lat"], cfg["city"]["lon"], date.today())
     win = filter_window(cfg)
-    mode = cfg["filter"]["mode"]
-    active = mode == "always" or (win is not None and in_window(now_min, *win))
+    temp, bright = target(cfg, now.hour * 60 + now.minute + now.second / 60)
     out = {
         "city": cfg["city"],
         "filter": cfg["filter"],
         "sun": {"rise": fmt(sun[0]), "set": fmt(sun[1])} if sun else None,
         "window": {"start": fmt(win[0]), "end": fmt(win[1])} if win else None,
-        "active": active and mode != "off",
+        "active": temp < 6500 or bright < 1,
+        "now": {"temp": temp, "brightness": round(bright * 100)},
         "running": systemctl("is-active", "--quiet", UNIT) == 0,
         "error": valid(cfg),
         "theme": theme_state(),
@@ -265,16 +343,14 @@ def cmd_set(key, value):
     elif name == "brightness":
         cfg["filter"]["brightness"] = max(30, min(100, int(value)))
     save(cfg)
-    if valid(cfg) is None:
-        apply(cfg)
+    apply(cfg)
 
 
 def cmd_set_city(name, region, lat, lon):
     cfg = load()
     cfg["city"] = {"name": name, "region": region, "lat": float(lat), "lon": float(lon)}
     save(cfg)
-    if valid(cfg) is None:
-        apply(cfg)
+    apply(cfg)
 
 
 def cmd_geocode(query):
@@ -300,12 +376,10 @@ def main():
     cmd = args[0] if args else "state"
     if cmd == "state":
         state()
+    elif cmd == "daemon":
+        daemon()
     elif cmd == "apply":
-        cfg = load()
-        if valid(cfg) is None:
-            apply(cfg, start=False)
-    elif cmd == "gen":
-        generate(load())
+        apply(load(), start=False)
     elif cmd == "enabled":
         cfg = load()
         sys.exit(0 if cfg["filter"]["mode"] != "off" and valid(cfg) is None else 1)
