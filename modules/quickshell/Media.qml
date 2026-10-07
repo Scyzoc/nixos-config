@@ -89,7 +89,9 @@ Pill {
         // morceau, ex. « soundcloud.com/discover » ; un onglet en arrière-plan non plus) :
         // sources possibles d'après les fenêtres ouvertes (PWA par appId, onglet YouTube
         // visible par titre). Une seule → c'est elle ; sinon YouTube en arrière-plan.
-        const wins = ToplevelManager.toplevels.values.map(w => ((w.appId || "") + " " + (w.title || "")).toLowerCase());
+        const wins = ToplevelManager.toplevels.values
+            .map(w => ((w.appId || "") + " " + (w.title || "")).toLowerCase())
+            .filter(w => /^(brave|chrom)/.test(w));    // pas l'appli Spotify native
         const cands = ["soundcloud", "spotify", "youtube"].filter(n => wins.some(w => w.indexOf(n) >= 0));
         return cands.length === 1 ? cands[0] : "youtube";
     }
