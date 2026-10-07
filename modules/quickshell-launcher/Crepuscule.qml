@@ -89,6 +89,12 @@ PanelWindow {
         queue.push(args);
         if (!actProc.running) next();
     }
+    // Aperçu pendant le glissement d'un curseur : seul le dernier aperçu en attente est gardé
+    function preview(temp, bright) {
+        const args = ["preview", String(temp), String(bright)];
+        if (queue.length && queue[queue.length - 1][0] === "preview") queue[queue.length - 1] = args;
+        else ctl(...args);
+    }
 
     // Copie locale modifiée tout de suite (affichage réactif), envoi groupé après 700 ms
     property var pending: ({})
@@ -569,6 +575,7 @@ PanelWindow {
                         spacing: 10
                         BarText { Layout.preferredWidth: 22; text: Theme.ic(0xf050f); font.pixelSize: 16; color: Theme.subtext }
                         Slider {
+                            id: tempSlider
                             Layout.fillWidth: true
                             from: 6500
                             to: 1500
@@ -577,14 +584,17 @@ PanelWindow {
                             colorFrom: "#fff3e6"
                             colorTo: "#ff7a1a"
                             onCommitted: v => win.setFilter("temp", v, true)
+                            onPreviewed: v => win.preview(v, win.flt.brightness)
+                            onPreviewEnded: win.ctl("preview-end")
                         }
-                        BarText { Layout.preferredWidth: 62; horizontalAlignment: Text.AlignRight; text: win.flt.temp + " K"; font.pixelSize: 12; color: Theme.subtext }
+                        BarText { Layout.preferredWidth: 62; horizontalAlignment: Text.AlignRight; text: tempSlider.dragValue + " K"; font.pixelSize: 12; color: Theme.subtext }
                     }
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
                         BarText { Layout.preferredWidth: 22; text: Theme.ic(0xf00df); font.pixelSize: 16; color: Theme.subtext }
                         Slider {
+                            id: brightSlider
                             Layout.fillWidth: true
                             from: 100
                             to: 40
@@ -593,8 +603,10 @@ PanelWindow {
                             colorFrom: "#ffffff"
                             colorTo: "#5a5a5a"
                             onCommitted: v => win.setFilter("brightness", v, true)
+                            onPreviewed: v => win.preview(win.flt.temp, v)
+                            onPreviewEnded: win.ctl("preview-end")
                         }
-                        BarText { Layout.preferredWidth: 62; horizontalAlignment: Text.AlignRight; text: win.flt.brightness + " %"; font.pixelSize: 12; color: Theme.subtext }
+                        BarText { Layout.preferredWidth: 62; horizontalAlignment: Text.AlignRight; text: brightSlider.dragValue + " %"; font.pixelSize: 12; color: Theme.subtext }
                     }
                 }
             }
@@ -856,7 +868,7 @@ PanelWindow {
         }
     }
 
-    // Curseur : piste en dégradé (from → to), appliqué au relâchement
+    // Curseur : piste en dégradé (from → to), aperçu à l'écran pendant le glissement, appliqué au relâchement
     component Slider: Item {
         id: sl
         property real from: 0
@@ -868,6 +880,8 @@ PanelWindow {
         property real dragValue: value
         readonly property real frac: Math.max(0, Math.min(1, (dragValue - from) / (to - from)))
         signal committed(int value)
+        signal previewed(int value)     // pendant le glissement
+        signal previewEnded()           // au relâchement, après committed
         implicitHeight: 24
         onValueChanged: if (!slMa.pressed) dragValue = value
 
@@ -907,9 +921,16 @@ PanelWindow {
             anchors.bottomMargin: -6
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onPressed: ev => sl.dragValue = sl.at(ev.x)
-            onPositionChanged: ev => { if (pressed) sl.dragValue = sl.at(ev.x); }
-            onReleased: if (sl.dragValue !== sl.value) sl.committed(sl.dragValue)
+            onPressed: ev => { sl.dragValue = sl.at(ev.x); sl.previewed(sl.dragValue); }
+            onPositionChanged: ev => {
+                if (!pressed) return;
+                const v = sl.at(ev.x);
+                if (v !== sl.dragValue) { sl.dragValue = v; sl.previewed(v); }
+            }
+            onReleased: {
+                if (sl.dragValue !== sl.value) sl.committed(sl.dragValue);
+                sl.previewEnded();
+            }
             onWheel: ev => {
                 const v = Math.max(Math.min(sl.from, sl.to), Math.min(Math.max(sl.from, sl.to),
                           sl.value + (ev.angleDelta.y > 0 ? 1 : -1) * sl.step * (sl.to > sl.from ? 1 : -1)));

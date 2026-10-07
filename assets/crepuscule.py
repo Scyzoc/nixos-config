@@ -15,6 +15,8 @@ des binaires par variables d'environnement. Sous-commandes :
                               (full_start / full_end : HH:MM, ou « edge » = borne de la plage)
   set-city <nom> <région> <lat> <lon>
   geocode <recherche>         villes correspondantes en JSON (API Open-Meteo)
+  preview <K> <luminosité %>  aperçu immédiat à l'écran (glissement d'un curseur) ; le démon s'efface
+  preview-end                 fin d'aperçu : fondu vers l'état normal
   theme <mode|hours|dark|light> [...]   délégué à la commande `theme` (theme-automation.nix)
 """
 
@@ -321,6 +323,38 @@ def fade(frm, to):
             os.remove(old)
 
 
+PREVIEW_LOCK = os.path.join(SHADER_DIR, "apercu")
+
+
+def previewing():
+    """Aperçu en cours (verrou touché il y a moins de 10 s : un menu planté ne bloque pas le démon)."""
+    try:
+        return time.time() - os.path.getmtime(PREVIEW_LOCK) < 10
+    except OSError:
+        return False
+
+
+def preview(temp, bright):
+    os.makedirs(SHADER_DIR, exist_ok=True)
+    with open(PREVIEW_LOCK, "w"):
+        pass
+    ref = kelvin_rgb(6500)
+    set_rgb(tuple(round(c / w * bright / 100, 3) for c, w in zip(kelvin_rgb(temp), ref)))
+
+
+def preview_end():
+    try:
+        os.remove(PREVIEW_LOCK)
+    except OSError:
+        pass
+    if systemctl("is-active", "--quiet", UNIT) == 0:
+        systemctl("kill", "--signal=USR1", UNIT)
+    else:
+        cur = shader_rgb(current_shader())
+        if cur is not None and cur != NEUTRAL:
+            fade(cur, NEUTRAL)
+
+
 def watch_reload():
     """Rechargement de la config Hyprland (rebuild…) = shader effacé : SIGUSR1 pour le reposer."""
     path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", ""), "hypr",
@@ -351,7 +385,7 @@ def daemon():
         # tant que le filtre est éteint)
         if cur is None and want != NEUTRAL:
             cur = NEUTRAL
-        if cur is not None and max(abs(a - b) for a, b in zip(cur, want)) > 0.002:
+        if cur is not None and not previewing() and max(abs(a - b) for a, b in zip(cur, want)) > 0.002:
             fade(cur, want)
         sig = signal.sigtimedwait({signal.SIGUSR1, signal.SIGTERM, signal.SIGINT}, TICK)
         if sig is not None and sig.si_signo != signal.SIGUSR1:
@@ -506,6 +540,10 @@ def main():
         cmd_set(args[1], args[2])
     elif cmd == "set-city" and len(args) == 5:
         cmd_set_city(*args[1:])
+    elif cmd == "preview" and len(args) == 3:
+        preview(int(args[1]), int(args[2]))
+    elif cmd == "preview-end":
+        preview_end()
     elif cmd == "geocode" and len(args) == 2:
         cmd_geocode(args[1])
     elif cmd == "theme" and len(args) >= 2:
