@@ -4,9 +4,14 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
 
-// Heure + météo + compte à rebours de sommeil ; clic : calendrier ; clic droit : calendrier Notion
+// Heure + météo + compte à rebours de sommeil ; clic : calendrier (ou détail de la nuit sur
+// le compteur) ; clic droit : calendrier Notion
 Pill {
     id: root
+
+    property string monitorName: ""
+    // Compteur de sommeil affiché : pastille coupée en deux, chaque moitié a son clic
+    splitX: sleep.visible ? (sleep.x, root.width, sleep.mapToItem(root, 0, 0).x - 2) : -1
 
     property string weatherIcon: ""      // emoji (pastille de la barre)
     property string weatherSym: ""       // symbole texte wttr (%x) → icône monochrome du menu
@@ -73,11 +78,13 @@ Pill {
     BarText { text: Qt.formatDateTime(clock.date, "dd/MM"); color: Theme.subtext; font.family: Theme.labelFont; font.features: { "tnum": 1 } }
     BarText { text: "·"; color: Theme.muted; font.family: Theme.labelFont }
     BarText { text: Qt.formatDateTime(clock.date, "HH:mm"); font.family: Theme.labelFont; font.weight: Font.DemiBold; font.features: { "tnum": 1 } }
-    SleepCountdown { id: sleep; now: clock.date }
+    SleepCountdown { id: sleep; monitorName: root.monitorName }
 
     onClicked: event => {
         if (event.button === Qt.RightButton)
             Hyprland.dispatch("exec brave --app=https://calendar.notion.so/");
+        else if (root.splitX >= 0 && event.x >= root.splitX)
+            sleep.toggleDetails();
         else
             popup.toggle();
     }

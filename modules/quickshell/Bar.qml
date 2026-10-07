@@ -51,6 +51,7 @@ PanelWindow {
     // jamais passer sur les workspaces
     Clock {
         id: clock
+        monitorName: bar.modelData.name
         readonly property real centered: (bar.width - width) / 2
         readonly property real maxX: rightRow.x - width - 12
         readonly property real minX: leftRow.x + leftRow.width + 12
