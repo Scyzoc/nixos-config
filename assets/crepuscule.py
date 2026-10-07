@@ -11,7 +11,8 @@ des binaires par variables d'environnement. Sous-commandes :
   daemon                      boucle du filtre (service crepuscule-filter) : applique le shader voulu
   apply                       recalcule les heures du soleil et prévient le démon
   enabled                     code 0 si le filtre doit tourner (ExecCondition du service)
-  set <clé> <valeur>          filter.mode / filter.start / filter.end / filter.offset / filter.temp / filter.brightness
+  set <clé> <valeur>          filter.mode / start / end / full_start / full_end / ramp_in / ramp_out / temp / brightness
+                              (full_start / full_end : HH:MM, ou « edge » = borne de la plage)
   set-city <nom> <région> <lat> <lon>
   geocode <recherche>         villes correspondantes en JSON (API Open-Meteo)
   theme <mode|hours|dark|light> [...]   délégué à la commande `theme` (theme-automation.nix)
@@ -44,7 +45,6 @@ HYPRCTL = os.environ.get("CREPUSCULE_HYPRCTL", "hyprctl")
 THEME = os.environ.get("CREPUSCULE_THEME", "theme")
 UNIT = "crepuscule-filter.service"
 
-TRANSITION = 30      # minutes de fondu au début et à la fin du filtre
 TICK = 20            # secondes entre deux vérifications du démon
 
 DEFAULT = {
@@ -53,7 +53,10 @@ DEFAULT = {
         "mode": "sun",          # sun | hours | always | off
         "start": "21:00",       # mode horaires
         "end": "07:00",
-        "offset": 0,            # mode soleil : minutes d'avance sur le coucher (négatif = retard)
+        "full_start": None,     # tranche à pleine valeur, dans la plage ; None = borne (coucher / début)
+        "full_end": None,       #   … None = borne (lever / fin)
+        "ramp_in": 30,          # minutes de montée, finie au début de la tranche
+        "ramp_out": 30,         # minutes de descente, commencée à la fin de la tranche
         "temp": 3500,           # K
         "brightness": 90,       # %
     },
@@ -69,7 +72,7 @@ def load():
             data = json.load(f)
         for k in ("city", "filter"):
             if isinstance(data.get(k), dict):
-                cfg[k].update(data[k])
+                cfg[k].update({kk: vv for kk, vv in data[k].items() if kk in DEFAULT[k]})
     except (OSError, ValueError):
         pass
     return cfg
@@ -143,25 +146,56 @@ def filter_window(cfg):
         if sun is None:
             return to_min(f["start"]), to_min(f["end"])
         rise, set_ = sun
-        return (set_ - int(f["offset"])) % 1440, rise
+        return set_ % 1440, rise
     return None
 
 
-def night_factor(cfg, now_min):
-    """0 (jour, pas de filtre) → 1 (filtre complet), fondu de TRANSITION min au début et à la fin."""
-    mode = cfg["filter"]["mode"]
-    if mode == "off":
-        return 0.0
+def full_slice(cfg):
+    """(début, fin) de la tranche à pleine valeur, ramenée dans la plage ; None si toujours / off."""
     win = filter_window(cfg)
     if win is None:
-        return 1.0
-    start, end = win
-    length = (end - start) % 1440
-    d = (now_min - start) % 1440
-    if length == 0 or d >= length:
+        return None
+    ws, we = win
+    length = (we - ws) % 1440
+
+    def clamp(v, edge):
+        if v is None:
+            return edge
+        p = (to_min(v) - ws) % 1440
+        if p > length:      # hors plage : borne la plus proche
+            p = 0 if p > (length + 1440) / 2 else length
+        return p
+
+    a = clamp(cfg["filter"]["full_start"], 0)
+    b = clamp(cfg["filter"]["full_end"], length)
+    if b < a:
+        a, b = b, a
+    return (ws + a) % 1440, (ws + b) % 1440
+
+
+def night_factor(cfg, now_min):
+    """0 (pas de filtre) → 1 (pleine valeur). Pleine valeur dans la tranche ; montée de ramp_in
+    min finie au début de la tranche, descente de ramp_out min après sa fin ; rien ailleurs."""
+    f = cfg["filter"]
+    if f["mode"] == "off":
         return 0.0
-    ramp = min(TRANSITION, length / 2)
-    return max(0.0, min(1.0, d / ramp, (length - d) / ramp))
+    sl = full_slice(cfg)
+    if sl is None:
+        return 1.0
+    a, b = sl
+    length = (b - a) % 1440
+    rel = (now_min - a) % 1440
+    if rel <= length:
+        return 1.0
+    rin, rout = max(0, int(f["ramp_in"])), max(0, int(f["ramp_out"]))
+    after = rel - length                 # minutes depuis la fin de la tranche
+    before = 1440 - rel                  # minutes avant le début de la tranche
+    v = 0.0
+    if rout and after < rout:
+        v = max(v, 1 - after / rout)
+    if rin and before < rin:
+        v = max(v, 1 - before / rin)
+    return v
 
 
 # --- Shader ------------------------------------------------------------------------------
@@ -388,6 +422,7 @@ def state():
     now = datetime.now()
     sun = sun_times(cfg["city"]["lat"], cfg["city"]["lon"], date.today())
     win = filter_window(cfg)
+    sl = full_slice(cfg)
     temp, bright = target(cfg, now.hour * 60 + now.minute + now.second / 60)
     temp, bright = int(round(temp / 50) * 50), round(bright, 2)
     out = {
@@ -395,6 +430,7 @@ def state():
         "filter": cfg["filter"],
         "sun": {"rise": fmt(sun[0]), "set": fmt(sun[1])} if sun else None,
         "window": {"start": fmt(win[0]), "end": fmt(win[1])} if win else None,
+        "slice": {"start": fmt(sl[0]), "end": fmt(sl[1])} if sl else None,
         "active": temp < 6500 or bright < 1,
         "now": {"temp": temp, "brightness": round(bright * 100)},
         "running": systemctl("is-active", "--quiet", UNIT) == 0,
@@ -417,8 +453,10 @@ def cmd_set(key, value):
         cfg["filter"]["mode"] = value
     elif name in ("start", "end"):
         cfg["filter"][name] = fmt(to_min(value))
-    elif name == "offset":
-        cfg["filter"]["offset"] = max(-180, min(180, int(value)))
+    elif name in ("full_start", "full_end"):
+        cfg["filter"][name] = None if value == "edge" else fmt(to_min(value))
+    elif name in ("ramp_in", "ramp_out"):
+        cfg["filter"][name] = max(0, min(240, int(value)))
     elif name == "temp":
         cfg["filter"]["temp"] = max(1500, min(6500, int(value)))
     elif name == "brightness":

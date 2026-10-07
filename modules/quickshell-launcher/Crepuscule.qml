@@ -54,7 +54,7 @@ PanelWindow {
 
     // --- Données -----------------------------------------------------------------
     property var st: null
-    readonly property var flt: st ? st.filter : ({ mode: "sun", start: "21:00", end: "07:00", offset: 0, temp: 3500, brightness: 90 })
+    readonly property var flt: st ? st.filter : ({ mode: "sun", start: "21:00", end: "07:00", full_start: null, full_end: null, ramp_in: 30, ramp_out: 30, temp: 3500, brightness: 90 })
     readonly property var th: st ? st.theme : ({ mode: "hours", dark: "20:00", light: "08:00", current: "light" })
     readonly property string sunRise: st && st.sun ? st.sun.rise : "--:--"
     readonly property string sunSet: st && st.sun ? st.sun.set : "--:--"
@@ -183,11 +183,11 @@ PanelWindow {
         const h = Math.floor(m / 60), mm = m % 60;
         return (h < 10 ? "0" : "") + h + ":" + (mm < 10 ? "0" : "") + mm;
     }
-    function offsetLabel(o) {
-        if (o === 0) return "au coucher du soleil";
-        const a = Math.abs(o), t = a >= 60 ? Math.floor(a / 60) + " h" + (a % 60 ? " " + (a % 60) : "") : a + " min";
-        return t + (o > 0 ? " avant le coucher" : " après le coucher");
-    }
+    readonly property var rampChoices: [0, 15, 30, 60, 120]
+    function durLabel(m) { return m === 0 ? "Aucune" : m < 60 ? m + " min" : (m / 60) + " h"; }
+    // Minutes actuelles (rafraîchies avec l'état, pour le repère « maintenant » de la frise)
+    property int nowMin: 0
+    onStChanged: { const d = new Date(); nowMin = d.getHours() * 60 + d.getMinutes(); }
 
     readonly property var filterModes: [
         { id: "sun", label: "Soleil", icon: 0xf059b },
@@ -475,42 +475,7 @@ PanelWindow {
                     onPicked: key => win.setFilter("mode", key, true)
                 }
 
-                // Détail du mode
-                RowLayout {
-                    Layout.fillWidth: true
-                    visible: win.flt.mode === "sun"
-                    spacing: 10
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
-                        BarText {
-                            text: win.st && win.st.window ? "Aujourd'hui : " + win.st.window.start + " → " + win.st.window.end : ""
-                            font.pixelSize: 13
-                        }
-                        BarText {
-                            text: "Début " + win.offsetLabel(win.flt.offset) + ", fin au lever"
-                            font.pixelSize: 11
-                            color: Theme.muted
-                        }
-                    }
-                    IconBtn {
-                        glyph: 0xf0374    // md-minus : plus tôt
-                        enabled: win.flt.offset < 120
-                        onClicked: win.setFilter("offset", win.flt.offset + 15)
-                    }
-                    BarText {
-                        Layout.preferredWidth: 64
-                        horizontalAlignment: Text.AlignHCenter
-                        text: (win.flt.offset > 0 ? "−" : win.flt.offset < 0 ? "+" : "") + Math.abs(win.flt.offset) + " min"
-                        font.pixelSize: 13
-                        color: Theme.subtext
-                    }
-                    IconBtn {
-                        glyph: 0xf0415    // md-plus : plus tard
-                        enabled: win.flt.offset > -120
-                        onClicked: win.setFilter("offset", win.flt.offset - 15)
-                    }
-                }
+                // Détail du mode : plage (horaires), frise de la nuit, montée / descente
                 RowLayout {
                     Layout.fillWidth: true
                     visible: win.flt.mode === "hours"
@@ -528,6 +493,56 @@ PanelWindow {
                         onEdited: m => win.setFilter("end", win.fmt(m))
                     }
                     Item { Layout.fillWidth: true }
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    visible: (win.flt.mode === "sun" || win.flt.mode === "hours") && win.st !== null && win.st.slice !== null
+                    spacing: 8
+                    BarText {
+                        text: "Pleine valeur de " + (win.st && win.st.slice ? win.st.slice.start + " à " + win.st.slice.end : "")
+                              + "  ·  glisse les poignées"
+                        font.pixelSize: 11
+                        color: Theme.muted
+                    }
+                    Timeline {
+                        Layout.fillWidth: true
+                        sunMode: win.flt.mode === "sun"
+                        winStart: win.st && win.st.window ? win.toMin(win.st.window.start) : 0
+                        winEnd: win.st && win.st.window ? win.toMin(win.st.window.end) : 0
+                        sliceStart: win.st && win.st.slice ? win.toMin(win.st.slice.start) : 0
+                        sliceEnd: win.st && win.st.slice ? win.toMin(win.st.slice.end) : 0
+                        rampIn: win.flt.ramp_in
+                        rampOut: win.flt.ramp_out
+                        now: win.nowMin
+                        onSliceEdited: (a, b) => {
+                            // Copie locale : la frise suit tout de suite, le backend recalcule ensuite
+                            if (win.st) {
+                                const s = JSON.parse(JSON.stringify(win.st));
+                                s.slice = { start: a === "edge" ? s.window.start : a, end: b === "edge" ? s.window.end : b };
+                                win.st = s;
+                            }
+                            win.setFilter("full_start", a);
+                            win.setFilter("full_end", b, true);
+                        }
+                    }
+                    RampRow {
+                        Layout.fillWidth: true
+                        glyph: 0xf059b    // md-weather_sunset_down
+                        label: "Montée"
+                        value: win.flt.ramp_in
+                        hint: value > 0 && win.st && win.st.slice
+                              ? "dès " + win.fmt(win.toMin(win.st.slice.start) - value) : "d'un coup"
+                        onPicked: m => win.setFilter("ramp_in", m, true)
+                    }
+                    RampRow {
+                        Layout.fillWidth: true
+                        glyph: 0xf059c    // md-weather_sunset_up
+                        label: "Descente"
+                        value: win.flt.ramp_out
+                        hint: value > 0 && win.st && win.st.slice
+                              ? "jusqu'à " + win.fmt(win.toMin(win.st.slice.end) + value) : "d'un coup"
+                        onPicked: m => win.setFilter("ramp_out", m, true)
+                    }
                 }
                 BarText {
                     visible: win.flt.mode === "always" || win.flt.mode === "off"
@@ -903,6 +918,209 @@ PanelWindow {
         }
     }
 
+    // Frise de la nuit : de la borne de début (coucher / début) à celle de fin (lever / fin).
+    // Courbe = intensité du filtre ; montée avant la tranche pleine, descente après (dessinées
+    // hors de la frise si elles débordent). Deux poignées règlent la tranche ; près d'une borne,
+    // elles s'y accrochent (« edge » : la tranche suit alors le soleil jour après jour).
+    component Timeline: Item {
+        id: tl
+        property bool sunMode: true
+        property int winStart: 0
+        property int winEnd: 0
+        property int sliceStart: 0
+        property int sliceEnd: 0
+        property int rampIn: 0
+        property int rampOut: 0
+        property int now: 0
+        signal sliceEdited(string a, string b)
+
+        // Tout en minutes relatives au début de plage
+        readonly property int wl: ((winEnd - winStart) % 1440 + 1440) % 1440 || 1440
+        property real dragA: -1
+        property real dragB: -1
+        readonly property real a: dragA >= 0 ? dragA : ((sliceStart - winStart) % 1440 + 1440) % 1440
+        readonly property real b: dragB >= 0 ? dragB : Math.max(a, (((sliceEnd - winStart) % 1440 + 1440) % 1440) || (sliceEnd === winEnd ? wl : 0))
+        readonly property real lo: Math.min(0, a - rampIn)
+        readonly property real hi: Math.max(wl, b + rampOut)
+        readonly property real pad: 12
+        readonly property real yTop: 30
+        readonly property real base: 84
+        function px(m) { return pad + (m - lo) / (hi - lo) * (width - 2 * pad); }
+        function rel(p) { return lo + (p - pad) / (width - 2 * pad) * (hi - lo); }
+        function abs(rel) { return win.fmt(winStart + rel); }
+        readonly property real nowRel: {
+            let r = ((now - winStart) % 1440 + 1440) % 1440;
+            if (r > hi && r - 1440 >= lo) r -= 1440;
+            return r;
+        }
+
+        implicitHeight: 108
+        onAChanged: cv.requestPaint()
+        onBChanged: cv.requestPaint()
+        onLoChanged: cv.requestPaint()
+        onHiChanged: cv.requestPaint()
+        onWidthChanged: cv.requestPaint()
+
+        // Fond de la plage (coucher → lever)
+        Rectangle {
+            x: tl.px(0)
+            y: tl.yTop - 8
+            width: tl.px(tl.wl) - tl.px(0)
+            height: tl.base - tl.yTop + 8
+            radius: 8
+            color: Qt.rgba(0.35, 0.4, 0.75, 0.10)
+            border.color: Qt.rgba(1, 1, 1, 0.06)
+            border.width: 1
+        }
+
+        Canvas {
+            id: cv
+            anchors.fill: parent
+            onPaint: {
+                const c = getContext("2d");
+                c.reset();
+                const x0 = tl.px(tl.a - tl.rampIn), xa = tl.px(tl.a), xb = tl.px(tl.b), x1 = tl.px(tl.b + tl.rampOut);
+                // Ligne de base (pointillés hors de la plage)
+                c.strokeStyle = Qt.rgba(1, 1, 1, 0.18);
+                c.lineWidth = 1;
+                c.beginPath(); c.moveTo(tl.px(0), tl.base); c.lineTo(tl.px(tl.wl), tl.base); c.stroke();
+                // Aire de la courbe
+                const g = c.createLinearGradient(0, tl.yTop, 0, tl.base);
+                g.addColorStop(0, Qt.rgba(1, 0.6, 0.3, 0.55));
+                g.addColorStop(1, Qt.rgba(1, 0.6, 0.3, 0.04));
+                c.fillStyle = g;
+                c.beginPath();
+                c.moveTo(x0, tl.base); c.lineTo(xa, tl.yTop); c.lineTo(xb, tl.yTop); c.lineTo(x1, tl.base);
+                c.closePath(); c.fill();
+                c.strokeStyle = "#ff9a4d";
+                c.lineWidth = 2;
+                c.beginPath();
+                c.moveTo(x0, tl.base); c.lineTo(xa, tl.yTop); c.lineTo(xb, tl.yTop); c.lineTo(x1, tl.base);
+                c.stroke();
+            }
+        }
+
+        // Repère « maintenant »
+        Rectangle {
+            visible: tl.nowRel >= tl.lo && tl.nowRel <= tl.hi
+            x: tl.px(tl.nowRel) - 1
+            y: tl.yTop - 12
+            width: 2
+            height: tl.base - tl.yTop + 12
+            radius: 1
+            color: Theme.text
+            opacity: 0.7
+        }
+
+        // Bornes : coucher / lever (ou début / fin)
+        Repeater {
+            model: [
+                { rel: 0, glyph: tl.sunMode ? 0xf059b : 0xf0150, color: win.warm, align: Text.AlignLeft },
+                { rel: tl.wl, glyph: tl.sunMode ? 0xf059c : 0xf0150, color: Theme.yellow, align: Text.AlignRight }
+            ]
+            BarText {
+                required property var modelData
+                x: modelData.align === Text.AlignLeft ? Math.max(0, tl.px(modelData.rel) - 4)
+                                                      : Math.min(tl.width - implicitWidth, tl.px(modelData.rel) - implicitWidth + 4)
+                y: tl.base + 6
+                text: Theme.ic(modelData.glyph) + " " + tl.abs(modelData.rel)
+                font.pixelSize: 11
+                color: modelData.color
+            }
+        }
+
+        // Poignées de la tranche pleine
+        Repeater {
+            model: [0, 1]
+            Item {
+                id: hd
+                required property int modelData
+                readonly property real pos: modelData === 0 ? tl.a : tl.b
+                x: tl.px(pos) - 12
+                y: tl.yTop - 12
+                width: 24
+                height: 24
+                z: 2
+                BarText {
+                    anchors.bottom: parent.top
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottomMargin: -2
+                    text: tl.abs(hd.pos)
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                    color: hma.containsMouse || hma.pressed ? win.warm : Theme.subtext
+                }
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 14
+                    height: 14
+                    radius: 7
+                    color: win.warm
+                    border.color: "#ffffff"
+                    border.width: 2
+                    scale: hma.pressed ? 1.3 : (hma.containsMouse ? 1.15 : 1)
+                    Behavior on scale { NumberAnimation { duration: 120 } }
+                }
+                MouseArea {
+                    id: hma
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    hoverEnabled: true
+                    cursorShape: Qt.SizeHorCursor
+                    preventStealing: true
+                    onPositionChanged: ev => {
+                        if (!pressed) return;
+                        const p = mapToItem(tl, ev.x, ev.y);
+                        let v = Math.round(tl.rel(p.x) / 5) * 5;
+                        v = Math.max(0, Math.min(tl.wl, v));
+                        if (v < 10) v = 0;                      // accroche aux bornes
+                        if (v > tl.wl - 10) v = tl.wl;
+                        if (hd.modelData === 0) { tl.dragB = tl.b; tl.dragA = Math.min(v, tl.b); }
+                        else { tl.dragA = tl.a; tl.dragB = Math.max(v, tl.a); }
+                    }
+                    onReleased: {
+                        if (tl.dragA < 0 && tl.dragB < 0) return;
+                        const a = tl.a, b = tl.b;
+                        tl.dragA = -1;
+                        tl.dragB = -1;
+                        tl.sliceEdited(a <= 0 ? "edge" : tl.abs(a), b >= tl.wl ? "edge" : tl.abs(b));
+                    }
+                }
+            }
+        }
+    }
+
+    // Durée de montée / descente : Aucune, 15 min… 2 h
+    component RampRow: RowLayout {
+        id: rr
+        property int glyph: 0
+        property string label: ""
+        property int value: 0
+        property string hint: ""
+        signal picked(int minutes)
+        spacing: 6
+        BarText { Layout.preferredWidth: 20; text: Theme.ic(rr.glyph); font.pixelSize: 14; color: win.warm }
+        BarText { Layout.preferredWidth: 70; text: rr.label; font.pixelSize: 12; color: Theme.subtext }
+        Repeater {
+            model: win.rampChoices
+            Chip {
+                required property int modelData
+                label: win.durLabel(modelData)
+                active: rr.value === modelData
+                accent: win.warm
+                onClicked: rr.picked(modelData)
+            }
+        }
+        BarText {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignRight
+            text: rr.hint
+            font.pixelSize: 11
+            color: Theme.muted
+            elide: Text.ElideRight
+        }
+    }
+
     // Bouton rond à icône seule
     component IconBtn: Rectangle {
         id: ib
@@ -938,12 +1156,14 @@ PanelWindow {
         id: chip
         property string label: ""
         property int glyph: 0
+        property bool active: false
+        property color accent: Theme.mauve
         signal clicked()
         implicitWidth: chipRow.implicitWidth + 20
         implicitHeight: 28
         radius: 14
-        color: cma.containsMouse ? Theme.pillHover : "transparent"
-        border.color: Theme.pillBorder
+        color: active ? Qt.rgba(accent.r, accent.g, accent.b, 0.22) : (cma.containsMouse ? Theme.pillHover : "transparent")
+        border.color: active ? accent : Theme.pillBorder
         border.width: 1
         Behavior on color { ColorAnimation { duration: 120 } }
         scale: cma.pressed ? 0.94 : 1
@@ -952,8 +1172,8 @@ PanelWindow {
             id: chipRow
             anchors.centerIn: parent
             spacing: 6
-            BarText { text: Theme.ic(chip.glyph); font.pixelSize: 13; color: Theme.subtext }
-            BarText { text: chip.label; font.pixelSize: 11; color: cma.containsMouse ? Theme.text : Theme.subtext }
+            BarText { visible: chip.glyph !== 0; text: Theme.ic(chip.glyph); font.pixelSize: 13; color: chip.active ? chip.accent : Theme.subtext }
+            BarText { text: chip.label; font.pixelSize: 11; color: chip.active || cma.containsMouse ? Theme.text : Theme.subtext }
         }
         MouseArea {
             id: cma
