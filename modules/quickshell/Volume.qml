@@ -178,7 +178,7 @@ Pill {
                 implicitWidth: 26
                 implicitHeight: 22
                 icon: Theme.ic(0xf066a)       // md-tune_vertical : mélangeur (volume par application)
-                accent: Theme.mauve
+                accent: Theme.sky
                 highlighted: root.mixerOpen
                 onClicked: {
                     root.mixerOpen = !root.mixerOpen;
@@ -303,7 +303,7 @@ Pill {
                             implicitHeight: 30
                             radius: 6
                             color: winMa.containsMouse && app.wins.length > 0 ? Theme.rowHover : "transparent"
-                            IconColor { id: iconTint; source: app.iconSrc }   // hors layout, invisible
+                            IconColor { id: iconTint; source: app.iconSrc; fallback: Theme.sky }   // hors layout, invisible
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: 6
@@ -317,7 +317,7 @@ Pill {
                                 BarText {
                                     visible: app.iconSrc === ""
                                     text: Theme.ic(0xf075a)   // md-music_note : appli sans icône
-                                    color: Theme.mauve
+                                    color: Theme.sky
                                     font.pixelSize: 16
                                     Layout.preferredWidth: 20
                                     horizontalAlignment: Text.AlignHCenter
