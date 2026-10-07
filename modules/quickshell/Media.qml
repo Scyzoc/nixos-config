@@ -392,56 +392,65 @@ Pill {
             }
         }
 
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 12
-            ActionButton {
-                icon: Theme.ic(0xf04ae)
-                enabled: root.player?.canGoPrevious ?? false
-                onClicked: root.prevTrack()
+        // Lecture au centre ; choix du lecteur (si plusieurs sont ouverts) sur la même ligne,
+        // logos seuls répartis aux deux extrémités
+        Item {
+            Layout.fillWidth: true
+            implicitHeight: transport.implicitHeight
+            readonly property int half: Math.ceil(root.livePlayers.length / 2)
+
+            Row {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 6
+                visible: root.livePlayers.length > 1
+                Repeater { model: root.livePlayers.slice(0, parent.parent.half); delegate: playerBtn }
             }
-            ActionButton {
-                icon: root.player?.isPlaying ? Theme.ic(0xf03e4) : Theme.ic(0xf040a)
-                accent: root.accent
-                highlighted: true
-                implicitWidth: 48
-                onClicked: root.player.togglePlaying()
+
+            RowLayout {
+                id: transport
+                anchors.centerIn: parent
+                spacing: 12
+                ActionButton {
+                    icon: Theme.ic(0xf04ae)
+                    enabled: root.player?.canGoPrevious ?? false
+                    onClicked: root.prevTrack()
+                }
+                ActionButton {
+                    icon: root.player?.isPlaying ? Theme.ic(0xf03e4) : Theme.ic(0xf040a)
+                    accent: root.accent
+                    highlighted: true
+                    implicitWidth: 48
+                    onClicked: root.player.togglePlaying()
+                }
+                ActionButton {
+                    icon: Theme.ic(0xf04ad)
+                    enabled: root.player?.canGoNext ?? false
+                    onClicked: root.nextTrack()
+                }
             }
-            ActionButton {
-                icon: Theme.ic(0xf04ad)
-                enabled: root.player?.canGoNext ?? false
-                onClicked: root.nextTrack()
+
+            Row {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 6
+                visible: root.livePlayers.length > 1
+                Repeater { model: root.livePlayers.slice(parent.parent.half); delegate: playerBtn }
             }
         }
 
-        // Choix du lecteur si plusieurs sont ouverts : logo seul, aux extrémités opposées
-        RowLayout {
-            Layout.fillWidth: true
-            visible: root.livePlayers.length > 1
-            spacing: 0
-            Repeater {
-                model: root.livePlayers
-                Item {
-                    id: slot
-                    required property MprisPlayer modelData
-                    required property int index
-                    Layout.fillWidth: true
-                    implicitHeight: btn.implicitHeight
-                    ActionButton {
-                        id: btn
-                        anchors.left: slot.index === 0 ? parent.left : undefined
-                        anchors.right: slot.index === root.livePlayers.length - 1 && slot.index > 0 ? parent.right : undefined
-                        anchors.horizontalCenter: slot.index > 0 && slot.index < root.livePlayers.length - 1 ? parent.horizontalCenter : undefined
-                        implicitWidth: 40
-                        icon: root.sourceIcon(root.sourceOf(slot.modelData, slot.modelData.trackTitle))
-                        highlighted: slot.modelData === root.player
-                        accent: root.sourceColor(root.sourceOf(slot.modelData, slot.modelData.trackTitle))
-                        onClicked: {
-                            if (!slot.modelData.isPlaying) {
-                                for (const p of root.players) if (p.isPlaying) p.pause();
-                                slot.modelData.play();
-                            }
-                        }
+        Component {
+            id: playerBtn
+            ActionButton {
+                required property MprisPlayer modelData
+                implicitWidth: 40
+                icon: root.sourceIcon(root.sourceOf(modelData, modelData.trackTitle))
+                highlighted: modelData === root.player
+                accent: root.sourceColor(root.sourceOf(modelData, modelData.trackTitle))
+                onClicked: {
+                    if (!modelData.isPlaying) {
+                        for (const p of root.players) if (p.isPlaying) p.pause();
+                        modelData.play();
                     }
                 }
             }
