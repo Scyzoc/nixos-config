@@ -282,11 +282,6 @@ PanelWindow {
                         font.pixelSize: 24
                         font.weight: Font.DemiBold
                     }
-                    BarText {
-                        text: win.tab === 0 ? "Filtre lumière bleue" : "Mode sombre"
-                        font.pixelSize: 11
-                        color: Theme.muted
-                    }
                 }
                 Item { Layout.fillWidth: true }
 
@@ -353,12 +348,14 @@ PanelWindow {
                         Layout.fillWidth: true
                         spacing: 1
                         BarText {
+                            font.family: Theme.labelFont
                             Layout.fillWidth: true
                             text: win.st ? win.st.city.name : "…"
                             font.pixelSize: 14
                             elide: Text.ElideRight
                         }
                         BarText {
+                            font.family: Theme.labelFont
                             Layout.fillWidth: true
                             text: win.st ? win.st.city.region : ""
                             font.pixelSize: 10
@@ -366,8 +363,10 @@ PanelWindow {
                             elide: Text.ElideRight
                         }
                     }
-                    BarText { text: Theme.ic(0xf059c) + " " + win.sunRise; font.pixelSize: 13; color: Theme.yellow }
-                    BarText { text: Theme.ic(0xf059b) + " " + win.sunSet; font.pixelSize: 13; color: win.warm }
+                    BarText { text: Theme.ic(0xf059c); font.pixelSize: 14; color: Theme.yellow }
+                    BarText { font.family: Theme.labelFont; text: win.sunRise; font.pixelSize: 13; color: Theme.yellow }
+                    BarText { text: Theme.ic(0xf059b); font.pixelSize: 14; color: win.warm }
+                    BarText { font.family: Theme.labelFont; text: win.sunSet; font.pixelSize: 13; color: win.warm }
                     Chip { glyph: 0xf0349; label: "Changer"; onClicked: win.startSearch() }    // md-magnify
                 }
 
@@ -384,6 +383,7 @@ PanelWindow {
                             Layout.fillWidth: true
                             implicitHeight: 28
                             BarText {
+                                font.family: Theme.labelFont
                                 anchors.fill: parent
                                 visible: cityInput.text === ""
                                 text: "Nom de la ville, puis Entrée"
@@ -395,7 +395,7 @@ PanelWindow {
                                 anchors.fill: parent
                                 verticalAlignment: TextInput.AlignVCenter
                                 color: Theme.text
-                                font.family: Theme.font
+                                font.family: Theme.labelFont
                                 font.pixelSize: 13
                                 clip: true
                                 selectByMouse: true
@@ -406,6 +406,7 @@ PanelWindow {
                         IconBtn { glyph: 0xf0156; onClicked: win.stopSearch() }
                     }
                     BarText {
+                        font.family: Theme.labelFont
                         visible: win.searchMsg !== ""
                         text: win.searchMsg
                         font.pixelSize: 11
@@ -425,8 +426,9 @@ PanelWindow {
                                 anchors.leftMargin: 10
                                 anchors.rightMargin: 10
                                 spacing: 8
-                                BarText { text: cityRow.modelData.name; font.pixelSize: 13 }
+                                BarText { font.family: Theme.labelFont; text: cityRow.modelData.name; font.pixelSize: 13 }
                                 BarText {
+                                    font.family: Theme.labelFont
                                     Layout.fillWidth: true
                                     text: cityRow.modelData.region
                                     font.pixelSize: 11
@@ -486,13 +488,13 @@ PanelWindow {
                     Layout.fillWidth: true
                     visible: win.flt.mode === "hours"
                     spacing: 14
-                    BarText { text: "De"; font.pixelSize: 13; color: Theme.subtext }
+                    BarText { font.family: Theme.labelFont; text: "De"; font.pixelSize: 13; color: Theme.subtext }
                     TimeBox {
                         minutes: win.toMin(win.flt.start)
                         accent: win.warm
                         onEdited: m => win.setFilter("start", win.fmt(m))
                     }
-                    BarText { text: "à"; font.pixelSize: 13; color: Theme.subtext }
+                    BarText { font.family: Theme.labelFont; text: "à"; font.pixelSize: 13; color: Theme.subtext }
                     TimeBox {
                         minutes: win.toMin(win.flt.end)
                         accent: win.warm
@@ -505,6 +507,7 @@ PanelWindow {
                     visible: (win.flt.mode === "sun" || win.flt.mode === "hours") && win.st !== null && win.st.slice !== null
                     spacing: 8
                     BarText {
+                        font.family: Theme.labelFont
                         text: "Pleine valeur de " + (win.st && win.st.slice ? win.st.slice.start + " à " + win.st.slice.end : "")
                               + "  ·  glisse les poignées"
                         font.pixelSize: 11
@@ -551,12 +554,14 @@ PanelWindow {
                     }
                 }
                 BarText {
+                    font.family: Theme.labelFont
                     visible: win.flt.mode === "always" || win.flt.mode === "off"
                     text: win.flt.mode === "always" ? "Filtre appliqué en permanence" : "Écran à sa couleur normale, jour et nuit"
                     font.pixelSize: 12
                     color: Theme.muted
                 }
                 BarText {
+                    font.family: Theme.labelFont
                     Layout.fillWidth: true
                     visible: win.st !== null && win.st.error !== null
                     text: win.st && win.st.error ? win.st.error : ""
@@ -587,7 +592,7 @@ PanelWindow {
                             onPreviewed: v => win.preview(v, win.flt.brightness)
                             onPreviewEnded: win.ctl("preview-end")
                         }
-                        BarText { Layout.preferredWidth: 62; horizontalAlignment: Text.AlignRight; text: tempSlider.dragValue + " K"; font.pixelSize: 12; color: Theme.subtext }
+                        BarText { font.family: Theme.labelFont; Layout.preferredWidth: 62; horizontalAlignment: Text.AlignRight; text: tempSlider.dragValue + " K"; font.pixelSize: 12; color: Theme.subtext }
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -606,7 +611,7 @@ PanelWindow {
                             onPreviewed: v => win.preview(win.flt.temp, v)
                             onPreviewEnded: win.ctl("preview-end")
                         }
-                        BarText { Layout.preferredWidth: 62; horizontalAlignment: Text.AlignRight; text: brightSlider.dragValue + " %"; font.pixelSize: 12; color: Theme.subtext }
+                        BarText { font.family: Theme.labelFont; Layout.preferredWidth: 62; horizontalAlignment: Text.AlignRight; text: brightSlider.dragValue + " %"; font.pixelSize: 12; color: Theme.subtext }
                     }
                 }
             }
@@ -641,14 +646,16 @@ PanelWindow {
                     Layout.fillWidth: true
                     visible: win.th.mode === "hours"
                     spacing: 14
-                    BarText { text: Theme.ic(0xf0594) + "  Sombre à"; font.pixelSize: 13; color: Theme.subtext }
+                    BarText { text: Theme.ic(0xf0594); font.pixelSize: 14; color: Theme.subtext }
+                    BarText { font.family: Theme.labelFont; text: "Sombre à"; font.pixelSize: 13; color: Theme.subtext }
                     TimeBox {
                         minutes: win.toMin(win.th.dark)
                         accent: Theme.mauve
                         onEdited: m => win.setThemeHours(win.fmt(m), win.th.light)
                     }
                     Item { implicitWidth: 6 }
-                    BarText { text: Theme.ic(0xf0599) + "  Clair à"; font.pixelSize: 13; color: Theme.subtext }
+                    BarText { text: Theme.ic(0xf0599); font.pixelSize: 14; color: Theme.subtext }
+                    BarText { font.family: Theme.labelFont; text: "Clair à"; font.pixelSize: 13; color: Theme.subtext }
                     TimeBox {
                         minutes: win.toMin(win.th.light)
                         accent: Theme.mauve
@@ -657,6 +664,7 @@ PanelWindow {
                     Item { Layout.fillWidth: true }
                 }
                 BarText {
+                    font.family: Theme.labelFont
                     visible: win.th.mode === "sun"
                     text: "Sombre au coucher (" + win.sunSet + "), clair au lever (" + win.sunRise + ")"
                     font.pixelSize: 12
@@ -679,6 +687,7 @@ PanelWindow {
                         onPicked: key => win.setScheme(key)
                     }
                     BarText {
+                        font.family: Theme.labelFont
                         Layout.fillWidth: true
                         text: "Le thème ne change plus tout seul"
                         wrapMode: Text.Wrap
@@ -726,6 +735,7 @@ PanelWindow {
         Behavior on color { ColorAnimation { duration: 160 } }
         BarText {
             id: badgeText
+            font.family: Theme.labelFont
             anchors.centerIn: parent
             text: badge.label
             font.pixelSize: 11
@@ -768,6 +778,7 @@ PanelWindow {
                         color: segBtn.active ? seg.accent : Theme.subtext
                     }
                     BarText {
+                        font.family: Theme.labelFont
                         text: segBtn.modelData.label
                         font.pixelSize: 12
                         color: segBtn.active || segMa.containsMouse ? Theme.text : Theme.subtext
@@ -808,7 +819,7 @@ PanelWindow {
             anchors.centerIn: parent
             spacing: 2
             TimePart { box: tb; value: Math.floor(tb.minutes / 60); step: 60 }
-            BarText { text: ":"; font.pixelSize: 22; color: Theme.muted }
+            BarText { font.family: Theme.labelFont; text: ":"; font.pixelSize: 22; color: Theme.muted }
             TimePart { box: tb; value: tb.minutes % 60; step: 5 }
         }
     }
@@ -822,6 +833,7 @@ PanelWindow {
         implicitWidth: 40
         implicitHeight: 60
         BarText {
+            font.family: Theme.labelFont
             anchors.centerIn: parent
             text: (tp.value < 10 ? "0" : "") + tp.value
             font.pixelSize: 22
@@ -1039,14 +1051,14 @@ PanelWindow {
                 { rel: 0, glyph: tl.sunMode ? 0xf059b : 0xf0150, color: win.warm, align: Text.AlignLeft },
                 { rel: tl.wl, glyph: tl.sunMode ? 0xf059c : 0xf0150, color: Theme.yellow, align: Text.AlignRight }
             ]
-            BarText {
+            Row {
                 required property var modelData
                 x: modelData.align === Text.AlignLeft ? Math.max(0, tl.px(modelData.rel) - 4)
                                                       : Math.min(tl.width - implicitWidth, tl.px(modelData.rel) - implicitWidth + 4)
                 y: tl.base + 6
-                text: Theme.ic(modelData.glyph) + " " + tl.abs(modelData.rel)
-                font.pixelSize: 11
-                color: modelData.color
+                spacing: 4
+                BarText { text: Theme.ic(parent.modelData.glyph); font.pixelSize: 12; color: parent.modelData.color }
+                BarText { text: tl.abs(parent.modelData.rel); font.pixelSize: 11; font.family: Theme.labelFont; color: parent.modelData.color }
             }
         }
 
@@ -1063,6 +1075,7 @@ PanelWindow {
                 height: 24
                 z: 2
                 BarText {
+                    font.family: Theme.labelFont
                     anchors.bottom: parent.top
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottomMargin: -2
@@ -1121,7 +1134,7 @@ PanelWindow {
         signal picked(int minutes)
         spacing: 6
         BarText { Layout.preferredWidth: 20; text: Theme.ic(rr.glyph); font.pixelSize: 14; color: win.warm }
-        BarText { Layout.preferredWidth: 70; text: rr.label; font.pixelSize: 12; color: Theme.subtext }
+        BarText { font.family: Theme.labelFont; Layout.preferredWidth: 70; text: rr.label; font.pixelSize: 12; color: Theme.subtext }
         Repeater {
             model: win.rampChoices
             Chip {
@@ -1133,6 +1146,7 @@ PanelWindow {
             }
         }
         BarText {
+            font.family: Theme.labelFont
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignRight
             text: rr.hint
@@ -1194,7 +1208,7 @@ PanelWindow {
             anchors.centerIn: parent
             spacing: 6
             BarText { visible: chip.glyph !== 0; text: Theme.ic(chip.glyph); font.pixelSize: 13; color: chip.active ? chip.accent : Theme.subtext }
-            BarText { text: chip.label; font.pixelSize: 11; color: chip.active || cma.containsMouse ? Theme.text : Theme.subtext }
+            BarText { font.family: Theme.labelFont; text: chip.label; font.pixelSize: 11; color: chip.active || cma.containsMouse ? Theme.text : Theme.subtext }
         }
         MouseArea {
             id: cma
