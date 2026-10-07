@@ -484,7 +484,7 @@ PanelWindow {
                     BarText { text: Theme.ic(0xf06e8); font.pixelSize: 18; color: win.warm }    // md-lightbulb_on
                     BarText { text: "Filtre lumière bleue"; font.family: Theme.labelFont; font.pixelSize: 15; font.weight: Font.DemiBold }
                     Item { Layout.fillWidth: true }
-                    // État : point orange (filtre actif) ou gris, température affichée en ce moment
+                    // État : point orange + température affichée en ce moment (filtre actif), point gris sinon
                     RowLayout {
                         id: filterState
                         readonly property bool lit: win.st ? win.st.active : false
@@ -498,9 +498,9 @@ PanelWindow {
                         }
                         BarText {
                             font.family: Theme.labelFont
+                            visible: filterState.lit
                             text: (win.st ? win.st.now.temp : 6500) + " K"
                             font.pixelSize: 12
-                            color: filterState.lit ? Theme.text : Theme.muted
                         }
                     }
                 }
