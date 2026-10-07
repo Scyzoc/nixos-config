@@ -386,34 +386,11 @@ RowLayout {
                             implicitHeight: 28
                             onClicked: SleepState.goodnight()
                         }
-                        ActionButton {
-                            icon: Theme.ic(0xf068e)    // md-alarm_snooze
-                            label: "Encore 10 min"
-                            implicitHeight: 28
-                            onClicked: SleepState.snooze()
-                        }
                     }
                 }
             }
 
-            // Croix
-            BarText {
-                anchors { top: parent.top; right: parent.right; margins: 10 }
-                text: Theme.ic(0xf0156)    // md-close
-                font.pixelSize: 12
-                color: closeMa.containsMouse ? Theme.text : Theme.muted
-                opacity: bubble.reveal
-                MouseArea {
-                    id: closeMa
-                    anchors.fill: parent
-                    anchors.margins: -6
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: SleepState.dismiss()
-                }
-            }
-
-            // Fermeture auto (bulles douces) : jauge qui se vide, en pause au survol
+            // Fermeture auto (bulle d'au revoir seulement) : jauge qui se vide
             Rectangle {
                 id: gauge
                 visible: bubble.current !== null && !bubble.current.sticky
@@ -619,12 +596,6 @@ RowLayout {
                 label: "Veille"
                 accent: Theme.mauve
                 onClicked: { details.visible = false; Quickshell.execDetached([Paths.systemctl, "suspend"]); }
-            }
-            ActionButton {
-                Layout.fillWidth: true
-                icon: Theme.ic(0xf009b)    // md-bell_off
-                label: "Silence 30 min"
-                onClicked: { SleepState.goodnightUntil = Date.now() + 30 * 60000; SleepState.dismiss(); details.visible = false; }
             }
         }
     }

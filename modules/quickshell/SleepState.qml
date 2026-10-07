@@ -96,13 +96,13 @@ Singleton {
     property var bubble: null
     property int bubbleId: 0
     property real nextNudge: 0      // ms epoch
-    property int snoozes: 0         // « encore 10 min » de la nuit
-    property real goodnightUntil: 0 // « J'y vais » : bulles suspendues
 
     // Écart entre deux bulles selon le niveau (min)
     readonly property var gaps: [0, 20, 15, 10, 5]
 
-    onShownChanged: if (!shown) { snoozes = 0; nextNudge = 0; goodnightUntil = 0; bubble = null; }
+    onShownChanged: if (!shown) { nextNudge = 0; bubble = null; }
+    // Bulle ignorée qui change de palier : remplacée par une plus insistante
+    onLevelChanged: if (bubble && !bubble.farewell && level > bubble.level) nudge()
 
     Timer {
         interval: 15000
@@ -111,7 +111,7 @@ Singleton {
         triggeredOnStart: true
         onTriggered: {
             const t = Date.now();
-            if (root.bubble || t < root.nextNudge || t < root.goodnightUntil) return;
+            if (root.bubble || t < root.nextNudge) return;
             root.nudge();
         }
     }
@@ -139,31 +139,24 @@ Singleton {
         if (lost > 0) bodies.push(`Déjà ${fmt(lost)} de perdues sur ta nuit idéale.`);
         if (l >= 3) bodies.push("Chaque minute ici, c'est une minute de sommeil en moins.");
         if (l >= 4) bodies.push(`Moins de 6 h de sommeil. Demain va piquer : ferme tout, maintenant.`);
-        let body = pick(bodies);
-        if (snoozes >= 2) body = `${snoozes}e « encore 10 min ». On sait tous les deux comment ça finit.`;
-        return { title: pick(titles), body: body };
+        return { title: pick(titles), body: pick(bodies) };
     }
 
     function nudge() {
         const m = compose();
         bubbleId++;
-        bubble = { id: bubbleId, level: Math.max(1, level), title: m.title, body: m.body, sticky: level >= 3 };
-        nextNudge = Date.now() + gaps[Math.max(1, level)] * 60000;
+        // Ne part qu'avec « J'y vais » : ni croix, ni délai, ni report
+        bubble = { id: bubbleId, level: Math.max(1, level), title: m.title, body: m.body, sticky: true };
         if (level >= 3) Quickshell.execDetached([Paths.pwPlay, Paths.bubbleSound]);
     }
-    // Fermée sans répondre (croix, délai écoulé)
+    // Fin de la bulle d'au revoir (délai écoulé)
     function dismiss() { bubble = null; }
-    // « Encore 10 min »
-    function snooze() {
-        snoozes++;
-        nextNudge = Date.now() + 10 * 60000;
-        bubble = null;
-    }
-    // « J'y vais » : bulle d'au revoir, puis silence 30 min
+    // « J'y vais » : bulle d'au revoir ; si l'écran est encore allumé au prochain
+    // créneau (20/15/10/5 min selon le niveau), une nouvelle bulle revient
     function goodnight() {
         bubbleId++;
         bubble = { id: bubbleId, level: 0, title: "Bonne nuit", body: `Réveil à ${hm(wakeDate)}. Dors bien.`, sticky: false, farewell: true };
-        goodnightUntil = Date.now() + 30 * 60000;
+        nextNudge = Date.now() + gaps[Math.max(1, level)] * 60000;
     }
 
     IpcHandler {
@@ -171,7 +164,7 @@ Singleton {
         function nudge(): string { root.nudge(); return root.bubble.title + " — " + root.bubble.body; }
         function status(): string {
             return root.wake === "" ? "désactivé"
-                : `réveil ${root.hm(root.wakeDate)}, reste ${root.fmt(root.minutesLeft)}, niveau ${root.level}, reports ${root.snoozes}`;
+                : `réveil ${root.hm(root.wakeDate)}, reste ${root.fmt(root.minutesLeft)}, niveau ${root.level}`;
         }
     }
 }
