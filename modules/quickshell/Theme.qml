@@ -16,7 +16,12 @@ Singleton {
     // Fond de barre plus sombre quand le haut du fond d'écran est clair (texte
     // blanc illisible sur gris clair) : 25 % sur fond sombre → 60 % sur fond blanc
     property real wallLum: 0
-    readonly property color bg: Qt.rgba(0, 0, 0, 0.25 + 0.35 * Math.max(0, Math.min(1, (wallLum - 0.4) / 0.55)))
+    readonly property real bgAlpha: 0.25 + 0.35 * Math.max(0, Math.min(1, (wallLum - 0.4) / 0.55))
+    readonly property color bg: Qt.rgba(0, 0, 0, bgAlpha)
+    // Texte de la barre (titre du morceau) : blanc ou noir, celui qui contraste le plus
+    // (WCAG) avec le fond réellement visible = fond d'écran assombri par `bg`
+    readonly property real barLum: Math.pow(wallLum * (1 - bgAlpha), 2.2)
+    readonly property color barText: (barLum + 0.05) / 0.05 > 1.05 / (barLum + 0.05) ? "#000000" : "#ffffff"
     Behavior on wallLum { NumberAnimation { duration: 600 } }
 
     // Fond changé (wallpaper-apply) → luminosité moyenne de la bande haute de l'image
