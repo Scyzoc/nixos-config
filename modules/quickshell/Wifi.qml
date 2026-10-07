@@ -279,19 +279,20 @@ Pill {
                 color: root.tint
             }
             ColumnLayout {
-                id: headCol
                 Layout.fillWidth: true
                 spacing: 2
                 // SSID + icône « connecté » juste après
-                RowLayout {
+                // Item (pas de layout) : la largeur du nom ne dépend pas de sa propre colonne
+                Item {
                     Layout.fillWidth: true
-                    spacing: 8
+                    implicitWidth: 0
+                    implicitHeight: nameText.implicitHeight
                     BarText {
-                        Layout.fillWidth: false
-                        Layout.maximumWidth: headCol.width - 26    // place de l'icône (pas de lien au RowLayout : boucle de layout)
+                        id: nameText
+                        width: Math.min(implicitWidth, parent.width - (check.visible ? 26 : 0))
                         elide: Text.ElideRight
                         text: root.current?.name
-                              ?? (root.airplane ? "Mode avion" : root.enabled_ ? "Déconnecté" : "Wi-Fi désactivé")
+                        ?? (root.airplane ? "Mode avion" : root.enabled_ ? "Déconnecté" : "Wi-Fi désactivé")
                         font.family: Theme.titleFont
                         font.pixelSize: 22
                         font.bold: true
@@ -299,11 +300,12 @@ Pill {
                     BarText {
                         id: check
                         visible: root.current !== null
+                        x: nameText.width + 8
+                        anchors.verticalCenter: nameText.verticalCenter
                         text: Theme.ic(0xf05e0)    // md-check-circle
                         color: root.tint
                         font.pixelSize: 16
                     }
-                    Item { Layout.fillWidth: true }
                 }
                 BarText {
                     font.family: Theme.labelFont

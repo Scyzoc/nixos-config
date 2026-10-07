@@ -642,19 +642,20 @@ Pill {
                 }
             }
             ColumnLayout {
-                id: headCol
                 Layout.fillWidth: true
                 spacing: 2
                 // Nom + icône « connecté » juste après
-                RowLayout {
+                // Item (pas de layout) : la largeur du nom ne dépend pas de sa propre colonne
+                Item {
                     Layout.fillWidth: true
-                    spacing: 8
+                    implicitWidth: 0
+                    implicitHeight: nameText.implicitHeight
                     BarText {
-                        Layout.fillWidth: false
-                        Layout.maximumWidth: headCol.width - 26    // place de l'icône (pas de lien au RowLayout : boucle de layout)
+                        id: nameText
+                        width: Math.min(implicitWidth, parent.width - (check.visible ? 26 : 0))
                         elide: Text.ElideRight
                         text: !root.powered ? (root.blocked ? "Bluetooth bloqué" : "Bluetooth")
-                            : root.main?.name ?? "Bluetooth"
+                        : root.main?.name ?? "Bluetooth"
                         font.family: Theme.titleFont
                         font.pixelSize: 22
                         font.bold: true
@@ -662,11 +663,12 @@ Pill {
                     BarText {
                         id: check
                         visible: root.powered && root.main !== null
+                        x: nameText.width + 8
+                        anchors.verticalCenter: nameText.verticalCenter
                         text: Theme.ic(0xf05e0)    // md-check-circle
                         color: Theme.bluetooth
                         font.pixelSize: 16
                     }
-                    Item { Layout.fillWidth: true }
                 }
                 BarText {
                     font.family: Theme.labelFont
