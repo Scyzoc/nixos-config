@@ -642,6 +642,7 @@ Pill {
                 }
             }
             ColumnLayout {
+                id: headCol
                 Layout.fillWidth: true
                 spacing: 2
                 // Nom + icône « connecté » juste après
@@ -650,7 +651,7 @@ Pill {
                     spacing: 8
                     BarText {
                         Layout.fillWidth: false
-                        Layout.maximumWidth: parent.width - (check.visible ? check.width + parent.spacing : 0)
+                        Layout.maximumWidth: headCol.width - 26    // place de l'icône (pas de lien au RowLayout : boucle de layout)
                         elide: Text.ElideRight
                         text: !root.powered ? (root.blocked ? "Bluetooth bloqué" : "Bluetooth")
                             : root.main?.name ?? "Bluetooth"
