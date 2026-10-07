@@ -84,10 +84,14 @@ Pill {
             sourceCache[key] = src;
             return src;
         }
-        // Aucune fenêtre : le titre d'une fenêtre Brave est celui de l'onglet actif, donc
-        // le média joue dans un onglet en arrière-plan (les PWA affichent toujours le
-        // morceau) → en pratique YouTube.
-        return sourceCache[key] ?? "youtube";
+        if (sourceCache[key]) return sourceCache[key];
+        // Aucune fenêtre au titre du morceau (la PWA SoundCloud n'affiche pas toujours le
+        // morceau, ex. « soundcloud.com/discover » ; un onglet en arrière-plan non plus) :
+        // sources possibles d'après les fenêtres ouvertes (PWA par appId, onglet YouTube
+        // visible par titre). Une seule → c'est elle ; sinon YouTube en arrière-plan.
+        const wins = ToplevelManager.toplevels.values.map(w => ((w.appId || "") + " " + (w.title || "")).toLowerCase());
+        const cands = ["soundcloud", "spotify", "youtube"].filter(n => wins.some(w => w.indexOf(n) >= 0));
+        return cands.length === 1 ? cands[0] : "youtube";
     }
     function sourceName(p, t) {
         const s = sourceOf(p, t);
