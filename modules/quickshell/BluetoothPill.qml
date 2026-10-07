@@ -191,8 +191,8 @@ Pill {
         return Theme.ic(0xf00af);
     }
     function devDetail(d) {
-        if (d.connected && d.name.toLowerCase().indexOf("airpod") >= 0 && root.airpods.left !== undefined)
-            return "G " + (root.airpods.left ?? "?") + "%  D " + (root.airpods.right ?? "?") + "%  B " + (root.airpods.case ?? "?") + "%";
+        // AirPods : batteries G / D / boîtier déjà dans l'en-tête du menu → rien dans la liste
+        if (d.connected && d.name.toLowerCase().indexOf("airpod") >= 0) return "";
         if (d.connected && d.batteryAvailable) return Math.round(d.battery * 100) + "%";
         if (d.connected) return "";    // point vert (ListRow.dot)
         return d.paired ? "" : "nouveau";
