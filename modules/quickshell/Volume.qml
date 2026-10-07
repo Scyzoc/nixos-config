@@ -177,6 +177,17 @@ Pill {
             ActionButton {
                 implicitWidth: 26
                 implicitHeight: 22
+                icon: Theme.ic(0xf066a)       // md-tune_vertical : mélangeur (volume par application)
+                accent: Theme.mauve
+                highlighted: root.mixerOpen
+                onClicked: {
+                    root.mixerOpen = !root.mixerOpen;
+                    if (root.mixerOpen) Hyprland.refreshToplevels();
+                }
+            }
+            ActionButton {
+                implicitWidth: 26
+                implicitHeight: 22
                 icon: Theme.ic(0xf0cb6)       // md-pencil_outline : renommer / masquer des sorties
                 accent: Theme.sky
                 highlighted: root.editSinks
@@ -240,57 +251,8 @@ Pill {
             }
         }
 
-        Separator {}
-
-        // Mélangeur : en-tête cliquable qui déplie le volume de chaque application
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: 34
-            radius: 8
-            color: mixMa.containsMouse ? Theme.rowHover : "transparent"
-            Behavior on color { ColorAnimation { duration: 120 } }
-            ClickFx { id: mixFx }
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
-                spacing: 10
-                BarText {
-                    text: Theme.ic(0xf066a)       // md-tune_vertical
-                    color: root.mixerOpen ? Theme.mauve : Theme.subtext
-                    font.pixelSize: 16
-                    Layout.preferredWidth: 20
-                    horizontalAlignment: Text.AlignHCenter
-                }
-                BarText { text: "Mélangeur"; Layout.fillWidth: true; font.family: Theme.labelFont; font.bold: root.mixerOpen }
-                BarText {
-                    text: root.streams.length === 0 ? "aucune appli"
-                        : root.streams.length + (root.streams.length > 1 ? " applis" : " appli")
-                    color: Theme.subtext
-                    font.pixelSize: 12
-                    font.family: Theme.labelFont
-                }
-                BarText {
-                    text: Theme.ic(0xf0140)       // md-chevron_down
-                    color: Theme.subtext
-                    rotation: root.mixerOpen ? 180 : 0
-                    Behavior on rotation { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-                }
-            }
-            MouseArea {
-                id: mixMa
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    mixFx.play();
-                    root.mixerOpen = !root.mixerOpen;
-                    if (root.mixerOpen) Hyprland.refreshToplevels();
-                }
-            }
-        }
-
+        // Mélangeur déplié (bouton à gauche du crayon) : volume de chaque application
+        Separator { visible: root.mixerOpen }
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: root.mixerOpen ? mixCol.implicitHeight : 0
@@ -331,6 +293,7 @@ Pill {
                             : (props["media.name"] && props["media.name"] !== appName ? props["media.name"] : "")
                         readonly property real vol: modelData.audio?.volume ?? 0
                         readonly property bool mute: modelData.audio?.muted ?? false
+                        readonly property color tint: iconTint.color
                         Layout.fillWidth: true
                         spacing: 4
 
@@ -340,6 +303,7 @@ Pill {
                             implicitHeight: 30
                             radius: 6
                             color: winMa.containsMouse && app.wins.length > 0 ? Theme.rowHover : "transparent"
+                            IconColor { id: iconTint; source: app.iconSrc }   // hors layout, invisible
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: 6
@@ -397,12 +361,12 @@ Pill {
                                 implicitWidth: 26
                                 implicitHeight: 22
                                 icon: root.icon(app.vol, app.mute)
-                                accent: app.mute ? Theme.red : Theme.mauve
+                                accent: app.mute ? Theme.red : app.tint
                                 onClicked: if (app.modelData.audio) app.modelData.audio.muted = !app.mute
                             }
                             Slider {
                                 Layout.fillWidth: true
-                                accent: app.mute ? Theme.muted : Theme.mauve
+                                accent: app.mute ? Theme.muted : app.tint
                                 value: app.vol
                                 onMoved: v => {
                                     app.modelData.audio.volume = v;
