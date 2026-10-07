@@ -264,16 +264,131 @@ let
     M=$'\e[38;5;140m'; X=$'\e[38;5;131m'
 
     usage() {
-      printf "Usage : ipinfo [-a] [--json] [IP | nom d'hôte]\n"
-      printf "  sans argument : analyse ta propre IP publique\n"
-      printf "  -a, --actif   : sondes directes (ping, TLS, HTTP, SSH) — la cible voit ton IP\n"
-      printf "  -j, --json    : sortie JSON brute\n"
+      printf "Usage : ipinfo [-a] [-j] [IP | nom d'hôte]   (ipinfo --help pour l'aide complète)\n"
+    }
+
+    aide() {
+      # Couleurs seulement dans un terminal (pas si redirigé vers un fichier)
+      local b="" d="" r="" c="" y="" x=""
+      if [ -t 1 ]; then b="$B"; d="$D"; r="$R"; c="$C"; y="$Y"; x="$X"; fi
+      cat <<EOF
+''${b}''${c}IPINFO''${r} — tout savoir sur une adresse IP publique
+
+''${b}''${c}USAGE''${r}
+    ipinfo [OPTIONS] [CIBLE]
+
+''${b}''${c}CIBLE''${r}
+    ''${y}(rien)''${r}            analyse ta propre IP publique (vue depuis Internet)
+    ''${y}8.8.8.8''${r}           une adresse IPv4
+    ''${y}2606:4700::1111''${r}   une adresse IPv6
+    ''${y}github.com''${r}        un nom d'hôte : résolu en IP (A, sinon AAAA), puis analysé
+
+    Les adresses privées ou réservées (10.x, 172.16-31.x, 192.168.x, 127.x,
+    169.254.x, 100.64-127.x CGNAT, multicast, fe80::, fc00::/7…) sont refusées :
+    elles n'existent pas sur Internet, aucune base n'a d'info dessus.
+
+''${b}''${c}OPTIONS''${r}
+    ''${b}-a, --actif''${r}   ajoute des sondes envoyées directement à la cible :
+                  ping, certificat TLS, serveur web, bannière SSH.
+                    ''${x}La cible voit alors ton IP''${r} (à éviter sur une IP hostile).
+    ''${b}-j, --json''${r}    sortie JSON brute de toutes les sources, pour jq / scripts.
+    ''${b}-h, --help''${r}    affiche cette aide.
+
+    Sans -a, tout est ''${b}passif''${r} : seules des bases publiques tierces sont
+    interrogées, la cible ne reçoit aucun paquet de ta part.
+
+''${b}''${c}CE QUE ÇA AFFICHE''${r}
+    ''${b}󰍎  Localisation''${r}                  ''${d}ip-api.com, ipinfo.io, secours ipwho.is''${r}
+        Pays et drapeau, continent, région, ville, code postal, coordonnées et
+        lien OpenStreetMap, fuseau horaire et heure locale, monnaie.
+        « Autre source » apparaît si ipinfo.io place l'IP ailleurs : la position
+        est alors incertaine. « Anycast » = IP servie depuis plusieurs lieux
+        (DNS, CDN) : la géoloc n'a aucun sens.
+        ''${d}Précision : ville du FAI, jamais l'adresse d'une personne.''${r}
+
+    ''${b}󰛳  Réseau''${r}                        ''${d}ip-api.com, DNS''${r}
+        FAI, organisation, numéro et nom d'AS, DNS inverse (PTR).
+        Type : résidentielle, mobile (4G/5G), hébergeur/datacenter, proxy/VPN/Tor.
+
+    ''${b}󰒃  Réputation et anonymat''${r}
+        Proxy / VPN     oui/non + type (VPN, TOR, Business…)     ''${d}proxycheck.io''${r}
+        Risque          score 0-100 : ''${y}vert < 34''${r}, ''${y}jaune < 67''${r}, ''${x}rouge''${r}
+        Appareils vus   machines observées sur l'IP / le sous-réseau
+        Tor             nœud de sortie ou simple relais, noms, date    ''${d}Tor Onionoo''${r}
+        Scanner         l'IP scanne-t-elle Internet ? malicious /       ''${d}GreyNoise''${r}
+                        suspicious / benign, ou service connu légitime
+        Listes noires   zen.spamhaus.org, bl.spamcop.net, b.barracudacentral.org,
+                        dnsbl-1.uceprotect.net, all.s5h.net  ''${d}(IPv4 seulement)''${r}
+                        « refus » = la liste bloque ton résolveur DNS, pas un résultat.
+
+    ''${b}󰛳  Routage BGP''${r}                   ''${d}RIPEstat''${r}
+        Préfixe         bloc réellement annoncé sur Internet et AS d'origine
+        Bloc parent     /8 d'origine et registre (RIPE, ARIN, APNIC, LACNIC, AFRINIC)
+        RPKI            ''${y}valide''${r} = route signée ; ''${x}INVALIDE''${r} = annonce non autorisée
+                        (fuite ou détournement BGP possible) ; sinon pas de ROA
+        Espace annoncé  nombre de préfixes et d'IP de tout l'AS (taille de l'opérateur)
+        Visibilité      combien de routeurs du monde voient l'AS
+        Voisins         amont = qui lui vend du transit, aval = ses clients
+        Transitaires    les 3 principaux opérateurs amont
+
+    ''${b}󰒍  Opérateur''${r}                     ''${d}PeeringDB (si l'AS y est inscrit)''${r}
+        Nom, alias, type (Cable/DSL/ISP, Content, NSP, Enterprise, Non-Profit…),
+        portée, volume de trafic, politique de peering, nombre de points
+        d'échange (IX) et de datacenters, site web.
+
+    ''${b}󰈙  Propriétaire du bloc''${r}          ''${d}RDAP (successeur de whois)''${r}
+        Nom du réseau, handle, plage exacte, CIDR, titulaire et son adresse,
+        description, registre, dates d'attribution / modification, et le
+        contact ''${b}abuse''${r} : l'adresse à qui signaler un abus venant de cette IP.
+
+    ''${b}󰖟  Exposition''${r}
+        Ports ouverts, noms d'hôte, tags, logiciels, CVE   ''${d}Shodan InternetDB''${r}
+        Domaines hébergés sur la même IP                    ''${d}HackerTarget''${r}
+
+    ''${b}󰓅  Sondes actives''${r}                ''${d}seulement avec -a''${r}
+        Ping            latence moyenne et perte (4 paquets)
+        TTL             devine l'OS (≤64 Linux/box, ≤128 Windows, sinon équipement
+                        réseau) et le nombre de sauts depuis toi
+        HTTP            code de réponse, en-têtes server / x-powered-by / location
+        Certificat      domaine, autres domaines couverts (SAN), émetteur, expiration
+                        — révèle souvent quels sites tournent sur l'IP
+        SSH             bannière du serveur (version d'OpenSSH, etc.)
+
+''${b}''${c}EXEMPLES''${r}
+    ipinfo                         ma propre IP
+    ipinfo IP_CENSUREE           qui est derrière cette IP ?
+    ipinfo -a monsite.fr           + certificat, serveur web, SSH
+    ipinfo -j 8.8.8.8 | jq .geo    seulement la géoloc en JSON
+    ipinfo -j 1.1.1.1 | jq -r .rdap.name
+    ipinfo -j \$IP | jq '.shodan.ports'
+
+''${b}''${c}JSON (-j)''${r}
+    Clés : ip, host, reverse_dns, geo, ipinfo, rdap, shodan, proxycheck,
+    greynoise, tor, ripestat {prefix, routing, neighbours, rpki}, peeringdb,
+    reverse_ip, active {ping, tls, http, ssh}. Une source muette vaut {}.
+
+''${b}''${c}LIMITES''${r}
+    • Aucune clé API, mais des quotas gratuits : ip-api 45 req/min,
+      HackerTarget 20 req/jour (« quota atteint »), proxycheck 100 req/jour,
+      GreyNoise et PeeringDB limités aussi. Une source muette = ligne absente.
+    • ip-api.com gratuit est en HTTP : l'IP recherchée passe en clair vers lui.
+    • La géoloc IP est approximative, et les étiquettes « proxy » peuvent se
+      tromper (8.8.8.8 ressort comme proxy chez ip-api).
+    • Durée : ~5 s (3 vagues de requêtes en parallèle).
+
+''${b}''${c}CODES DE SORTIE''${r}
+    0   analyse réussie
+    1   IP privée/réservée, nom introuvable, ou pas d'accès Internet
+    2   option inconnue ou IPv4 invalide
+
+''${d}Voir aussi : monip (aperçu réseau local + IP publique en direct)''${r}
+EOF
     }
 
     JSON=0; ACTIF=0; CIBLE=""
     for A in "$@"; do
       case "$A" in
-        -h|--help) usage; exit 0 ;;
+        -h|--help) if [ -t 1 ]; then aide | ${pkgs.less}/bin/less -RFX; else aide; fi; exit 0 ;;
         -j|--json) JSON=1 ;;
         -a|--actif) ACTIF=1 ;;
         -*) printf "Option inconnue : %s\n" "$A" >&2; usage >&2; exit 2 ;;
