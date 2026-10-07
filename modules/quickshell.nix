@@ -196,6 +196,9 @@ let
         readonly property string pwPlay: "${pkgs.pipewire}/bin/pw-play"
         readonly property string alarmSound: "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
         readonly property string stateDir: "${config.xdg.stateHome}/quickshell-bar"
+        readonly property string magick: "${pkgs.imagemagick}/bin/magick"
+        // Fond d'écran courant (écrit par wallpaper-apply, wallpaper-picker.nix)
+        readonly property string wallpaperState: "${config.xdg.stateHome}/wallpaper/current"
     }
   '';
 

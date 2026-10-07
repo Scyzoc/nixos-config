@@ -1,16 +1,48 @@
 pragma Singleton
 import QtQuick
 import Quickshell
+import Quickshell.Io
 
 // Palette et constantes partagées (reprend le style de l'ancienne waybar)
 Singleton {
+    id: theme
+
     readonly property string font: "JetBrainsMono Nerd Font"
     readonly property string titleFont: "League Spartan"    // titres des menus
     readonly property string trackFont: "Figtree"           // titre du morceau dans la barre
     readonly property string labelFont: "Inter"             // horloge, date, workspaces, Wi-Fi, Bluetooth, % son / CPU / RAM / luminosité
     readonly property int fontSize: 13
 
-    readonly property color bg: Qt.rgba(0, 0, 0, 0.25)
+    // Fond de barre plus sombre quand le haut du fond d'écran est clair (texte
+    // blanc illisible sur gris clair) : 25 % sur fond sombre → 60 % sur fond blanc
+    property real wallLum: 0
+    readonly property color bg: Qt.rgba(0, 0, 0, 0.25 + 0.35 * Math.max(0, Math.min(1, (wallLum - 0.4) / 0.55)))
+    Behavior on wallLum { NumberAnimation { duration: 600 } }
+
+    // Fond changé (wallpaper-apply) → luminosité moyenne de la bande haute de l'image
+    FileView {
+        path: Paths.wallpaperState
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            const f = text().trim();
+            if (!f) return;
+            lumProc.command = [Paths.magick, f + "[0]", "-gravity", "north", "-crop", "100%x6%+0+0",
+                               "+repage", "-colorspace", "Gray", "-format", "%[fx:mean]", "info:"];
+            lumProc.running = true;
+        }
+    }
+    Process {
+        id: lumProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const v = parseFloat(text);
+                if (!isNaN(v)) theme.wallLum = v;
+            }
+        }
+    }
+
     readonly property color border: Qt.rgba(1, 1, 1, 0.2)
     readonly property color pill: Qt.rgba(1, 1, 1, 0.05)
     readonly property color pillHover: Qt.rgba(1, 1, 1, 0.2)
