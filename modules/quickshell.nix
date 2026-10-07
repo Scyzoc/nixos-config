@@ -170,6 +170,70 @@ let
                 s.send(NOISE + bytes([int(m), 0, 0, 0]))
   '';
 
+  # Site web d'un média joué dans Brave (mélangeur audio) : nom + favicon, lus en lecture
+  # seule dans le profil Brave (base ouverte en immutable : Brave la garde verrouillée)
+  #   web-source --host soundcloud.com              site connu (fenêtre PWA)
+  #   web-source --title "<morceau>" [--pwa h1,h2]  historique (titre de page), sinon
+  #                                                 l'unique PWA ouverte
+  # Affiche {"host", "name", "icon"} en JSON ; {} si rien trouvé.
+  web-source = pkgs.writeScript "web-source" ''
+    #!${pkgs.python3}/bin/python3
+    import json, os, sqlite3, sys
+
+    PROFILE = os.path.expanduser("~/.config/BraveSoftware/Brave-Browser/Default")
+    CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
+                         "quickshell-bar", "favicons")
+    NAMES = {"soundcloud.com": "SoundCloud", "youtube.com": "YouTube", "music.youtube.com": "YouTube Music",
+             "open.spotify.com": "Spotify", "deezer.com": "Deezer", "twitch.tv": "Twitch",
+             "netflix.com": "Netflix", "primevideo.com": "Prime Video", "dailymotion.com": "Dailymotion"}
+
+    def db(name):
+        return sqlite3.connect(f"file:{PROFILE}/{name}?immutable=1", uri=True)
+
+    def strip(h):
+        for p in ("www.", "m."):
+            if h.startswith(p):
+                h = h[len(p):]
+        return h
+
+    args = dict(zip(sys.argv[1::2], sys.argv[2::2]))
+    host = args.get("--host", "")
+    try:
+        if not host and args.get("--title"):
+            row = db("History").execute(
+                "select url from urls where instr(title, ?) > 0 order by last_visit_time desc limit 1",
+                (args["--title"],)).fetchone()
+            if row:
+                host = row[0].split("/")[2] if "://" in row[0] else ""
+        if not host:
+            pwas = [h for h in args.get("--pwa", "").split(",") if h]
+            if len(pwas) == 1:
+                host = pwas[0]
+    except sqlite3.Error:
+        pass
+    if not host:
+        print("{}")
+        sys.exit(0)
+
+    host = strip(host)
+    name = NAMES.get(host) or host.split(".")[-2 if host.count(".") else 0].capitalize()
+    icon = os.path.join(CACHE, host + ".png")
+    if not os.path.exists(icon):
+        try:
+            row = db("Favicons").execute(
+                "select b.image_data from icon_mapping m join favicon_bitmaps b on b.icon_id = m.icon_id "
+                "where m.page_url like ? or m.page_url like ? order by b.width desc limit 1",
+                (f"https://{host}/%", f"https://www.{host}/%")).fetchone()
+            if row and row[0]:
+                os.makedirs(CACHE, exist_ok=True)
+                with open(icon + ".tmp", "wb") as f:
+                    f.write(row[0])
+                os.replace(icon + ".tmp", icon)
+        except sqlite3.Error:
+            pass
+    print(json.dumps({"host": host, "name": name, "icon": icon if os.path.exists(icon) else ""}))
+  '';
+
   # Chemins absolus des binaires utilisés par la barre (PATH non garanti sous systemd)
   paths = pkgs.writeText "Paths.qml" ''
     pragma Singleton
@@ -197,6 +261,7 @@ let
         readonly property string alarmSound: "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
         readonly property string stateDir: "${config.xdg.stateHome}/quickshell-bar"
         readonly property string magick: "${pkgs.imagemagick}/bin/magick"
+        readonly property string webSource: "${web-source}"
         // Fond d'écran courant (écrit par wallpaper-apply, wallpaper-picker.nix)
         readonly property string wallpaperState: "${config.xdg.stateHome}/wallpaper/current"
     }

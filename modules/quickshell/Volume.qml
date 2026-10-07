@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
+import Quickshell.Services.Mpris
 import Quickshell.Widgets
 
 // Volume : molette = ±5 % ; clic : sortie, volume, mélangeur dépliable (volume par application)
@@ -84,6 +85,15 @@ Pill {
             const c = (t.lastIpcObject?.class ?? "").toLowerCase();
             return c !== "" && keys.some(k => c === k || c.startsWith(k + "-") || k.startsWith(c));
         });
+    }
+    // Brave : site d'où vient le son (nom + favicon, WebSource) d'après le morceau de son
+    // lecteur MPRIS (celui qui joue en priorité)
+    readonly property var bravePlayer: {
+        const ps = Mpris.players.values.filter(p => /brave/i.test(p.dbusName ?? ""));
+        return ps.find(p => p.isPlaying) ?? ps[0] ?? null;
+    }
+    function isBrave(n) {
+        return /brave/i.test(n.properties["application.process.binary"] ?? n.properties["application.name"] ?? "");
     }
     function streamEntry(n, cls) {
         DesktopEntries.applications.values.length;   // ré-évalue une fois les .desktop chargés
@@ -286,10 +296,14 @@ Pill {
                         readonly property var wins: root.streamWindows(modelData)
                         readonly property string cls: wins.length > 0 ? (wins[0].lastIpcObject?.class ?? "") : ""
                         readonly property var entry: root.streamEntry(modelData, cls)
-                        readonly property string iconSrc: root.streamIcon(modelData, cls, entry)
-                        readonly property string appName: entry?.name ?? props["application.name"] ?? modelData.name
-                        // Une seule fenêtre → son titre ; sinon le nom du flux s'il apporte quelque chose
-                        readonly property string sub: wins.length === 1 ? (wins[0].title ?? "")
+                        readonly property string track: root.isBrave(modelData) ? (root.bravePlayer?.trackTitle ?? "") : ""
+                        readonly property var site: track ? WebSource.info(track) : null
+                        readonly property string iconSrc: site?.icon ? "file://" + site.icon : root.streamIcon(modelData, cls, entry)
+                        readonly property string appName: site?.name ?? entry?.name ?? props["application.name"] ?? modelData.name
+                        // Site connu → morceau ; une seule fenêtre → son titre ; sinon le nom du
+                        // flux s'il apporte quelque chose
+                        readonly property string sub: site ? track
+                            : wins.length === 1 ? (wins[0].title ?? "")
                             : (props["media.name"] && props["media.name"] !== appName ? props["media.name"] : "")
                         readonly property real vol: modelData.audio?.volume ?? 0
                         readonly property bool mute: modelData.audio?.muted ?? false
@@ -302,7 +316,8 @@ Pill {
                             Layout.fillWidth: true
                             implicitHeight: 30
                             radius: 6
-                            color: winMa.containsMouse && app.wins.length > 0 ? Theme.rowHover : "transparent"
+                            readonly property bool canFocus: app.site?.win || app.wins.length > 0
+                            color: winMa.containsMouse && canFocus ? Theme.rowHover : "transparent"
                             IconColor { id: iconTint; source: app.iconSrc; fallback: Theme.sky }   // hors layout, invisible
                             RowLayout {
                                 anchors.fill: parent
@@ -343,11 +358,13 @@ Pill {
                                 id: winMa
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                cursorShape: app.wins.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                cursorShape: parent.canFocus ? Qt.PointingHandCursor : Qt.ArrowCursor
                                 onClicked: {
-                                    if (app.wins.length === 0) return;
+                                    if (!parent.canFocus) return;
                                     popup.visible = false;
-                                    Hyprland.dispatch("focuswindow address:0x" + app.wins[0].address);
+                                    // Site : sa fenêtre (PWA ou onglet du morceau)
+                                    if (app.site?.win) app.site.win.activate();
+                                    else Hyprland.dispatch("focuswindow address:0x" + app.wins[0].address);
                                 }
                             }
                         }
