@@ -9,7 +9,8 @@ import Quickshell.Hyprland
 // Filtre : selon le soleil d'une ville (avance réglable), horaires fixes, toujours ou désactivé ;
 // température et luminosité. Mode sombre : horaires, soleil ou manuel (clair / sombre à la main).
 // Données et actions via `crepuscule-ctl` (assets/crepuscule.py, modules/crepuscule.nix).
-// Touches : Échap fermer (ou annuler la recherche de ville).
+// Deux sections (lumière bleue / mode sombre), changées par le switch à icônes de l'en-tête.
+// Touches : Tab changer de section, Échap fermer (ou annuler la recherche de ville).
 PanelWindow {
     id: win
 
@@ -45,6 +46,11 @@ PanelWindow {
     }
     function toggle() { open ? hide() : show(); }
     Timer { id: closeTimer; interval: 220; onTriggered: if (!win.open) win.visible = false }
+
+    // --- Section ----------------------------------------------------------------
+    property int tab: 0             // 0 lumière bleue, 1 mode sombre (gardée d'une ouverture à l'autre)
+    property real pos: tab          // position animée (glissement entre sections)
+    Behavior on pos { NumberAnimation { duration: 340; easing.type: Easing.OutCubic } }
 
     // --- Données -----------------------------------------------------------------
     property var st: null
@@ -210,6 +216,8 @@ PanelWindow {
         anchors.fill: parent
         focus: true
         Keys.onEscapePressed: win.hide()
+        Keys.onTabPressed: win.tab = 1 - win.tab
+        Keys.onBacktabPressed: win.tab = 1 - win.tab
     }
 
     Rectangle {
@@ -269,12 +277,61 @@ PanelWindow {
                         font.weight: Font.DemiBold
                     }
                     BarText {
-                        text: "Filtre lumière bleue et mode sombre"
+                        text: win.tab === 0 ? "Filtre lumière bleue" : "Mode sombre"
                         font.pixelSize: 11
                         color: Theme.muted
                     }
                 }
                 Item { Layout.fillWidth: true }
+
+                // Switch des sections : pastille qui glisse sous l'icône active
+                Rectangle {
+                    id: sw
+                    readonly property color accent: Theme.lerpColor(win.warm, Theme.mauve, Math.max(0, Math.min(1, win.pos)))
+                    implicitWidth: 2 * 54 + 8
+                    implicitHeight: 42
+                    radius: 21
+                    color: Theme.pill
+                    border.color: Theme.pillBorder
+                    border.width: 1
+                    Rectangle {
+                        x: 4 + win.pos * 54
+                        y: 4
+                        width: 54
+                        height: 34
+                        radius: 17
+                        color: Qt.rgba(sw.accent.r, sw.accent.g, sw.accent.b, 0.25)
+                        border.color: sw.accent
+                        border.width: 1
+                    }
+                    Repeater {
+                        model: [
+                            { icon: 0xf06e8, color: win.warm },       // md-lightbulb_on
+                            { icon: 0xf050e, color: Theme.mauve }     // md-theme_light_dark
+                        ]
+                        Item {
+                            required property var modelData
+                            required property int index
+                            readonly property real near: Math.max(0, 1 - Math.abs(win.pos - index))
+                            x: 4 + index * 54
+                            y: 4
+                            width: 54
+                            height: 34
+                            BarText {
+                                anchors.centerIn: parent
+                                text: Theme.ic(modelData.icon)
+                                font.pixelSize: 18
+                                color: Theme.lerpColor(Theme.subtext, modelData.color, near)
+                                scale: 1 + 0.15 * near
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: win.tab = index
+                            }
+                        }
+                    }
+                }
                 IconBtn { glyph: 0xf0156; onClicked: win.hide() }    // md-close
             }
 
@@ -383,9 +440,21 @@ PanelWindow {
                 }
             }
 
-            // --- Filtre lumière bleue ---
-            Card {
+            // --- Sections : glissement + fondu selon `pos`, hauteur interpolée ---
+            Item {
+                id: host
                 Layout.fillWidth: true
+                implicitHeight: filterCard.implicitHeight
+                                + (themeCard.implicitHeight - filterCard.implicitHeight) * Math.max(0, Math.min(1, win.pos))
+                clip: true
+
+            // Section 0 : filtre lumière bleue
+            Card {
+                id: filterCard
+                width: host.width
+                x: -win.pos * 70
+                opacity: Math.max(0, 1 - win.pos * 1.6)
+                visible: opacity > 0.01
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 10
@@ -515,9 +584,13 @@ PanelWindow {
                 }
             }
 
-            // --- Mode sombre ---
+            // Section 1 : mode sombre
             Card {
-                Layout.fillWidth: true
+                id: themeCard
+                width: host.width
+                x: (1 - win.pos) * 70
+                opacity: Math.max(0, 1 - (1 - win.pos) * 1.6)
+                visible: opacity > 0.01
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 10
@@ -563,9 +636,10 @@ PanelWindow {
                     color: Theme.muted
                 }
 
-                // Choix immédiat clair / sombre
+                // Mode manuel : choix clair / sombre
                 RowLayout {
                     Layout.fillWidth: true
+                    visible: win.th.mode === "manual"
                     spacing: 10
                     Segmented {
                         Layout.preferredWidth: 240
@@ -579,13 +653,13 @@ PanelWindow {
                     }
                     BarText {
                         Layout.fillWidth: true
-                        text: win.th.mode === "manual" ? "Le thème ne change plus tout seul"
-                                                       : "Jusqu'au prochain changement automatique"
+                        text: "Le thème ne change plus tout seul"
                         wrapMode: Text.Wrap
                         font.pixelSize: 11
                         color: Theme.muted
                     }
                 }
+            }
             }
         }
     }
