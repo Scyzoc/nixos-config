@@ -236,12 +236,17 @@ let
   '';
 
   # Commande `ipinfo` : toutes les infos publiques sur une adresse IP (ou un nom d'hôte).
-  # Sources sans clé API : ip-api.com (géoloc, FAI, drapeaux proxy/hébergeur),
-  # ipwho.is (secours), RDAP (propriétaire du bloc, abuse), Shodan InternetDB
-  # (ports ouverts, CVE), DNS inverse et listes noires DNSBL.
+  # Sources sans clé API : ip-api.com + ipinfo.io (géoloc, FAI, anycast), ipwho.is
+  # (secours), RDAP (propriétaire du bloc, abuse), RIPEstat (BGP, RPKI, voisins),
+  # PeeringDB (profil de l'opérateur), proxycheck.io (VPN/proxy, score de risque),
+  # GreyNoise (scanner ?), Tor Onionoo (relais Tor ?), Shodan InternetDB (ports, CVE),
+  # HackerTarget (domaines hébergés, 20 req/jour), DNS inverse et listes noires DNSBL.
+  # Par défaut tout est passif (APIs tierces) ; -a ajoute des sondes directes sur la
+  # cible (ping, certificat TLS, en-têtes HTTP, bannière SSH) — elle voit alors ton IP.
   # Usage : ipinfo                → sa propre IP publique
   #         ipinfo 8.8.8.8        → une IP
   #         ipinfo example.com    → résout le nom puis analyse l'IP
+  #         ipinfo -a <ip>        → + sondes actives
   #         ipinfo --json <ip>    → JSON brut fusionné
   ipinfo = pkgs.writeShellScriptBin "ipinfo" ''
     set -u
@@ -249,21 +254,28 @@ let
     CURL="${pkgs.curl}/bin/curl"
     JQ="${pkgs.jq}/bin/jq"
     DIG="${pkgs.dnsutils}/bin/dig"
+    PING="${pkgs.iputils}/bin/ping"
+    OPENSSL="${lib.getBin pkgs.openssl}/bin/openssl"
+    TIMEOUT="${pkgs.coreutils}/bin/timeout"
+    BASH="${pkgs.bash}/bin/bash"
 
     B=$'\e[1m'; D=$'\e[2m'; R=$'\e[0m'
     C=$'\e[38;5;110m'; G=$'\e[38;5;114m'; Y=$'\e[38;5;179m'
     M=$'\e[38;5;140m'; X=$'\e[38;5;131m'
 
     usage() {
-      printf "Usage : ipinfo [--json] [IP | nom d'hôte]\n"
+      printf "Usage : ipinfo [-a] [--json] [IP | nom d'hôte]\n"
       printf "  sans argument : analyse ta propre IP publique\n"
+      printf "  -a, --actif   : sondes directes (ping, TLS, HTTP, SSH) — la cible voit ton IP\n"
+      printf "  -j, --json    : sortie JSON brute\n"
     }
 
-    JSON=0; CIBLE=""
+    JSON=0; ACTIF=0; CIBLE=""
     for A in "$@"; do
       case "$A" in
         -h|--help) usage; exit 0 ;;
         -j|--json) JSON=1 ;;
+        -a|--actif) ACTIF=1 ;;
         -*) printf "Option inconnue : %s\n" "$A" >&2; usage >&2; exit 2 ;;
         *) CIBLE="$A" ;;
       esac
@@ -283,7 +295,7 @@ let
     else
       HOTE="$CIBLE"
       IPADDR=$($DIG +short +time=3 +tries=1 A "$HOTE" | grep -E '^[0-9.]+$' | head -1)
-      [ -z "$IPADDR" ] && IPADDR=$($DIG +short +time=3 +tries=1 AAAA "$HOTE" | grep ':' | head -1)
+      [ -z "$IPADDR" ] && IPADDR=$($DIG +short +time=3 +tries=1 AAAA "$HOTE" | grep -E '^[0-9a-fA-F:]+$' | head -1)
       [ -z "$IPADDR" ] && { printf "''${X}« %s » : ni une IP, ni un nom résolvable''${R}\n" "$HOTE" >&2; exit 1; }
     fi
 
@@ -301,31 +313,56 @@ let
          || { [ "$O1" -eq 100 ] && [ "$O2" -ge 64 ] && [ "$O2" -le 127 ]; }; then
         PRIVE=1
       fi
+      HP="$IPADDR"
     else
       case "''${IPADDR,,}" in
         ::1|fe8*|fe9*|fea*|feb*|fc*|fd*|ff*) PRIVE=1 ;;
       esac
+      HP="[$IPADDR]"
     fi
     if [ -n "$PRIVE" ]; then
       printf "''${Y}%s''${R} est une adresse privée/réservée : aucune info publique.\n" "$IPADDR"
       exit 1
     fi
 
-    # ── Collecte en parallèle ───────────────────────────────────
     TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+    get() { $CURL -sL --max-time "''${3:-8}" -A "ipinfo-cli" "$2" -o "$TMP/$1" 2>/dev/null; }
+
+    if [ "$JSON" = 0 ] && [ -t 2 ]; then
+      printf "  ''${D}Analyse de %s…''${R}" "$IPADDR" >&2
+    fi
+
+    # ── Vague 1 : tout ce qui ne dépend que de l'IP ─────────────
     CHAMPS="status,message,continent,country,countryCode,regionName,city,district,zip,lat,lon,timezone,offset,currency,isp,org,as,asname,reverse,mobile,proxy,hosting,query"
-    $CURL -sf --max-time 6 "http://ip-api.com/json/$IPADDR?fields=$CHAMPS&lang=fr" -o "$TMP/geo" &
-    $CURL -sfL --max-time 10 "https://rdap.org/ip/$IPADDR" -o "$TMP/rdap" &
-    $CURL -s --max-time 8 "https://internetdb.shodan.io/$IPADDR" -o "$TMP/shodan" &
+    get geo      "http://ip-api.com/json/$IPADDR?fields=$CHAMPS&lang=fr" 6 &
+    get ipinfoio "https://ipinfo.io/$IPADDR/json" &
+    get rdap     "https://rdap.org/ip/$IPADDR" 10 &
+    get shodan   "https://internetdb.shodan.io/$IPADDR" &
+    get proxy    "https://proxycheck.io/v2/$IPADDR?vpn=1&asn=1&risk=1" &
+    get grey     "https://api.greynoise.io/v3/community/$IPADDR" &
+    get tor      "https://onionoo.torproject.org/details?search=$IPADDR&fields=nickname,flags,or_addresses,exit_addresses,first_seen,running" 10 &
+    get prefix   "https://stat.ripe.net/data/prefix-overview/data.json?resource=$IPADDR" 10 &
+    get revip    "https://api.hackertarget.com/reverseiplookup/?q=$IPADDR" &
     $DIG +short +time=3 +tries=1 -x "$IPADDR" > "$TMP/rdns" 2>/dev/null &
 
     # Listes noires (IPv4 seulement) : ip inversée + zone
     DNSBL="zen.spamhaus.org bl.spamcop.net b.barracudacentral.org dnsbl-1.uceprotect.net all.s5h.net"
     if is_v4 "$IPADDR"; then
-      REV="$O4.$O3.$O2.$O1"
       for Z in $DNSBL; do
-        $DIG +short +time=3 +tries=1 A "$REV.$Z" > "$TMP/bl_$Z" 2>/dev/null &
+        $DIG +short +time=3 +tries=1 A "$O4.$O3.$O2.$O1.$Z" > "$TMP/bl_$Z" 2>/dev/null &
       done
+    fi
+
+    # Sondes actives
+    : > "$TMP/ping"; : > "$TMP/tls"; : > "$TMP/http"; : > "$TMP/ssh"
+    if [ "$ACTIF" = 1 ]; then
+      $PING -c4 -i0.3 -W2 "$IPADDR" > "$TMP/ping" 2>&1 &
+      ( echo | $TIMEOUT 6 $OPENSSL s_client -connect "$HP:443" ''${HOTE:+-servername "$HOTE"} 2>/dev/null \
+          | $OPENSSL x509 -noout -subject -issuer -enddate -ext subjectAltName 2>/dev/null > "$TMP/tls" ) &
+      ( URLH="''${HOTE:-$HP}"
+        $CURL -skI --max-time 5 "https://$URLH/" > "$TMP/http" 2>/dev/null \
+          || $CURL -sI --max-time 5 "http://$URLH/" > "$TMP/http" 2>/dev/null ) &
+      $TIMEOUT 4 $BASH -c 'exec 3<>"/dev/tcp/$1/22" && read -r -t 3 L <&3 && printf "%s\n" "$L"' _ "$IPADDR" > "$TMP/ssh" 2>/dev/null &
     fi
     wait
 
@@ -342,15 +379,46 @@ let
       }' > "$TMP/geo" 2>/dev/null
     fi
 
-    for F in geo rdap shodan; do
-      $JQ -e . "$TMP/$F" >/dev/null 2>&1 || echo '{}' > "$TMP/$F"
+    JSONS="geo ipinfoio rdap shodan proxy grey tor prefix routing neigh rpki pdb"
+    jsonfix() { for F in "$@"; do $JQ -e . "$TMP/$F" >/dev/null 2>&1 || echo '{}' > "$TMP/$F"; done; }
+    jsonfix geo ipinfoio rdap shodan proxy grey tor prefix
+
+    # ── Vague 2 : ce qui dépend de l'AS et du préfixe annoncé ───
+    ASN=$($JQ -r '.data.asns[0].asn // empty' "$TMP/prefix")
+    [ -z "$ASN" ] && ASN=$($JQ -r '.as // empty' "$TMP/geo" | sed -n 's/^AS\([0-9]*\).*/\1/p')
+    PREFIXE=$($JQ -r 'if .data.announced then .data.resource else empty end' "$TMP/prefix")
+    if [ -n "$ASN" ]; then
+      get routing "https://stat.ripe.net/data/routing-status/data.json?resource=AS$ASN" 10 &
+      get neigh   "https://stat.ripe.net/data/asn-neighbours/data.json?resource=AS$ASN" 10 &
+      get pdb     "https://www.peeringdb.com/api/net?asn=$ASN" &
+      [ -n "$PREFIXE" ] && get rpki "https://stat.ripe.net/data/rpki-validation/data.json?resource=AS$ASN&prefix=$PREFIXE" 10 &
+      wait
+    fi
+    jsonfix routing neigh rpki pdb
+
+    # ── Vague 3 : noms des 3 principaux opérateurs amont ────────
+    AMONTS=$($JQ -r '[.data.neighbours[]? | select(.type=="left")] | sort_by(-.power) | .[0:3][] | .asn' "$TMP/neigh")
+    for U in $AMONTS; do
+      get "up_$U" "https://stat.ripe.net/data/as-overview/data.json?resource=AS$U" 6 &
     done
+    wait
+
+    [ "$JSON" = 0 ] && [ -t 2 ] && printf '\r\e[2K' >&2
+
     RDNS=$(grep -v '^;' "$TMP/rdns" | sed 's/\.$//' | paste -sd, - | sed 's/,/, /g')
 
     if [ "$JSON" = 1 ]; then
-      $JQ -n --arg ip "$IPADDR" --arg host "$HOTE" --arg rdns "$RDNS" \
-        --slurpfile geo "$TMP/geo" --slurpfile rdap "$TMP/rdap" --slurpfile shodan "$TMP/shodan" \
-        '{ip: $ip, host: $host, reverse_dns: $rdns, geo: $geo[0], rdap: $rdap[0], shodan: $shodan[0]}'
+      ARGS=()
+      for F in $JSONS; do ARGS+=(--slurpfile "$F" "$TMP/$F"); done
+      $JQ -n --arg ip "$IPADDR" --arg host "$HOTE" --arg rdns "$RDNS" "''${ARGS[@]}" \
+        --rawfile revip "$TMP/revip" --rawfile ping "$TMP/ping" --rawfile tls "$TMP/tls" \
+        --rawfile http "$TMP/http" --rawfile ssh "$TMP/ssh" \
+        '{ip: $ip, host: $host, reverse_dns: $rdns,
+          geo: $geo[0], ipinfo: $ipinfoio[0], rdap: $rdap[0], shodan: $shodan[0],
+          proxycheck: $proxy[0], greynoise: $grey[0], tor: $tor[0],
+          ripestat: {prefix: $prefix[0].data, routing: $routing[0].data, neighbours: $neigh[0].data, rpki: $rpki[0].data},
+          peeringdb: $pdb[0].data[0], reverse_ip: $revip,
+          active: {ping: $ping, tls: $tls, http: $http, ssh: $ssh}}'
       exit 0
     fi
 
@@ -358,12 +426,13 @@ let
     # Padding à la main : printf compte les octets, pas les caractères accentués
     row() {
       [ -n "$2" ] || return 0
-      local pad=$((14 - ''${#1})); [ "$pad" -lt 1 ] && pad=1
+      local pad=$((15 - ''${#1})); [ "$pad" -lt 1 ] && pad=1
       printf "    ''${D}%s''${R}%*s%s\n" "$1" "$pad" "" "$2"
     }
     titre() { printf "\n  ''${B}''${C}%s''${R}\n" "$1"; }
     W=64
     line() { printf "''${D}%s''${R}\n" "$(printf '─%.0s' $(seq 1 $W))"; }
+    joinv() { local IFS=,; printf '%s' "$*" | sed 's/,/, /g'; }
 
     # ── En-tête ─────────────────────────────────────────────────
     CC=$(g .countryCode geo)
@@ -386,6 +455,10 @@ let
     row "Région" "$(g .regionName geo)"
     VILLE=$(g .city geo); ZIP=$(g .zip geo); QUARTIER=$(g .district geo)
     row "Ville" "$VILLE''${ZIP:+ $ZIP}''${QUARTIER:+ — $QUARTIER}"
+    VILLE2=$(g .city ipinfoio); PAYS2=$(g .country ipinfoio)
+    if [ -n "$VILLE2" ] && [ "$VILLE2" != "$VILLE" ]; then
+      row "Autre source" "''${Y}$VILLE2, $PAYS2''${R} ''${D}(ipinfo.io — géoloc incertaine)''${R}"
+    fi
     LAT=$(g .lat geo); LON=$(g .lon geo)
     if [ -n "$LAT" ] && [ -n "$LON" ]; then
       row "Coordonnées" "$LAT, $LON  ''${D}(approx.)''${R}"
@@ -394,6 +467,8 @@ let
     TZN=$(g .timezone geo)
     [ -n "$TZN" ] && row "Fuseau" "$TZN  ''${D}il est $(TZ="$TZN" date '+%H:%M')''${R}"
     row "Monnaie" "$(g .currency geo)"
+    [ "$(g .anycast ipinfoio)" = "true" ] && \
+      row "Anycast" "''${Y}oui''${R} ''${D}— servie depuis plusieurs lieux, la géoloc n'a pas de sens''${R}"
 
     # ── Réseau ──────────────────────────────────────────────────
     titre "󰛳  Réseau"
@@ -410,42 +485,62 @@ let
     [ "$(g .hosting geo)" = "true" ] && TYPES+=("''${Y}hébergeur / datacenter''${R}")
     if [ -n "$(g .proxy geo)" ]; then
       [ ''${#TYPES[@]} -eq 0 ] && TYPES+=("''${G}résidentielle / standard''${R}")
-      row "Type" "$(IFS=,; printf '%s' "''${TYPES[*]}" | sed 's/,/, /g')"
+      row "Type" "$(joinv "''${TYPES[@]}")"
     fi
 
-    # ── Propriétaire du bloc (RDAP) ─────────────────────────────
-    if [ "$($JQ -r '.handle // empty' "$TMP/rdap")" != "" ]; then
-      titre "󰈙  Propriétaire du bloc (RDAP)"
-      row "Nom réseau" "$(g .name rdap)"
-      row "Handle" "$(g .handle rdap)"
-      row "Plage" "$($JQ -r 'if .startAddress then "\(.startAddress) – \(.endAddress)" else empty end' "$TMP/rdap")"
-      row "CIDR" "$($JQ -r '[.cidr0_cidrs[]? | "\(.v4prefix // .v6prefix)/\(.length)"] | join(", ")' "$TMP/rdap")"
-      row "Titulaire" "$($JQ -r '[.entities[]? | select(.roles|index("registrant")) | .vcardArray[1][]? | select(.[0]=="fn") | .[3]] | first // empty' "$TMP/rdap")"
-      row "Description" "$($JQ -r '[.remarks[]?.description[]?] | .[0:2] | join(" / ")' "$TMP/rdap")"
-      row "Registre" "$(g .port43 rdap)"
-      row "Attribué le" "$($JQ -r '[.events[]? | select(.eventAction=="registration") | .eventDate[0:10]] | first // empty' "$TMP/rdap")"
-      row "Modifié le" "$($JQ -r '[.events[]? | select(.eventAction=="last changed") | .eventDate[0:10]] | first // empty' "$TMP/rdap")"
-      row "Abuse" "$($JQ -r '[.. | objects | select((.roles? // []) | index("abuse")) | .vcardArray[1][]? | select(.[0]=="email") | .[3]] | unique | join(", ")' "$TMP/rdap")"
-    fi
-
-    # ── Exposition (Shodan InternetDB) ──────────────────────────
-    titre "󰒃  Exposition (Shodan)"
-    if [ "$($JQ -r '.ip // empty' "$TMP/shodan")" != "" ]; then
-      row "Ports ouverts" "$($JQ -r '.ports | map(tostring) | join(", ")' "$TMP/shodan")"
-      row "Noms d'hôte" "$($JQ -r '.hostnames[0:5] | join(", ")' "$TMP/shodan")"
-      row "Tags" "$($JQ -r '.tags | join(", ")' "$TMP/shodan")"
-      row "Logiciels" "$($JQ -r '[.cpes[] | sub("^cpe:/[aoh]:"; "")] | .[0:6] | join(", ")' "$TMP/shodan")"
-      NV=$($JQ -r '.vulns | length' "$TMP/shodan")
-      if [ "$NV" -gt 0 ]; then
-        row "Vulnérabilités" "''${X}$NV CVE''${R} ''${D}$($JQ -r '.vulns[0:5] | join(", ")' "$TMP/shodan")$([ "$NV" -gt 5 ] && printf ' …')''${R}"
+    # ── Réputation / anonymat ───────────────────────────────────
+    titre "󰒃  Réputation et anonymat"
+    PX=".\"$IPADDR\""
+    PXOUI=$(g "$PX.proxy" proxy)
+    if [ -n "$PXOUI" ]; then
+      PXTYPE=$(g "$PX.type" proxy); RISK=$(g "$PX.risk" proxy)
+      if [ "$PXOUI" = "yes" ]; then
+        row "Proxy / VPN" "''${X}oui''${R}''${PXTYPE:+ ($PXTYPE)}"
+      else
+        row "Proxy / VPN" "''${G}non''${R}''${PXTYPE:+ ''${D}($PXTYPE)''${R}}"
       fi
-    else
-      row "État" "''${D}aucune donnée (rien d'exposé ou pas encore scanné)''${R}"
+      if [ -n "$RISK" ]; then
+        if [ "$RISK" -ge 67 ]; then RC="$X"; elif [ "$RISK" -ge 34 ]; then RC="$Y"; else RC="$G"; fi
+        row "Risque" "''${RC}$RISK/100''${R} ''${D}(proxycheck.io)''${R}"
+      fi
+      DEVA=$(g "$PX.devices.address" proxy); DEVS=$(g "$PX.devices.subnet" proxy)
+      [ -n "$DEVA" ] && row "Appareils vus" "$DEVA sur l'IP''${DEVS:+, $DEVS sur le sous-réseau}"
     fi
 
-    # ── Réputation (DNSBL) ──────────────────────────────────────
+    # Tor : on ne garde que les relais dont l'adresse correspond exactement
+    TOR=$($JQ -r --arg ip "$IPADDR" '
+      [.relays[]? | select(((.or_addresses // []) + (.exit_addresses // []))
+        | map(sub(":[0-9]+$"; "") | gsub("[\\[\\]]"; "")) | index($ip))]
+      | if length == 0 then empty else
+          (if any(.[]; .flags | index("Exit")) then "sortie" else "relais" end)
+          + "|" + (map(.nickname) | .[0:4] | join(", "))
+          + "|" + (map(.first_seen[0:10]) | min)
+        end' "$TMP/tor" 2>/dev/null)
+    if [ -n "$TOR" ]; then
+      IFS='|' read -r TKIND TNOMS TDEPUIS <<< "$TOR"
+      if [ "$TKIND" = "sortie" ]; then
+        row "Tor" "''${X}nœud de sortie''${R} ($TNOMS) ''${D}depuis $TDEPUIS''${R}"
+      else
+        row "Tor" "''${Y}relais (pas de sortie)''${R} ($TNOMS) ''${D}depuis $TDEPUIS''${R}"
+      fi
+    elif [ "$($JQ -r '.relays | type' "$TMP/tor" 2>/dev/null)" = "array" ]; then
+      row "Tor" "''${G}non''${R}"
+    fi
+
+    GMSG=$(g .message grey)
+    if [ "$(g .noise grey)" = "true" ]; then
+      GCL=$(g .classification grey); GNAME=$(g .name grey); GLAST=$(g .last_seen grey)
+      case "$GCL" in malicious) GC="$X" ;; benign) GC="$G" ;; *) GC="$Y" ;; esac
+      row "Scanner" "''${GC}scanne Internet — $GCL''${R}''${GNAME:+ ($GNAME)}''${GLAST:+ ''${D}vu le $GLAST''${R}}"
+    elif [ "$(g .riot grey)" = "true" ]; then
+      row "Scanner" "''${G}service connu et légitime''${R} ($(g .name grey))"
+    elif [ "$(g .noise grey)" = "false" ]; then
+      row "Scanner" "''${G}jamais vu en train de scanner''${R} ''${D}(GreyNoise)''${R}"
+    elif [ -n "$GMSG" ]; then
+      row "Scanner" "''${D}GreyNoise : $GMSG''${R}"
+    fi
+
     if is_v4 "$IPADDR"; then
-      titre "󰞀  Listes noires"
       LISTEES=(); INVERIF=()
       for Z in $DNSBL; do
         REP=$(grep -E '^127\.' "$TMP/bl_$Z" | head -1)
@@ -455,16 +550,139 @@ let
           *) LISTEES+=("$Z") ;;
         esac
       done
+      NBL=$(printf '%s\n' $DNSBL | wc -l)
       if [ ''${#LISTEES[@]} -gt 0 ]; then
-        row "Listée sur" "''${X}''${LISTEES[*]}''${R}"
+        row "Listes noires" "''${X}listée sur ''${LISTEES[*]}''${R}"
       else
-        row "Résultat" "''${G}propre''${R} ''${D}($(printf '%s\n' $DNSBL | wc -l) listes testées)''${R}"
+        row "Listes noires" "''${G}propre''${R} ''${D}($((NBL - ''${#INVERIF[@]}))/$NBL vérifiées''${INVERIF[*]:+, refus : ''${INVERIF[*]}})''${R}"
       fi
-      [ ''${#INVERIF[@]} -gt 0 ] && row "Non vérifié" "''${D}''${INVERIF[*]} (refus du résolveur)''${R}"
+    fi
+
+    # ── Routage BGP (RIPEstat) ──────────────────────────────────
+    if [ -n "$ASN" ]; then
+      titre "󰛳  Routage BGP"
+      if [ -n "$PREFIXE" ]; then
+        row "Préfixe" "$PREFIXE ''${D}annoncé par AS$ASN''${R}"
+      else
+        row "Préfixe" "''${Y}non annoncé sur Internet''${R}"
+      fi
+      row "Bloc parent" "$($JQ -r '.data.block | if .resource then "\(.resource) — \(.desc)" else empty end' "$TMP/prefix")"
+      RPKI=$(g .data.status rpki)
+      case "$RPKI" in
+        valid)   row "RPKI" "''${G}valide''${R} ''${D}(route signée, protégée contre le détournement)''${R}" ;;
+        invalid*) row "RPKI" "''${X}INVALIDE''${R} ''${D}(route non autorisée — détournement ?)''${R}" ;;
+        unknown) row "RPKI" "''${Y}aucune signature ROA''${R}" ;;
+      esac
+      row "Espace annoncé" "$($JQ -r '.data.announced_space | select(.v4) |
+        "\(.v4.prefixes) préfixes v4 (\(.v4.ips) IP), \(.v6.prefixes) v6"' "$TMP/routing")"
+      row "Visibilité" "$($JQ -r '.data.visibility.v4 | select(.total_ris_peers) |
+        "\(.ris_peers_seeing)/\(.total_ris_peers) routeurs RIS voient l AS"' "$TMP/routing" | sed "s/l AS/l'AS/")"
+      row "AS actif depuis" "$(g '.data.first_seen.time[0:10]' routing)"
+      row "Voisins" "$($JQ -r '.data.neighbour_counts | select(.unique) |
+        "\(.unique) au total — \(.left) amont, \(.right) aval"' "$TMP/neigh")"
+      UPS=()
+      for U in $AMONTS; do
+        UPS+=("AS$U $(g .data.holder "up_$U" | sed 's/^[A-Z0-9-]* - //' | cut -c1-24 | sed 's/ *$//')")
+      done
+      [ ''${#UPS[@]} -gt 0 ] && row "Transitaires" "$(joinv "''${UPS[@]}")"
+    fi
+
+    # ── Opérateur (PeeringDB) ───────────────────────────────────
+    if [ -n "$(g '.data[0].name' pdb)" ]; then
+      titre "󰒍  Opérateur (PeeringDB)"
+      row "Nom" "$(g '.data[0].name' pdb)"
+      row "Aussi connu" "$(g '.data[0].aka' pdb | cut -c1-60)"
+      row "Type" "$(g '.data[0].info_type' pdb)"
+      row "Portée" "$(g '.data[0].info_scope' pdb)"
+      row "Trafic" "$(g '.data[0].info_traffic' pdb)''${D}$(g '.data[0].info_ratio' pdb | sed 's/^/ — /')''${R}"
+      row "Peering" "$(g '.data[0].policy_general' pdb)"
+      row "Présence" "$($JQ -r '.data[0] | "\(.ix_count) points d échange (IX), \(.fac_count) datacenters"' "$TMP/pdb" | sed "s/d échange/d'échange/")"
+      row "Site web" "$(g '.data[0].website' pdb)"
+    fi
+
+    # ── Propriétaire du bloc (RDAP) ─────────────────────────────
+    if [ -n "$(g .handle rdap)" ]; then
+      titre "󰈙  Propriétaire du bloc (RDAP)"
+      row "Nom réseau" "$(g .name rdap)"
+      row "Handle" "$(g .handle rdap)"
+      row "Plage" "$($JQ -r 'if .startAddress then "\(.startAddress) – \(.endAddress)" else empty end' "$TMP/rdap")"
+      row "CIDR" "$($JQ -r '[.cidr0_cidrs[]? | "\(.v4prefix // .v6prefix)/\(.length)"] | join(", ")' "$TMP/rdap")"
+      row "Titulaire" "$($JQ -r '[.entities[]? | select(.roles|index("registrant")) | .vcardArray[1][]? | select(.[0]=="fn") | .[3]] | first // empty' "$TMP/rdap")"
+      row "Adresse" "$($JQ -r '[.entities[]? | select(.roles|index("registrant")) | .vcardArray[1][]? | select(.[0]=="adr") | .[1].label // empty] | first // empty' "$TMP/rdap" | tr '\n' ' ' | sed 's/ *$//')"
+      row "Description" "$($JQ -r '[.remarks[]?.description[]?] | .[0:2] | join(" / ")' "$TMP/rdap")"
+      row "Registre" "$(g .port43 rdap)"
+      row "Attribué le" "$($JQ -r '[.events[]? | select(.eventAction=="registration") | .eventDate[0:10]] | first // empty' "$TMP/rdap")"
+      row "Modifié le" "$($JQ -r '[.events[]? | select(.eventAction=="last changed") | .eventDate[0:10]] | first // empty' "$TMP/rdap")"
+      row "Abuse" "$($JQ -r '[.. | objects | select((.roles? // []) | index("abuse")) | .vcardArray[1][]? | select(.[0]=="email") | .[3]] | unique | join(", ")' "$TMP/rdap")"
+    fi
+
+    # ── Exposition (Shodan InternetDB + domaines hébergés) ──────
+    titre "󰖟  Exposition"
+    if [ -n "$(g .ip shodan)" ]; then
+      row "Ports ouverts" "$($JQ -r '.ports | map(tostring) | join(", ")' "$TMP/shodan")"
+      row "Noms d'hôte" "$($JQ -r '.hostnames[0:5] | join(", ")' "$TMP/shodan")"
+      row "Tags" "$($JQ -r '.tags | join(", ")' "$TMP/shodan")"
+      row "Logiciels" "$($JQ -r '[.cpes[] | sub("^cpe:/[aoh]:"; "")] | .[0:6] | join(", ")' "$TMP/shodan")"
+      NV=$($JQ -r '.vulns | length' "$TMP/shodan")
+      if [ "$NV" -gt 0 ]; then
+        row "Vulnérabilités" "''${X}$NV CVE''${R} ''${D}$($JQ -r '.vulns[0:5] | join(", ")' "$TMP/shodan")$([ "$NV" -gt 5 ] && printf ' …')''${R}"
+      fi
+    else
+      row "Shodan" "''${D}aucune donnée (rien d'exposé ou pas encore scanné)''${R}"
+    fi
+    if grep -qi 'API count exceeded' "$TMP/revip"; then
+      row "Domaines" "''${D}quota HackerTarget du jour atteint''${R}"
+    elif grep -qiE 'no (dns )?(a )?records|error|invalid' "$TMP/revip" || [ ! -s "$TMP/revip" ]; then
+      row "Domaines" "''${D}aucun domaine connu sur cette IP''${R}"
+    else
+      ND=$(grep -c . "$TMP/revip")
+      row "Domaines" "''${B}$ND''${R} hébergé(s) : $(head -8 "$TMP/revip" | paste -sd, - | sed 's/,/, /g')$([ "$ND" -gt 8 ] && printf ' …')"
+    fi
+
+    # ── Sondes actives ──────────────────────────────────────────
+    if [ "$ACTIF" = 1 ]; then
+      titre "󰓅  Sondes actives"
+      PERTE=$(sed -n 's/.* \([0-9.]*\)% packet loss.*/\1/p' "$TMP/ping")
+      MOY=$(sed -n 's|^rtt [^=]*= [0-9.]*/\([0-9.]*\)/.*|\1|p' "$TMP/ping")
+      TTL=$(sed -n 's/.*ttl=\([0-9]*\).*/\1/p' "$TMP/ping" | head -1)
+      if [ -n "$MOY" ]; then
+        row "Ping" "$MOY ms ''${D}(perte $PERTE %)''${R}"
+      else
+        row "Ping" "''${D}pas de réponse ICMP (filtré)''${R}"
+      fi
+      if [ -n "$TTL" ]; then
+        if   [ "$TTL" -le 64 ];  then OS="Linux / Unix / box"; INIT=64
+        elif [ "$TTL" -le 128 ]; then OS="Windows";            INIT=128
+        else                          OS="équipement réseau";  INIT=255; fi
+        row "TTL" "$TTL ''${D}→ probablement $OS, ~$((INIT - TTL)) sauts''${R}"
+      fi
+      HSTAT=$(head -1 "$TMP/http" | tr -d '\r')
+      if [ -n "$HSTAT" ]; then
+        row "HTTP" "$HSTAT"
+        for H in server x-powered-by location; do
+          V=$(grep -i "^$H:" "$TMP/http" | head -1 | cut -d: -f2- | tr -d '\r' | sed 's/^ *//')
+          row "  $H" "$V"
+        done
+      else
+        row "HTTP" "''${D}pas de serveur web (80/443)''${R}"
+      fi
+      if [ -s "$TMP/tls" ]; then
+        row "Certificat" "$(sed -n 's/^subject=.*CN *= *\([^,]*\).*/\1/p' "$TMP/tls")"
+        SAN=$(grep -A1 'Subject Alternative Name' "$TMP/tls" | tail -1 | sed 's/DNS://g; s/^ *//')
+        NSAN=$(printf '%s' "$SAN" | tr ',' '\n' | grep -c .)
+        row "  domaines" "$(printf '%s' "$SAN" | cut -d, -f1-6)$([ "$NSAN" -gt 6 ] && printf ' … (%s)' "$NSAN")"
+        row "  émetteur" "$(sed -n 's/^issuer=.*O *= *\([^,]*\).*/\1/p' "$TMP/tls")"
+        FIN=$(sed -n 's/^notAfter=//p' "$TMP/tls")
+        [ -n "$FIN" ] && row "  expire le" "$(date -d "$FIN" '+%d/%m/%Y' 2>/dev/null || printf '%s' "$FIN")"
+      fi
+      row "SSH" "$(tr -d '\r' < "$TMP/ssh")"
     fi
 
     printf "\n"; line
-    printf "  ''${D}Liens : https://ipinfo.io/%s · https://www.abuseipdb.com/check/%s · https://www.shodan.io/host/%s''${R}\n\n" "$IPADDR" "$IPADDR" "$IPADDR"
+    printf "  ''${D}Plus : https://www.abuseipdb.com/check/%s · https://www.shodan.io/host/%s''${R}\n" "$IPADDR" "$IPADDR"
+    [ -n "$ASN" ] && printf "  ''${D}       https://bgp.he.net/AS%s · https://viz.greynoise.io/ip/%s''${R}\n" "$ASN" "$IPADDR"
+    [ "$ACTIF" = 0 ] && printf "  ''${D}ipinfo -a %s → + ping, certificat TLS, serveur web, SSH''${R}\n" "''${HOTE:-$IPADDR}"
+    printf "\n"
   '';
 in
 {
