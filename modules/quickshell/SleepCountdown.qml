@@ -173,7 +173,10 @@ RowLayout {
         implicitWidth: 380
         readonly property bool alarm: current !== null && !current.farewell && current.level >= 3
         implicitHeight: body.y + body.height + 10
-        mask: Region { item: body }
+        // Zone cliquable = la bulle seule. Géométrie liée explicitement : avec `item:`, la
+        // zone restait figée à la position initiale de la bulle (calculée avant que la
+        // fenêtre ait sa largeur) et « J'y vais » tombait en dehors.
+        mask: Region { x: body.x - 4; y: body.y - 4; width: body.width + 8; height: body.height + 8 }
 
         SequentialAnimation {
             id: enter
