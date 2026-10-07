@@ -286,7 +286,7 @@ Pill {
                 Item {
                     Layout.fillWidth: true
                     implicitWidth: 0
-                    implicitHeight: nameText.implicitHeight
+                    implicitHeight: menuName.implicitHeight
                     BarText {
                         id: menuName
                         width: Math.min(implicitWidth, parent.width - (menuCheck.visible ? 26 : 0))
@@ -302,7 +302,7 @@ Pill {
                         visible: root.current !== null
                         x: menuName.width + 8
                         anchors.verticalCenter: menuName.verticalCenter
-                        text: Theme.ic(0xf05e0)    // md-menuCheck-circle
+                        text: Theme.ic(0xf05e0)    // md-check-circle
                         color: root.tint
                         font.pixelSize: 16
                     }

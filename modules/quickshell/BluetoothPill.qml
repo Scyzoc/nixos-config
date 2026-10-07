@@ -245,7 +245,7 @@ Pill {
         readonly property int maxWidth: 140
         readonly property bool overflow: nameText.implicitWidth > maxWidth
         implicitWidth: Math.min(nameText.implicitWidth, maxWidth)
-        implicitHeight: nameText.implicitHeight
+        implicitHeight: menuName.implicitHeight
         clip: true
 
         BarText {
@@ -649,7 +649,7 @@ Pill {
                 Item {
                     Layout.fillWidth: true
                     implicitWidth: 0
-                    implicitHeight: nameText.implicitHeight
+                    implicitHeight: menuName.implicitHeight
                     BarText {
                         id: menuName
                         width: Math.min(implicitWidth, parent.width - (menuCheck.visible ? 26 : 0))
@@ -665,7 +665,7 @@ Pill {
                         visible: root.powered && root.main !== null
                         x: menuName.width + 8
                         anchors.verticalCenter: menuName.verticalCenter
-                        text: Theme.ic(0xf05e0)    // md-menuCheck-circle
+                        text: Theme.ic(0xf05e0)    // md-check-circle
                         color: Theme.bluetooth
                         font.pixelSize: 16
                     }
