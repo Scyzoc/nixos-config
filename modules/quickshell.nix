@@ -173,8 +173,8 @@ let
   # Site web d'un média joué dans Brave (mélangeur audio) : nom + favicon, lus en lecture
   # seule dans le profil Brave (base ouverte en immutable : Brave la garde verrouillée)
   #   web-source --host soundcloud.com              site connu (fenêtre PWA)
-  #   web-source --title "<morceau>" [--pwa h1,h2]  historique (titre de page), sinon
-  #                                                 l'unique PWA ouverte
+  #   web-source --title "<morceau>" [--pwa h1,h2]  historique (titre de page), sinon la
+  #                                                 seule PWA ouverte (média si plusieurs)
   # Affiche {"host", "name", "icon"} en JSON ; {} si rien trouvé.
   web-source = pkgs.writeScript "web-source" ''
     #!${pkgs.python3}/bin/python3
