@@ -163,6 +163,8 @@ Pill {
                             device: entry.modelData
                             typeDefs: root.typeDefs
                             type: root.types[entry.modelData.address] ?? "auto"
+                            deviceIcon: root.devIcon(entry.modelData)
+                            deviceIconFont: root.devIconFont(entry.modelData)
                             onTypeChosen: t => root.setType(entry.modelData.address, t)
                             onForgotten: {
                                 root.setType(entry.modelData.address, "auto");

@@ -4,14 +4,17 @@ import Quickshell
 import Quickshell.Bluetooth
 
 // Réglages d'un appareil Bluetooth connu (sobre, icônes seules) :
-// nom (alias BlueZ) + oublier · adresse MAC (copier) · type (icône, mémorisé localement)
+// [icône du type] nom (alias BlueZ) + oublier ; clic sur l'icône → choix du type (mémorisé localement)
 Rectangle {
     id: root
 
     required property BluetoothDevice device
     required property var typeDefs        // [{ id, label, icon, font? }] (BluetoothPill.qml)
     property string type: "auto"          // type choisi pour cet appareil
+    property string deviceIcon: ""        // icône actuelle (BluetoothPill.devIcon)
+    property string deviceIconFont: Theme.font
     property bool confirmForget: false
+    property bool pickType: false         // grille des types ouverte
 
     signal typeChosen(string type)
     signal forgotten()
@@ -42,6 +45,16 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             spacing: 6
+            // Icône actuelle : ouvre / referme la grille des types
+            ActionButton {
+                implicitWidth: 30
+                implicitHeight: 30
+                icon: root.deviceIcon
+                iconFont: root.deviceIconFont
+                accent: Theme.bluetooth
+                highlighted: root.pickType
+                onClicked: root.pickType = !root.pickType
+            }
             Field {
                 id: nameField
                 placeholder: root.device.deviceName
@@ -70,27 +83,9 @@ Rectangle {
             }
         }
 
-        // Adresse MAC (icône = copier)
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
-            BarText {
-                font.family: Theme.labelFont
-                Layout.fillWidth: true
-                text: root.device.address
-                color: Theme.muted
-                font.pixelSize: 11
-            }
-            ActionButton {
-                implicitWidth: 26
-                implicitHeight: 22
-                icon: Theme.ic(0xf018f)
-                onClicked: Quickshell.clipboardText = root.device.address
-            }
-        }
-
-        // Type d'appareil → icône (Auto = détection BlueZ)
+        // Type d'appareil → icône (Auto = détection BlueZ) ; refermée après le choix
         GridLayout {
+            visible: root.pickType
             Layout.fillWidth: true
             columns: 7
             columnSpacing: 4
@@ -105,7 +100,7 @@ Rectangle {
                     iconFont: modelData.font ?? Theme.font
                     accent: Theme.bluetooth
                     highlighted: root.type === modelData.id
-                    onClicked: root.typeChosen(modelData.id)
+                    onClicked: { root.typeChosen(modelData.id); root.pickType = false; }
                 }
             }
         }
