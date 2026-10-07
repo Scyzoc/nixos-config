@@ -156,6 +156,7 @@ let
       "wakepc|Réveiller le PC Windows (WoL)" \
       "pcoff|Éteindre le PC Windows" \
       "monip|Afficher l'IP publique" \
+      "ipinfo|Infos complètes sur une IP publique" \
       "internet-check|Test de connexion internet" \
       "netfix|Diagnostic + réparation réseau"
 

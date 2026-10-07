@@ -234,7 +234,239 @@ let
       fi
     done
   '';
+
+  # Commande `ipinfo` : toutes les infos publiques sur une adresse IP (ou un nom d'hôte).
+  # Sources sans clé API : ip-api.com (géoloc, FAI, drapeaux proxy/hébergeur),
+  # ipwho.is (secours), RDAP (propriétaire du bloc, abuse), Shodan InternetDB
+  # (ports ouverts, CVE), DNS inverse et listes noires DNSBL.
+  # Usage : ipinfo                → sa propre IP publique
+  #         ipinfo 8.8.8.8        → une IP
+  #         ipinfo example.com    → résout le nom puis analyse l'IP
+  #         ipinfo --json <ip>    → JSON brut fusionné
+  ipinfo = pkgs.writeShellScriptBin "ipinfo" ''
+    set -u
+    export LC_ALL=C.UTF-8
+    CURL="${pkgs.curl}/bin/curl"
+    JQ="${pkgs.jq}/bin/jq"
+    DIG="${pkgs.dnsutils}/bin/dig"
+
+    B=$'\e[1m'; D=$'\e[2m'; R=$'\e[0m'
+    C=$'\e[38;5;110m'; G=$'\e[38;5;114m'; Y=$'\e[38;5;179m'
+    M=$'\e[38;5;140m'; X=$'\e[38;5;131m'
+
+    usage() {
+      printf "Usage : ipinfo [--json] [IP | nom d'hôte]\n"
+      printf "  sans argument : analyse ta propre IP publique\n"
+    }
+
+    JSON=0; CIBLE=""
+    for A in "$@"; do
+      case "$A" in
+        -h|--help) usage; exit 0 ;;
+        -j|--json) JSON=1 ;;
+        -*) printf "Option inconnue : %s\n" "$A" >&2; usage >&2; exit 2 ;;
+        *) CIBLE="$A" ;;
+      esac
+    done
+
+    is_v4() { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; }
+    is_v6() { [[ "$1" == *:* && "$1" =~ ^[0-9a-fA-F:.]+$ ]]; }
+
+    # ── Cible ───────────────────────────────────────────────────
+    HOTE=""
+    if [ -z "$CIBLE" ]; then
+      IPADDR=$($CURL -sf --max-time 5 https://api.ipify.org || $CURL -sf --max-time 5 https://ifconfig.me)
+      IPADDR=$(printf '%s' "$IPADDR" | tr -d '[:space:]')
+      [ -z "$IPADDR" ] && { printf "''${X}Impossible de récupérer ton IP publique (pas d'Internet ?)''${R}\n" >&2; exit 1; }
+    elif is_v4 "$CIBLE" || is_v6 "$CIBLE"; then
+      IPADDR="$CIBLE"
+    else
+      HOTE="$CIBLE"
+      IPADDR=$($DIG +short +time=3 +tries=1 A "$HOTE" | grep -E '^[0-9.]+$' | head -1)
+      [ -z "$IPADDR" ] && IPADDR=$($DIG +short +time=3 +tries=1 AAAA "$HOTE" | grep ':' | head -1)
+      [ -z "$IPADDR" ] && { printf "''${X}« %s » : ni une IP, ni un nom résolvable''${R}\n" "$HOTE" >&2; exit 1; }
+    fi
+
+    # Adresses privées / réservées : rien à chercher sur Internet
+    PRIVE=""
+    if is_v4 "$IPADDR"; then
+      IFS=. read -r O1 O2 O3 O4 <<< "$IPADDR"
+      for O in "$O1" "$O2" "$O3" "$O4"; do
+        [ "$O" -gt 255 ] && { printf "''${X}IPv4 invalide : %s''${R}\n" "$IPADDR" >&2; exit 2; }
+      done
+      if [ "$O1" -eq 10 ] || [ "$O1" -eq 127 ] || [ "$O1" -eq 0 ] || [ "$O1" -ge 224 ] \
+         || { [ "$O1" -eq 172 ] && [ "$O2" -ge 16 ] && [ "$O2" -le 31 ]; } \
+         || { [ "$O1" -eq 192 ] && [ "$O2" -eq 168 ]; } \
+         || { [ "$O1" -eq 169 ] && [ "$O2" -eq 254 ]; } \
+         || { [ "$O1" -eq 100 ] && [ "$O2" -ge 64 ] && [ "$O2" -le 127 ]; }; then
+        PRIVE=1
+      fi
+    else
+      case "''${IPADDR,,}" in
+        ::1|fe8*|fe9*|fea*|feb*|fc*|fd*|ff*) PRIVE=1 ;;
+      esac
+    fi
+    if [ -n "$PRIVE" ]; then
+      printf "''${Y}%s''${R} est une adresse privée/réservée : aucune info publique.\n" "$IPADDR"
+      exit 1
+    fi
+
+    # ── Collecte en parallèle ───────────────────────────────────
+    TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+    CHAMPS="status,message,continent,country,countryCode,regionName,city,district,zip,lat,lon,timezone,offset,currency,isp,org,as,asname,reverse,mobile,proxy,hosting,query"
+    $CURL -sf --max-time 6 "http://ip-api.com/json/$IPADDR?fields=$CHAMPS&lang=fr" -o "$TMP/geo" &
+    $CURL -sfL --max-time 10 "https://rdap.org/ip/$IPADDR" -o "$TMP/rdap" &
+    $CURL -s --max-time 8 "https://internetdb.shodan.io/$IPADDR" -o "$TMP/shodan" &
+    $DIG +short +time=3 +tries=1 -x "$IPADDR" > "$TMP/rdns" 2>/dev/null &
+
+    # Listes noires (IPv4 seulement) : ip inversée + zone
+    DNSBL="zen.spamhaus.org bl.spamcop.net b.barracudacentral.org dnsbl-1.uceprotect.net all.s5h.net"
+    if is_v4 "$IPADDR"; then
+      REV="$O4.$O3.$O2.$O1"
+      for Z in $DNSBL; do
+        $DIG +short +time=3 +tries=1 A "$REV.$Z" > "$TMP/bl_$Z" 2>/dev/null &
+      done
+    fi
+    wait
+
+    # Secours géoloc : ipwho.is, remappé au format ip-api
+    if [ "$($JQ -r '.status // empty' "$TMP/geo" 2>/dev/null)" != "success" ]; then
+      $CURL -sf --max-time 6 "https://ipwho.is/$IPADDR?lang=fr" | $JQ '{
+        status: (if .success then "success" else "fail" end), message,
+        continent, country, countryCode: .country_code, regionName: .region, city,
+        zip: .postal, lat: .latitude, lon: .longitude,
+        timezone: .timezone.id, offset: .timezone.offset,
+        isp: .connection.isp, org: .connection.org,
+        as: (if .connection.asn then "AS\(.connection.asn) \(.connection.org)" else null end),
+        asname: .connection.org, query: .ip
+      }' > "$TMP/geo" 2>/dev/null
+    fi
+
+    for F in geo rdap shodan; do
+      $JQ -e . "$TMP/$F" >/dev/null 2>&1 || echo '{}' > "$TMP/$F"
+    done
+    RDNS=$(grep -v '^;' "$TMP/rdns" | sed 's/\.$//' | paste -sd, - | sed 's/,/, /g')
+
+    if [ "$JSON" = 1 ]; then
+      $JQ -n --arg ip "$IPADDR" --arg host "$HOTE" --arg rdns "$RDNS" \
+        --slurpfile geo "$TMP/geo" --slurpfile rdap "$TMP/rdap" --slurpfile shodan "$TMP/shodan" \
+        '{ip: $ip, host: $host, reverse_dns: $rdns, geo: $geo[0], rdap: $rdap[0], shodan: $shodan[0]}'
+      exit 0
+    fi
+
+    g() { $JQ -r "$1 | if . == null or . == \"\" then empty else tostring end" "$TMP/$2" 2>/dev/null; }
+    # Padding à la main : printf compte les octets, pas les caractères accentués
+    row() {
+      [ -n "$2" ] || return 0
+      local pad=$((14 - ''${#1})); [ "$pad" -lt 1 ] && pad=1
+      printf "    ''${D}%s''${R}%*s%s\n" "$1" "$pad" "" "$2"
+    }
+    titre() { printf "\n  ''${B}''${C}%s''${R}\n" "$1"; }
+    W=64
+    line() { printf "''${D}%s''${R}\n" "$(printf '─%.0s' $(seq 1 $W))"; }
+
+    # ── En-tête ─────────────────────────────────────────────────
+    CC=$(g .countryCode geo)
+    DRAPEAU=""
+    if [[ "$CC" =~ ^[A-Z]{2}$ ]]; then
+      A1=$(printf '%d' "\"''${CC:0:1}"); A2=$(printf '%d' "\"''${CC:1:1}")
+      DRAPEAU=$(printf "\\U$(printf '%08X' $((0x1F1E6 + A1 - 65)))\\U$(printf '%08X' $((0x1F1E6 + A2 - 65)))")
+    fi
+    printf "\n  ''${B}''${M}󰩠  %s''${R}" "$IPADDR"
+    [ -n "$HOTE" ] && printf "  ''${D}(%s)''${R}" "$HOTE"
+    [ -z "$CIBLE" ] && printf "  ''${D}(ton IP publique)''${R}"
+    printf "\n"
+    line
+
+    # ── Localisation ────────────────────────────────────────────
+    titre "󰍎  Localisation"
+    PAYS=$(g .country geo)
+    row "Pays" "$PAYS''${CC:+ ($CC)}''${DRAPEAU:+ $DRAPEAU}"
+    row "Continent" "$(g .continent geo)"
+    row "Région" "$(g .regionName geo)"
+    VILLE=$(g .city geo); ZIP=$(g .zip geo); QUARTIER=$(g .district geo)
+    row "Ville" "$VILLE''${ZIP:+ $ZIP}''${QUARTIER:+ — $QUARTIER}"
+    LAT=$(g .lat geo); LON=$(g .lon geo)
+    if [ -n "$LAT" ] && [ -n "$LON" ]; then
+      row "Coordonnées" "$LAT, $LON  ''${D}(approx.)''${R}"
+      row "Carte" "https://www.openstreetmap.org/?mlat=$LAT&mlon=$LON#map=11/$LAT/$LON"
+    fi
+    TZN=$(g .timezone geo)
+    [ -n "$TZN" ] && row "Fuseau" "$TZN  ''${D}il est $(TZ="$TZN" date '+%H:%M')''${R}"
+    row "Monnaie" "$(g .currency geo)"
+
+    # ── Réseau ──────────────────────────────────────────────────
+    titre "󰛳  Réseau"
+    row "FAI" "$(g .isp geo)"
+    row "Organisation" "$(g .org geo)"
+    row "AS" "$(g .as geo)"
+    row "Nom AS" "$(g .asname geo)"
+    row "DNS inverse" "''${RDNS:-$(g .reverse geo)}"
+
+    # Type de connexion (drapeaux ip-api)
+    TYPES=()
+    [ "$(g .mobile geo)" = "true" ]  && TYPES+=("''${Y}mobile (4G/5G)''${R}")
+    [ "$(g .proxy geo)" = "true" ]   && TYPES+=("''${X}proxy / VPN / Tor''${R}")
+    [ "$(g .hosting geo)" = "true" ] && TYPES+=("''${Y}hébergeur / datacenter''${R}")
+    if [ -n "$(g .proxy geo)" ]; then
+      [ ''${#TYPES[@]} -eq 0 ] && TYPES+=("''${G}résidentielle / standard''${R}")
+      row "Type" "$(IFS=,; printf '%s' "''${TYPES[*]}" | sed 's/,/, /g')"
+    fi
+
+    # ── Propriétaire du bloc (RDAP) ─────────────────────────────
+    if [ "$($JQ -r '.handle // empty' "$TMP/rdap")" != "" ]; then
+      titre "󰈙  Propriétaire du bloc (RDAP)"
+      row "Nom réseau" "$(g .name rdap)"
+      row "Handle" "$(g .handle rdap)"
+      row "Plage" "$($JQ -r 'if .startAddress then "\(.startAddress) – \(.endAddress)" else empty end' "$TMP/rdap")"
+      row "CIDR" "$($JQ -r '[.cidr0_cidrs[]? | "\(.v4prefix // .v6prefix)/\(.length)"] | join(", ")' "$TMP/rdap")"
+      row "Titulaire" "$($JQ -r '[.entities[]? | select(.roles|index("registrant")) | .vcardArray[1][]? | select(.[0]=="fn") | .[3]] | first // empty' "$TMP/rdap")"
+      row "Description" "$($JQ -r '[.remarks[]?.description[]?] | .[0:2] | join(" / ")' "$TMP/rdap")"
+      row "Registre" "$(g .port43 rdap)"
+      row "Attribué le" "$($JQ -r '[.events[]? | select(.eventAction=="registration") | .eventDate[0:10]] | first // empty' "$TMP/rdap")"
+      row "Modifié le" "$($JQ -r '[.events[]? | select(.eventAction=="last changed") | .eventDate[0:10]] | first // empty' "$TMP/rdap")"
+      row "Abuse" "$($JQ -r '[.. | objects | select((.roles? // []) | index("abuse")) | .vcardArray[1][]? | select(.[0]=="email") | .[3]] | unique | join(", ")' "$TMP/rdap")"
+    fi
+
+    # ── Exposition (Shodan InternetDB) ──────────────────────────
+    titre "󰒃  Exposition (Shodan)"
+    if [ "$($JQ -r '.ip // empty' "$TMP/shodan")" != "" ]; then
+      row "Ports ouverts" "$($JQ -r '.ports | map(tostring) | join(", ")' "$TMP/shodan")"
+      row "Noms d'hôte" "$($JQ -r '.hostnames[0:5] | join(", ")' "$TMP/shodan")"
+      row "Tags" "$($JQ -r '.tags | join(", ")' "$TMP/shodan")"
+      row "Logiciels" "$($JQ -r '[.cpes[] | sub("^cpe:/[aoh]:"; "")] | .[0:6] | join(", ")' "$TMP/shodan")"
+      NV=$($JQ -r '.vulns | length' "$TMP/shodan")
+      if [ "$NV" -gt 0 ]; then
+        row "Vulnérabilités" "''${X}$NV CVE''${R} ''${D}$($JQ -r '.vulns[0:5] | join(", ")' "$TMP/shodan")$([ "$NV" -gt 5 ] && printf ' …')''${R}"
+      fi
+    else
+      row "État" "''${D}aucune donnée (rien d'exposé ou pas encore scanné)''${R}"
+    fi
+
+    # ── Réputation (DNSBL) ──────────────────────────────────────
+    if is_v4 "$IPADDR"; then
+      titre "󰞀  Listes noires"
+      LISTEES=(); INVERIF=()
+      for Z in $DNSBL; do
+        REP=$(grep -E '^127\.' "$TMP/bl_$Z" | head -1)
+        case "$REP" in
+          "") ;;
+          127.255.255.*|IP_CENSUREE) INVERIF+=("$Z") ;;   # refus (résolveur public / quota)
+          *) LISTEES+=("$Z") ;;
+        esac
+      done
+      if [ ''${#LISTEES[@]} -gt 0 ]; then
+        row "Listée sur" "''${X}''${LISTEES[*]}''${R}"
+      else
+        row "Résultat" "''${G}propre''${R} ''${D}($(printf '%s\n' $DNSBL | wc -l) listes testées)''${R}"
+      fi
+      [ ''${#INVERIF[@]} -gt 0 ] && row "Non vérifié" "''${D}''${INVERIF[*]} (refus du résolveur)''${R}"
+    fi
+
+    printf "\n"; line
+    printf "  ''${D}Liens : https://ipinfo.io/%s · https://www.abuseipdb.com/check/%s · https://www.shodan.io/host/%s''${R}\n\n" "$IPADDR" "$IPADDR" "$IPADDR"
+  '';
 in
 {
-  home.packages = [ monip ];
+  home.packages = [ monip ipinfo ];
 }
