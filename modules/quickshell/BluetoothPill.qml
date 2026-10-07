@@ -651,8 +651,8 @@ Pill {
                     implicitWidth: 0
                     implicitHeight: nameText.implicitHeight
                     BarText {
-                        id: nameText
-                        width: Math.min(implicitWidth, parent.width - (check.visible ? 26 : 0))
+                        id: menuName
+                        width: Math.min(implicitWidth, parent.width - (menuCheck.visible ? 26 : 0))
                         elide: Text.ElideRight
                         text: !root.powered ? (root.blocked ? "Bluetooth bloqué" : "Bluetooth")
                         : root.main?.name ?? "Bluetooth"
@@ -661,11 +661,11 @@ Pill {
                         font.bold: true
                     }
                     BarText {
-                        id: check
+                        id: menuCheck
                         visible: root.powered && root.main !== null
-                        x: nameText.width + 8
-                        anchors.verticalCenter: nameText.verticalCenter
-                        text: Theme.ic(0xf05e0)    // md-check-circle
+                        x: menuName.width + 8
+                        anchors.verticalCenter: menuName.verticalCenter
+                        text: Theme.ic(0xf05e0)    // md-menuCheck-circle
                         color: Theme.bluetooth
                         font.pixelSize: 16
                     }
