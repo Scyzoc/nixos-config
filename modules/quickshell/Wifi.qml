@@ -281,19 +281,33 @@ Pill {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
-                BarText {
+                // SSID + icône « connecté » juste après
+                RowLayout {
                     Layout.fillWidth: true
-                    elide: Text.ElideRight
-                    text: root.current?.name
-                          ?? (root.airplane ? "Mode avion" : root.enabled_ ? "Déconnecté" : "Wi-Fi désactivé")
-                    font.family: Theme.titleFont
-                    font.pixelSize: 22
-                    font.bold: true
+                    spacing: 8
+                    BarText {
+                        Layout.fillWidth: false
+                        Layout.maximumWidth: parent.width - (check.visible ? check.width + parent.spacing : 0)
+                        elide: Text.ElideRight
+                        text: root.current?.name
+                              ?? (root.airplane ? "Mode avion" : root.enabled_ ? "Déconnecté" : "Wi-Fi désactivé")
+                        font.family: Theme.titleFont
+                        font.pixelSize: 22
+                        font.bold: true
+                    }
+                    BarText {
+                        id: check
+                        visible: root.current !== null
+                        text: Theme.ic(0xf05e0)    // md-check-circle
+                        color: root.tint
+                        font.pixelSize: 16
+                    }
+                    Item { Layout.fillWidth: true }
                 }
                 BarText {
                     font.family: Theme.labelFont
                     visible: root.current !== null
-                    text: "Connecté  ·  " + (root.ip || "N/A")
+                    text: root.ip || "N/A"
                     color: Theme.subtext
                     font.pixelSize: 12
                 }

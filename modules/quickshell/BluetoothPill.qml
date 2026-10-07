@@ -644,14 +644,28 @@ Pill {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
-                BarText {
+                // Nom + icône « connecté » juste après
+                RowLayout {
                     Layout.fillWidth: true
-                    elide: Text.ElideRight
-                    text: !root.powered ? (root.blocked ? "Bluetooth bloqué" : "Bluetooth")
-                        : root.main?.name ?? "Bluetooth"
-                    font.family: Theme.titleFont
-                    font.pixelSize: 22
-                    font.bold: true
+                    spacing: 8
+                    BarText {
+                        Layout.fillWidth: false
+                        Layout.maximumWidth: parent.width - (check.visible ? check.width + parent.spacing : 0)
+                        elide: Text.ElideRight
+                        text: !root.powered ? (root.blocked ? "Bluetooth bloqué" : "Bluetooth")
+                            : root.main?.name ?? "Bluetooth"
+                        font.family: Theme.titleFont
+                        font.pixelSize: 22
+                        font.bold: true
+                    }
+                    BarText {
+                        id: check
+                        visible: root.powered && root.main !== null
+                        text: Theme.ic(0xf05e0)    // md-check-circle
+                        color: Theme.bluetooth
+                        font.pixelSize: 16
+                    }
+                    Item { Layout.fillWidth: true }
                 }
                 BarText {
                     font.family: Theme.labelFont
@@ -665,8 +679,8 @@ Pill {
                         if (root.isAirpods && root.airpods.left !== undefined)
                             return "G " + (root.airpods.left ?? "?") + " %  ·  D " + (root.airpods.right ?? "?")
                                    + " %  ·  Boîtier " + (root.airpods.case ?? "?") + " %";
-                        if (root.main.batteryAvailable) return "Connecté  ·  batterie " + Math.round(root.main.battery * 100) + " %";
-                        return "Connecté";
+                        if (root.main.batteryAvailable) return "Batterie " + Math.round(root.main.battery * 100) + " %";
+                        return "";
                     }
                     visible: text !== ""
                 }
