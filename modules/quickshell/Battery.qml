@@ -117,12 +117,20 @@ Pill {
         const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
         return h > 0 ? h + " h " + (m < 10 ? "0" : "") + m : m + " min";
     }
+    // Temps avant d'atteindre la limite de charge (UPower ne donne que le temps jusqu'à 100 %) :
+    // énergie manquante jusqu'au seuil / puissance de charge ; sinon timeToFull au prorata
+    readonly property real timeToLimit: {
+        const rate = dev?.changeRate ?? 0, cap_ = dev?.energyCapacity ?? 0;
+        if (rate > 0 && cap_ > 0) return Math.max(0, (limit / 100 * cap_ - (dev?.energy ?? 0)) / rate * 3600);
+        const full = dev?.timeToFull ?? 0;
+        return pct < 100 ? full * Math.max(0, limit - pct) / (100 - pct) : 0;
+    }
     // État de charge (sous-titre du menu, infobulle)
     readonly property string statusText: {
         if (dev?.state === UPowerDeviceState.FullyCharged) return "Chargée";
         if (charging) {
-            const t = fmtDuration(dev?.timeToFull);
-            return "En charge" + (t ? "  ·  pleine dans " + t : "");
+            const t = fmtDuration(limitOn ? timeToLimit : dev?.timeToFull);
+            return "En charge" + (t ? "  ·  " + (limitOn ? limit + " % dans " : "pleine dans ") + t : "");
         }
         // Secteur : indiqué par l'icône prise à côté du pourcentage (plugIcon)
         if (!UPower.onBattery) return (desktopMode ? "Mode bureau  ·  " : "") + (limitOn ? "Limite " + limit + " %" : "");
@@ -256,6 +264,7 @@ Pill {
                     text: (root.dev?.changeRate ?? 0).toFixed(1) + " W"
                     color: Theme.muted
                     font.pixelSize: 11
+                    font.family: Theme.labelFont
                 }
             }
         }
@@ -268,6 +277,7 @@ Pill {
             text: "Profil d'énergie : " + ({ eco: "Éco", normal: "Normal", performance: "Performance" }[root.mode] ?? root.mode)
             color: Theme.subtext
             font.pixelSize: 12
+            font.family: Theme.labelFont
         }
 
         RowLayout {
@@ -295,12 +305,13 @@ Pill {
         Separator {}
         RowLayout {
             Layout.fillWidth: true
-            BarText { text: "Limite de charge"; color: Theme.subtext; font.pixelSize: 12; Layout.fillWidth: true }
+            BarText { text: "Limite de charge"; color: Theme.subtext; font.pixelSize: 12; font.family: Theme.labelFont; Layout.fillWidth: true }
             BarText {
                 visible: limitPanel.open
                 text: root.shownLimit >= 100 ? "sans limite" : root.shownLimit + " %"
                 color: root.shownLimit >= 100 ? Theme.yellow : Theme.green
                 font.pixelSize: 12
+                font.family: Theme.labelFont
                 font.bold: true
             }
             Toggle {
