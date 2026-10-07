@@ -206,7 +206,10 @@ let
             if row:
                 host = row[0].split("/")[2] if "://" in row[0] else ""
         if not host:
-            pwas = [h for h in args.get("--pwa", "").split(",") if h]
+            # Plusieurs PWA ouvertes (RustDesk, Atlas…) → seulement les sites média connus
+            pwas = [strip(h) for h in args.get("--pwa", "").split(",") if h]
+            if len(pwas) > 1:
+                pwas = [h for h in pwas if h in NAMES]
             if len(pwas) == 1:
                 host = pwas[0]
     except sqlite3.Error:
