@@ -382,7 +382,7 @@ PanelWindow {
                     BarText { font.family: Theme.labelFont; text: win.sunRise; font.pixelSize: 13; color: Theme.yellow }
                     BarText { text: Theme.ic(0xf059b); font.pixelSize: 14; color: win.warm }
                     BarText { font.family: Theme.labelFont; text: win.sunSet; font.pixelSize: 13; color: win.warm }
-                    Chip { glyph: 0xf0349; label: "Changer"; onClicked: win.startSearch() }    // md-magnify
+                    IconBtn { glyph: 0xf0349; onClicked: win.startSearch() }    // md-magnify : changer de ville
                 }
 
                 // Recherche de ville
@@ -484,10 +484,24 @@ PanelWindow {
                     BarText { text: Theme.ic(0xf06e8); font.pixelSize: 18; color: win.warm }    // md-lightbulb_on
                     BarText { text: "Filtre lumière bleue"; font.family: Theme.labelFont; font.pixelSize: 15; font.weight: Font.DemiBold }
                     Item { Layout.fillWidth: true }
-                    Badge {
-                        lit: win.st ? win.st.active : false
-                        accent: win.warm
-                        label: lit ? "Actif · " + win.st.now.temp + " K" : "Inactif"
+                    // État : point orange (filtre actif) ou gris, température affichée en ce moment
+                    RowLayout {
+                        id: filterState
+                        readonly property bool lit: win.st ? win.st.active : false
+                        spacing: 7
+                        Rectangle {
+                            implicitWidth: 9
+                            implicitHeight: 9
+                            radius: 4.5
+                            color: filterState.lit ? win.warm : Theme.muted
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                        }
+                        BarText {
+                            font.family: Theme.labelFont
+                            text: (win.st ? win.st.now.temp : 6500) + " K"
+                            font.pixelSize: 12
+                            color: filterState.lit ? Theme.text : Theme.muted
+                        }
                     }
                 }
                 Segmented {
