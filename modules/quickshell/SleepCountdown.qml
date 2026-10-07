@@ -25,34 +25,93 @@ RowLayout {
     opacity: SleepState.shown ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: 420 } }
     visible: opacity > 0
-    clip: true
+    // Coupé seulement pendant l'ouverture : battement et onde débordent ensuite
+    clip: Layout.preferredWidth < implicitWidth - 0.5
 
     BarText { text: "·"; color: Theme.muted; font.family: Theme.labelFont }
-    RowLayout {
+    Item {
         id: badge
-        spacing: 4
-        BarText {
-            text: Theme.ic(0xf04b2)    // md-sleep
-            color: SleepState.tint
-            Behavior on color { ColorAnimation { duration: 600 } }
+        // Sous 7 h : capsule rouge vif pleine qui bat comme un cœur, onde autour à chaque
+        // battement ; sous 6 h : battement plus rapide + secousse
+        readonly property bool alarm: SleepState.alarm
+        property real pad: alarm ? 8 : 0
+        Behavior on pad { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
+        implicitWidth: inner.implicitWidth + pad * 2
+        implicitHeight: 20
+        property real beat: 0      // 0 → 1 : battement
+        property real ring: 1      // 0 → 1 : onde qui s'élargit (1 = éteinte)
+        property real shakeX: 0
+        scale: 1 + 0.14 * beat
+
+        Rectangle {
+            id: halo
+            visible: badge.alarm
+            anchors.centerIn: parent
+            width: parent.width + badge.ring * 18
+            height: parent.height + badge.ring * 10
+            radius: height / 2
+            color: "transparent"
+            border.width: 2
+            border.color: SleepState.vivid
+            opacity: (1 - badge.ring) * 0.9
         }
-        BarText {
-            text: SleepState.label
-            color: SleepState.tint
-            Behavior on color { ColorAnimation { duration: 600 } }
-            font.family: Theme.labelFont
-            font.weight: Font.DemiBold
-            font.features: { "tnum": 1 }
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: SleepState.mix(Qt.rgba(0.43, 0, 0.07, 1), SleepState.vivid, 0.45 + 0.55 * badge.beat)
+            opacity: badge.alarm ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 300 } }
         }
-        // Clignotement de plus en plus rapide : 1,6 s à 7 h 30 → 0,5 s à 5 h 30
-        readonly property int period: Math.round(500 + 1100 * Math.max(0, Math.min(1, (SleepState.minutesLeft - 330) / 120)))
+        RowLayout {
+            id: inner
+            anchors.centerIn: parent
+            anchors.horizontalCenterOffset: badge.shakeX
+            spacing: 4
+            BarText {
+                text: Theme.ic(0xf04b2)    // md-sleep
+                color: badge.alarm ? "#ffffff" : SleepState.tint
+                Behavior on color { ColorAnimation { duration: 400 } }
+            }
+            BarText {
+                text: SleepState.label
+                color: badge.alarm ? "#ffffff" : SleepState.tint
+                Behavior on color { ColorAnimation { duration: 400 } }
+                font.family: Theme.labelFont
+                font.weight: badge.alarm ? Font.Black : Font.DemiBold
+                font.features: { "tnum": 1 }
+            }
+        }
+
+        // 7 h 30 → 7 h : clignotement de plus en plus rapide (1,2 s → 0,5 s)
+        readonly property int period: Math.round(500 + 700 * Math.max(0, Math.min(1, (SleepState.minutesLeft - 420) / 30)))
         SequentialAnimation on opacity {
-            running: SleepState.blinking && !bubble.current
+            running: SleepState.blinking && !badge.alarm && !bubble.current
             loops: Animation.Infinite
-            NumberAnimation { to: 0.2; duration: badge.period / 2; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0.15; duration: badge.period / 2; easing.type: Easing.InOutSine }
             NumberAnimation { to: 1; duration: badge.period / 2; easing.type: Easing.InOutSine }
             onRunningChanged: if (!running) badge.opacity = 1
         }
+        // Sous 7 h : double battement (boum-boum) + onde ; sous 6 h plus rapide et secoué
+        SequentialAnimation {
+            running: badge.alarm
+            loops: Animation.Infinite
+            ParallelAnimation {
+                NumberAnimation { target: badge; property: "beat"; to: 1; duration: 90; easing.type: Easing.OutQuad }
+                NumberAnimation { target: badge; property: "ring"; from: 0; to: 1; duration: 700; easing.type: Easing.OutCubic }
+                SequentialAnimation {
+                    NumberAnimation { target: badge; property: "shakeX"; to: SleepState.panic ? 3 : 0; duration: 40 }
+                    NumberAnimation { target: badge; property: "shakeX"; to: SleepState.panic ? -3 : 0; duration: 80 }
+                    NumberAnimation { target: badge; property: "shakeX"; to: SleepState.panic ? 2 : 0; duration: 60 }
+                    NumberAnimation { target: badge; property: "shakeX"; to: 0; duration: 40 }
+                }
+            }
+            NumberAnimation { target: badge; property: "beat"; to: 0.35; duration: 110 }
+            NumberAnimation { target: badge; property: "beat"; to: 0.9; duration: 80; easing.type: Easing.OutQuad }
+            NumberAnimation { target: badge; property: "beat"; to: 0; duration: 380; easing.type: Easing.OutCubic }
+            PauseAnimation { duration: SleepState.panic ? 100 : 500 }
+            onRunningChanged: if (!running) { badge.beat = 0; badge.ring = 1; badge.shakeX = 0; }
+        }
+
         // « Pouf » quand une bulle sort du compteur
         transform: Scale { id: puff; origin.x: badge.width / 2; origin.y: badge.height / 2 }
         SequentialAnimation {
@@ -77,7 +136,7 @@ RowLayout {
         property var current: null
         // Cachée sur les autres écrans et pendant le détail de la nuit (revient à sa fermeture)
         readonly property var wanted: root.here && !details.visible ? SleepState.bubble : null
-        readonly property color accent: current ? (current.farewell ? Theme.mauve : [Theme.mauve, Theme.mauve, Theme.peach, Theme.red, Theme.red][current.level]) : Theme.mauve
+        readonly property color accent: current ? (current.farewell ? Theme.mauve : SleepState.levelColorFor(current.level)) : Theme.mauve
         property real grow: 0          // 0 → 1 : gonflement de la bulle
         property real dots: 0          // 0 → 3 : points de la traînée
         property real reveal: 0        // contenu (fondu + texte qui s'écrit)
@@ -106,7 +165,8 @@ RowLayout {
         anchor.gravity: Edges.Bottom
         visible: current !== null
         color: "transparent"
-        implicitWidth: 340
+        implicitWidth: 380
+        readonly property bool alarm: current !== null && !current.farewell && current.level >= 3
         implicitHeight: body.y + body.height + 10
         mask: Region { item: body }
 
@@ -114,8 +174,8 @@ RowLayout {
             id: enter
             ScriptAction { script: { bubble.anchor.updateAnchor(); bubble.grow = 0; bubble.dots = 0; bubble.reveal = 0; typing.stop(); msg.typed = 0; countdown.stop(); gauge.remain = 1; } }
             NumberAnimation { target: bubble; property: "dots"; to: 3; duration: 240 }
-            NumberAnimation { target: bubble; property: "grow"; to: 1; duration: 520; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
-            ScriptAction { script: if (bubble.current && bubble.current.level >= 4) shake.restart() }
+            NumberAnimation { target: bubble; property: "grow"; to: 1; duration: bubble.alarm ? 380 : 520; easing.type: Easing.OutBack; easing.overshoot: bubble.alarm ? 3.2 : 2.2 }
+            ScriptAction { script: if (bubble.alarm) body.hit() }
             ScriptAction { script: typing.restart() }
             NumberAnimation { target: bubble; property: "reveal"; to: 1; duration: 260 }
             ScriptAction { script: if (bubble.current && !bubble.current.sticky) countdown.restart() }
@@ -140,7 +200,7 @@ RowLayout {
                 width: modelData.s
                 height: width
                 radius: width / 2
-                color: Theme.popupBg
+                color: bubble.alarm ? SleepState.vivid : Theme.popupBg
                 border.color: Qt.rgba(bubble.accent.r, bubble.accent.g, bubble.accent.b, 0.6)
                 border.width: 1
                 scale: t < 1 ? t * 1.3 : 1
@@ -152,12 +212,39 @@ RowLayout {
             id: body
             y: 34
             x: (bubble.width - width) / 2 + shakeX
-            width: bubble.width - 20
+            width: 320
             height: content.implicitHeight + 28
             radius: 18
-            color: Theme.popupBg
-            border.color: Qt.rgba(bubble.accent.r, bubble.accent.g, bubble.accent.b, 0.35 + 0.45 * glow)
-            border.width: 1
+            // Alarme : fond rouge sombre, flash rouge vif à chaque « coup », bordure épaisse
+            color: bubble.alarm ? SleepState.mix(Qt.rgba(0.17, 0.02, 0.04, 1), SleepState.vivid, 0.7 * flash) : Theme.popupBg
+            border.color: bubble.alarm ? SleepState.mix(Qt.rgba(0.55, 0.05, 0.1, 1), SleepState.vivid, glow)
+                                       : Qt.rgba(bubble.accent.r, bubble.accent.g, bubble.accent.b, 0.35 + 0.45 * glow)
+            border.width: bubble.alarm ? 2 : 1
+
+            property real flash: 0
+            property real wave: 1
+            // Coup : flash + secousse + onde de choc
+            function hit() { shake.restart(); flashAnim.restart(); waveAnim.restart(); }
+            NumberAnimation { id: flashAnim; target: body; property: "flash"; from: 1; to: 0; duration: 550; easing.type: Easing.OutCubic }
+            NumberAnimation { id: waveAnim; target: body; property: "wave"; from: 0; to: 1; duration: 650; easing.type: Easing.OutCubic }
+            // Tant qu'elle est là, elle insiste : un coup toutes les 3,5 s (1,8 s sous 6 h)
+            Timer {
+                running: bubble.alarm && bubble.reveal === 1 && !bubble.leaving
+                interval: bubble.current?.level >= 4 ? 1800 : 3500
+                repeat: true
+                onTriggered: body.hit()
+            }
+            Rectangle {
+                z: -1
+                anchors.centerIn: parent
+                width: parent.width + body.wave * 36
+                height: parent.height + body.wave * 24
+                radius: parent.radius + body.wave * 10
+                color: "transparent"
+                border.width: 3
+                border.color: SleepState.vivid
+                opacity: bubble.alarm ? (1 - body.wave) * 0.85 : 0
+            }
             transformOrigin: Item.Top
             scale: 0.08 + 0.92 * bubble.grow
             opacity: Math.min(1, bubble.grow * 2)
@@ -165,18 +252,18 @@ RowLayout {
             property real shakeX: 0
             SequentialAnimation {
                 id: shake
-                loops: 2
-                NumberAnimation { target: body; property: "shakeX"; to: 7; duration: 50 }
-                NumberAnimation { target: body; property: "shakeX"; to: -7; duration: 100 }
-                NumberAnimation { target: body; property: "shakeX"; to: 0; duration: 50 }
+                loops: 3
+                NumberAnimation { target: body; property: "shakeX"; to: 10; duration: 45 }
+                NumberAnimation { target: body; property: "shakeX"; to: -10; duration: 90 }
+                NumberAnimation { target: body; property: "shakeX"; to: 0; duration: 45 }
             }
             // Bordure qui respire (niveaux 3-4)
             property real glow: 0
             SequentialAnimation on glow {
                 running: bubble.visible && bubble.current !== null && bubble.current.level >= 3
                 loops: Animation.Infinite
-                NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }
-                NumberAnimation { to: 0; duration: 700; easing.type: Easing.InOutSine }
+                NumberAnimation { to: 1; duration: 400; easing.type: Easing.InOutSine }
+                NumberAnimation { to: 0; duration: 400; easing.type: Easing.InOutSine }
             }
 
             HoverHandler { id: hover }
@@ -238,16 +325,17 @@ RowLayout {
                             text: bubble.current?.title ?? ""
                             font.family: Theme.titleFont
                             font.bold: true
-                            font.pixelSize: 16
-                            color: bubble.accent
+                            font.pixelSize: bubble.alarm ? 19 : 16
+                            font.capitalization: bubble.alarm ? Font.AllUppercase : Font.MixedCase
+                            color: bubble.alarm ? "#ffffff" : bubble.accent
                         }
                         BarText {
                             visible: !(bubble.current?.farewell ?? false)
                             text: SleepState.label
                             font.family: Theme.labelFont
-                            font.weight: Font.DemiBold
                             font.features: { "tnum": 1 }
-                            color: SleepState.tint
+                            font.weight: bubble.alarm ? Font.Black : Font.DemiBold
+                            color: bubble.alarm ? "#ffffff" : SleepState.tint
                         }
                     }
                     // Texte qui s'écrit
@@ -261,7 +349,7 @@ RowLayout {
                         font.family: Theme.labelFont
                         font.pixelSize: 12
                         lineHeight: 1.15
-                        color: Theme.subtext
+                        color: bubble.alarm ? "#ffd9df" : Theme.subtext
                         // Hauteur réservée dès le départ : la bulle ne grandit pas en écrivant
                         Layout.preferredHeight: ghost.implicitHeight
                         Text {

@@ -33,16 +33,28 @@ Singleton {
     readonly property int minutesLeft: wake === "" ? -1 : Math.ceil((wakeDate - now) / 60000)
     readonly property bool shown: minutesLeft > 0 && minutesLeft <= fullMin
     readonly property bool blinking: shown && minutesLeft < blinkMin
-    // 0 à 8 h → 1 à 6 h : du gris clair au rouge
-    readonly property real heat: Math.max(0, Math.min(1, (fullMin - minutesLeft) / (fullMin - redMin)))
-    readonly property color tint: mix(Theme.subtext, Theme.red, heat)
+    readonly property int alarmMin: 7 * 60      // sous 7 h : alarme (rouge vif, capsule pleine)
+    readonly property bool alarm: shown && minutesLeft < alarmMin
+    readonly property bool panic: shown && minutesLeft < redMin
+    // Rouge d'alarme, plus saturé que Theme.red (pastel) : il doit sauter aux yeux
+    readonly property color vivid: "#ff1a3c"
+    // 0 à 8 h → 1 à 7 h : du gris clair au rouge vif (courbe accélérée : ça vire vite)
+    readonly property real heat: Math.max(0, Math.min(1, (fullMin - minutesLeft) / (fullMin - alarmMin)))
+    readonly property color tint: alarm ? vivid : mix(Theme.subtext, vivid, Math.pow(heat, 0.7))
     // 1 : 8 h–7 h 30 · 2 : 7 h 30–7 h · 3 : 7 h–6 h · 4 : moins de 6 h
     readonly property int level: !shown ? 0 : minutesLeft >= blinkMin ? 1 : minutesLeft >= 420 ? 2
                                  : minutesLeft >= redMin ? 3 : 4
-    readonly property color levelColor: [Theme.subtext, Theme.mauve, Theme.peach, Theme.red, Theme.red][level]
+    readonly property color levelColor: levelColorFor(level)
+    function levelColorFor(l) { return [Theme.subtext, Theme.mauve, "#ff6a3d", vivid, vivid][l]; }
     // Cycles complets si couché maintenant
     readonly property int cycles: Math.max(0, Math.floor((minutesLeft - fallAsleep) / cycle))
-    readonly property string label: fmt(minutesLeft)
+    readonly property int secondsLeft: wake === "" ? -1 : Math.max(0, Math.floor((wakeDate - now) / 1000))
+    // Compteur à la seconde (7:18:42) : la pression monte
+    readonly property string label: {
+        const t = secondsLeft, h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60;
+        const p = n => String(n).padStart(2, "0");
+        return (h > 0 ? h + ":" + p(m) : m) + ":" + p(sec);
+    }
 
     function mix(a, b, t) {
         return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1);
