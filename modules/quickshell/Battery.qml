@@ -133,7 +133,8 @@ Pill {
             return "En charge" + (t ? "  ·  " + (limitOn ? limit + " % dans " : "pleine dans ") + t : "");
         }
         // Secteur : indiqué par l'icône prise à côté du pourcentage (plugIcon)
-        if (!UPower.onBattery) return (desktopMode ? "Mode bureau  ·  " : "") + (limitOn ? "Limite " + limit + " %" : "");
+        // (limite : effet sur l'icône prise ; valeur rappelée dans la section « Limite de charge »)
+        if (!UPower.onBattery) return desktopMode ? "Mode bureau" : "";
         const t = fmtDuration(dev?.timeToEmpty);
         return "Sur batterie" + (t ? "  ·  " + t + " restantes" : "");
     }
