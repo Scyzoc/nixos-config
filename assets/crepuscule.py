@@ -15,14 +15,15 @@ des binaires par variables d'environnement. Sous-commandes :
                               (full_start / full_end : HH:MM, ou « edge » = borne de la plage)
   set-city <nom> <région> <lat> <lon>
   geocode <recherche>         villes correspondantes en JSON (API Open-Meteo)
-  preview <K> <luminosité %>  aperçu immédiat à l'écran (glissement d'un curseur) ; le démon s'efface
-  preview-end                 fin d'aperçu : fondu vers l'état normal
+  preview-serve               aperçu animé (glissement d'un curseur) : lit « <K> <luminosité %> » ou
+                              « end » sur stdin, une ligne par mise à jour (lancé par Crepuscule.qml)
   theme <mode|hours|dark|light> [...]   délégué à la commande `theme` (theme-automation.nix)
 """
 
 import glob
 import json
 import math
+import select
 import os
 import signal
 import socket
@@ -334,25 +335,82 @@ def previewing():
         return False
 
 
-def preview(temp, bright):
+def preview_serve():
+    """Aperçu fluide : la couleur affichée suit en continu (lissage exponentiel, FPS images/s)
+    la dernière valeur reçue sur stdin. « end » (ou fin de stdin) : fondu vers l'état normal
+    du filtre, puis la main revient au démon. Reste lancé entre deux glissements."""
     os.makedirs(SHADER_DIR, exist_ok=True)
-    with open(PREVIEW_LOCK, "w"):
-        pass
-    ref = kelvin_rgb(6500)
-    set_rgb(tuple(round(c / w * bright / 100, 3) for c, w in zip(kelvin_rgb(temp), ref)))
+    fd = sys.stdin.fileno()
+    cur = shader_rgb(current_shader()) or NEUTRAL
+    shown = cur
+    goal = None
+    ending = eof = False
+    tau = 0.15                 # constante de temps du lissage (s)
+    buf = b""
+    last = touched = time.monotonic()
 
+    def touch():
+        with open(PREVIEW_LOCK, "w"):
+            pass
 
-def preview_end():
-    try:
-        os.remove(PREVIEW_LOCK)
-    except OSError:
-        pass
-    if systemctl("is-active", "--quiet", UNIT) == 0:
-        systemctl("kill", "--signal=USR1", UNIT)
-    else:
-        cur = shader_rgb(current_shader())
-        if cur is not None and cur != NEUTRAL:
-            fade(cur, NEUTRAL)
+    while True:
+        moving = goal is not None and max(abs(a - b) for a, b in zip(cur, goal)) > 0.0005
+        timeout = 1 / FPS if moving else (1.0 if goal is not None else None)
+        if not eof and select.select([fd], [], [], timeout)[0]:
+            data = os.read(fd, 4096)
+            if not data:
+                eof = True
+                data = b"end\n"
+            buf += data
+            *lines, buf = buf.split(b"\n")
+            for line in lines:
+                parts = line.decode(errors="replace").split()
+                if parts == ["end"]:
+                    if goal is not None:
+                        now = datetime.now()
+                        goal = target_rgb(load(), now.hour * 60 + now.minute + now.second / 60)
+                        ending, tau = True, 0.35
+                elif len(parts) == 2:
+                    temp, bright = int(parts[0]), int(parts[1])
+                    ref = kelvin_rgb(6500)
+                    goal = tuple(c / w * bright / 100 for c, w in zip(kelvin_rgb(temp), ref))
+                    if not moving:
+                        last = time.monotonic()
+                    ending, tau = False, 0.15
+                    touch()
+                    touched = time.monotonic()
+        elif eof and goal is None:
+            return
+
+        t = time.monotonic()
+        dt, last = min(t - last, 2 / FPS), t
+        if goal is not None:
+            k = 1 - math.exp(-dt / tau)
+            cur = tuple(c + (g - c) * k for c, g in zip(cur, goal))
+            if max(abs(a - b) for a, b in zip(cur, goal)) <= 0.0005:
+                cur = goal
+            rgb = tuple(round(c, 3) for c in cur)
+            if rgb != shown:
+                set_rgb(rgb)
+                shown = rgb
+            if not ending and t - touched > 2:
+                touch()
+                touched = t
+            if ending and cur == goal:
+                # Fin d'aperçu : verrou levé, fichiers inutiles supprimés, le démon reprend
+                try:
+                    os.remove(PREVIEW_LOCK)
+                except OSError:
+                    pass
+                keep = "" if shown == NEUTRAL else shader_path(shown)
+                for old in glob.glob(os.path.join(SHADER_DIR, "filtre-*.frag")):
+                    if old != keep:
+                        os.remove(old)
+                if systemctl("is-active", "--quiet", UNIT) == 0:
+                    systemctl("kill", "--signal=USR1", UNIT)
+                goal, ending = None, False
+                if eof:
+                    return
 
 
 def watch_reload():
@@ -540,10 +598,8 @@ def main():
         cmd_set(args[1], args[2])
     elif cmd == "set-city" and len(args) == 5:
         cmd_set_city(*args[1:])
-    elif cmd == "preview" and len(args) == 3:
-        preview(int(args[1]), int(args[2]))
-    elif cmd == "preview-end":
-        preview_end()
+    elif cmd == "preview-serve":
+        preview_serve()
     elif cmd == "geocode" and len(args) == 2:
         cmd_geocode(args[1])
     elif cmd == "theme" and len(args) >= 2:

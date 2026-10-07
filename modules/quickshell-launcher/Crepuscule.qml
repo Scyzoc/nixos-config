@@ -82,18 +82,33 @@ PanelWindow {
         onExited: win.queue.length ? win.next() : win.refresh()
     }
     function next() {
-        actProc.command = [ctlPath, ...queue.shift()];
+        const args = queue.shift();
+        // Fin d'aperçu, envoyée une fois le réglage enregistré (fondu vers la nouvelle valeur)
+        if (args[0] === "preview-end") {
+            if (previewProc.running) previewProc.write("end\n");
+            if (queue.length) next(); else refresh();
+            return;
+        }
+        actProc.command = [ctlPath, ...args];
         actProc.running = true;
     }
     function ctl(...args) {
         queue.push(args);
         if (!actProc.running) next();
     }
-    // Aperçu pendant le glissement d'un curseur : seul le dernier aperçu en attente est gardé
+    // Aperçu pendant le glissement d'un curseur : serveur d'aperçu (crepuscule-ctl preview-serve)
+    // qui anime la couleur à l'écran ; lancé au premier glissement, il reste ensuite ouvert
+    property string previewLine: ""
+    Process {
+        id: previewProc
+        command: [win.ctlPath, "preview-serve"]
+        stdinEnabled: true
+        onStarted: write(win.previewLine)
+    }
     function preview(temp, bright) {
-        const args = ["preview", String(temp), String(bright)];
-        if (queue.length && queue[queue.length - 1][0] === "preview") queue[queue.length - 1] = args;
-        else ctl(...args);
+        previewLine = temp + " " + bright + "\n";
+        if (previewProc.running) previewProc.write(previewLine);
+        else previewProc.running = true;
     }
 
     // Copie locale modifiée tout de suite (affichage réactif), envoi groupé après 700 ms
