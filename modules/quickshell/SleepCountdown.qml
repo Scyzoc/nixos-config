@@ -34,7 +34,9 @@ RowLayout {
         // Sous 7 h : capsule rouge vif pleine qui bat comme un cœur, onde autour à chaque
         // battement ; sous 6 h : battement plus rapide + secousse
         readonly property bool alarm: SleepState.alarm
-        property real pad: alarm ? 8 : 0
+        // 7 h 30 → 7 h : capsule rouge translucide cerclée de rouge vif (avant la capsule pleine)
+        readonly property bool warn: SleepState.blinking && !alarm
+        property real pad: alarm || warn ? 8 : 0
         Behavior on pad { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
         implicitWidth: inner.implicitWidth + pad * 2
         implicitHeight: 20
@@ -58,8 +60,11 @@ RowLayout {
         Rectangle {
             anchors.fill: parent
             radius: height / 2
-            color: SleepState.mix(Qt.rgba(0.43, 0, 0.07, 1), SleepState.vivid, 0.45 + 0.55 * badge.beat)
-            opacity: badge.alarm ? 1 : 0
+            color: badge.alarm ? SleepState.mix(Qt.rgba(0.43, 0, 0.07, 1), SleepState.vivid, 0.45 + 0.55 * badge.beat)
+                               : Qt.rgba(SleepState.vivid.r, SleepState.vivid.g, SleepState.vivid.b, 0.22)
+            border.width: badge.warn ? 1.5 : 0
+            border.color: SleepState.vivid
+            opacity: badge.alarm || badge.warn ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 300 } }
         }
         RowLayout {
@@ -77,7 +82,7 @@ RowLayout {
                 color: badge.alarm ? "#ffffff" : SleepState.tint
                 Behavior on color { ColorAnimation { duration: 400 } }
                 font.family: Theme.labelFont
-                font.weight: badge.alarm ? Font.Black : Font.DemiBold
+                font.weight: badge.alarm || badge.warn ? Font.Black : Font.DemiBold
                 font.features: { "tnum": 1 }
             }
         }

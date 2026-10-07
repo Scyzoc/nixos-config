@@ -37,7 +37,7 @@ Singleton {
     readonly property bool alarm: shown && minutesLeft < alarmMin
     readonly property bool panic: shown && minutesLeft < redMin
     // Rouge d'alarme, plus saturé que Theme.red (pastel) : il doit sauter aux yeux
-    readonly property color vivid: "#ff1a3c"
+    readonly property color vivid: "#ff2a45"
     // 0 à 8 h → 1 à 7 h : du gris clair au rouge vif (courbe accélérée : ça vire vite)
     readonly property real heat: Math.max(0, Math.min(1, (fullMin - minutesLeft) / (fullMin - alarmMin)))
     readonly property color tint: alarm ? vivid : mix(Theme.subtext, vivid, Math.pow(heat, 0.7))
