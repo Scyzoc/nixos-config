@@ -53,20 +53,43 @@ Pill {
     }
     Timer { interval: 2000; running: true; repeat: true; triggeredOnStart: true; onTriggered: statProc.running = true }
 
+    // Nom lisible depuis la ligne de commande (top -c) : le nom du thread principal
+    // (« MainThread » pour Node, Python…) ne dit rien. Exécutable sans chemin ni
+    // /nix/store, et pour un interpréteur le script lancé (node …/ccstatusline → ccstatusline)
+    function procName(args) {
+        const base = a => a.replace(/^.*\//, "").replace(/^\./, "").replace(/-wrapped$/, "");
+        if (/^\[.*\]$/.test(args[0])) return args[0].slice(1, -1);     // thread noyau
+        const exe = base(args[0]);
+        if (/^(node|nodejs|bun|deno|python[0-9.]*|perl|ruby|bash|sh|zsh|java)$/.test(exe)) {
+            const script = args.slice(1).find(a => !a.startsWith("-"));
+            if (args[1] === "-e" || args[1] === "-c") return exe + " (script)";
+            if (script) return base(script);
+        }
+        return exe;
+    }
+
     Process {
         id: topProc
-        command: [Paths.top, "-b", "-n", "2", "-d", "0.5", "-o", "%CPU", "-e", "m", "-w", "256"]
+        command: [Paths.top, "-b", "-c", "-n", "2", "-d", "0.5", "-o", "%CPU", "-e", "m", "-w", "512"]
         environment: ({ LC_ALL: "C" })
         stdout: StdioCollector {
             onStreamFinished: {
                 // Colonnes : PID USER PR NI VIRT RES SHR S %CPU %MEM TIME+ COMMAND
                 const blocks = text.split(/^\s*PID\s+USER.*$/m);
-                const rows = blocks[blocks.length - 1].trim().split("\n").slice(0, 6);
-                root.topProcs = rows.map(l => {
+                const rows = blocks[blocks.length - 1].trim().split("\n").slice(0, 40);
+                // Regroupés par nom (ex. 5 × ccstatusline), triés par CPU cumulé
+                const byName = {};
+                for (const l of rows) {
                     const p = l.trim().split(/\s+/);
+                    if (p.length < 12) continue;
                     const unit = { k: 1 / 1048576, m: 1 / 1024, g: 1, t: 1024 }[p[5].slice(-1)] ?? 1 / 1024;
-                    return { name: p.slice(11).join(" "), cpu: parseFloat(p[8]), mem: parseFloat(p[5]) * unit };
-                });
+                    const name = root.procName(p.slice(11));
+                    const e = byName[name] ?? (byName[name] = { name: name, count: 0, cpu: 0, mem: 0 });
+                    e.count++;
+                    e.cpu += parseFloat(p[8]) || 0;
+                    e.mem += (parseFloat(p[5]) || 0) * unit;
+                }
+                root.topProcs = Object.values(byName).sort((a, b) => b.cpu - a.cpu).slice(0, 6);
             }
         }
     }
@@ -123,7 +146,7 @@ Pill {
             RowLayout {
                 required property var modelData
                 Layout.fillWidth: true
-                BarText { text: modelData.name; Layout.fillWidth: true; elide: Text.ElideRight; font.pixelSize: 12; font.family: Theme.labelFont }
+                BarText { text: modelData.name + (modelData.count > 1 ? "  ×" + modelData.count : ""); Layout.fillWidth: true; elide: Text.ElideRight; font.pixelSize: 12; font.family: Theme.labelFont }
                 BarText { text: modelData.cpu.toFixed(1) + "%"; color: Theme.blue; font.pixelSize: 12; Layout.preferredWidth: 50; horizontalAlignment: Text.AlignRight; font.family: Theme.labelFont }
                 BarText { text: modelData.mem.toFixed(1) + " Go"; color: Theme.pink; font.pixelSize: 12; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight; font.family: Theme.labelFont }
             }
