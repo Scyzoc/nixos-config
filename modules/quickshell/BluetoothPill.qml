@@ -245,7 +245,7 @@ Pill {
         readonly property int maxWidth: 140
         readonly property bool overflow: nameText.implicitWidth > maxWidth
         implicitWidth: Math.min(nameText.implicitWidth, maxWidth)
-        implicitHeight: menuName.implicitHeight
+        implicitHeight: nameText.implicitHeight
         clip: true
 
         BarText {
