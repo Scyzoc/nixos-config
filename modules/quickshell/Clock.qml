@@ -115,6 +115,7 @@ Pill {
                 onClicked: popup.view = new Date(popup.view.getFullYear(), popup.view.getMonth() - 1, 1)
             }
             BarText {
+                font.family: Theme.labelFont
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 text: popup.view.toLocaleDateString(Qt.locale("fr_FR"), "MMMM yyyy")
@@ -141,6 +142,7 @@ Pill {
             Repeater {
                 model: ["L", "M", "M", "J", "V", "S", "D"]
                 BarText {
+                    font.family: Theme.labelFont
                     required property string modelData
                     width: 38
                     height: 22
@@ -163,6 +165,7 @@ Pill {
                     radius: 8
                     color: today ? Theme.text : "transparent"
                     BarText {
+                        font.family: Theme.labelFont
                         anchors.centerIn: parent
                         text: parent.day.getDate()
                         font.pixelSize: 12
@@ -177,6 +180,7 @@ Pill {
 
         // Météo : icône + température centrées, condition, puis 3 colonnes égales
         BarText {
+            font.family: Theme.labelFont
             visible: root.weatherTemp === ""
             Layout.alignment: Qt.AlignHCenter
             text: "Météo en cours de chargement…"
@@ -197,6 +201,7 @@ Pill {
                 BarText { text: root.weatherTemp; font.family: Theme.titleFont; font.bold: true; font.pixelSize: 26 }
             }
             BarText {
+                font.family: Theme.labelFont
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 text: root.weatherCond + "  ·  Paris"
@@ -212,8 +217,8 @@ Pill {
                         required property var modelData
                         width: popup.contentWidth / 3
                         spacing: 1
-                        BarText { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: modelData[0]; color: Theme.muted; font.pixelSize: 10 }
-                        BarText { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: modelData[1]; font.pixelSize: 12; font.bold: true }
+                        BarText { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: modelData[0]; color: Theme.muted; font.pixelSize: 10; font.family: Theme.labelFont }
+                        BarText { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: modelData[1]; font.pixelSize: 12; font.bold: true; font.family: Theme.labelFont }
                     }
                 }
             }

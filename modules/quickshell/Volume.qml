@@ -127,13 +127,13 @@ Pill {
                 value: root.vol
                 onMoved: v => root.setVol(v)
             }
-            BarText { text: Math.round(root.vol * 100) + "%"; Layout.preferredWidth: 38; horizontalAlignment: Text.AlignRight }
+            BarText { text: Math.round(root.vol * 100) + "%"; Layout.preferredWidth: 38; horizontalAlignment: Text.AlignRight; font.family: Theme.labelFont }
         }
 
         Separator {}
         RowLayout {
             Layout.fillWidth: true
-            BarText { text: "Sortie"; color: Theme.subtext; font.pixelSize: 12; Layout.fillWidth: true }
+            BarText { text: "Sortie"; color: Theme.subtext; font.pixelSize: 12; Layout.fillWidth: true; font.family: Theme.labelFont }
             ActionButton {
                 implicitWidth: 26
                 implicitHeight: 22
@@ -201,7 +201,7 @@ Pill {
         }
 
         Separator { visible: root.streams.length > 0 }
-        BarText { visible: root.streams.length > 0; text: "Applications"; color: Theme.subtext; font.pixelSize: 12 }
+        BarText { visible: root.streams.length > 0; text: "Applications"; color: Theme.subtext; font.pixelSize: 12; font.family: Theme.labelFont }
 
         Repeater {
             model: root.streams
@@ -210,6 +210,7 @@ Pill {
                 Layout.fillWidth: true
                 spacing: 2
                 BarText {
+                    font.family: Theme.labelFont
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                     font.pixelSize: 12
@@ -224,7 +225,7 @@ Pill {
                         value: modelData.audio?.volume ?? 0
                         onMoved: v => modelData.audio.volume = v
                     }
-                    BarText { text: Math.round((modelData.audio?.volume ?? 0) * 100) + "%"; font.pixelSize: 11; color: Theme.subtext; Layout.preferredWidth: 38; horizontalAlignment: Text.AlignRight }
+                    BarText { text: Math.round((modelData.audio?.volume ?? 0) * 100) + "%"; font.pixelSize: 11; color: Theme.subtext; Layout.preferredWidth: 38; horizontalAlignment: Text.AlignRight; font.family: Theme.labelFont }
                 }
             }
         }

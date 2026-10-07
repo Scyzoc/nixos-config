@@ -128,6 +128,7 @@ Pill {
         PopupHeader { title: "Minuteurs" }
 
         BarText {
+            font.family: Theme.labelFont
             visible: TimerState.timers.length === 0
             text: "Aucun minuteur. Demande à l'assistant (Super+K) :\n« mets un minuteur de 10 minutes »"
             color: Theme.muted
@@ -154,6 +155,7 @@ Pill {
                         Layout.fillWidth: true
                         spacing: 0
                         BarText {
+                            font.family: Theme.labelFont
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                             text: TimerState.title(row.t)
@@ -216,7 +218,7 @@ Pill {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                BarText { text: "Chronomètre"; color: Theme.subtext; font.pixelSize: 12 }
+                BarText { text: "Chronomètre"; color: Theme.subtext; font.pixelSize: 12; font.family: Theme.labelFont }
                 BarText {
                     text: TimerState.fmt(TimerState.swElapsed / 1000)
                     font.family: Theme.titleFont

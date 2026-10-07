@@ -100,8 +100,8 @@ Pill {
             Layout.fillWidth: true
             spacing: 4
             RowLayout {
-                BarText { text: Theme.ic(0xf035b) + "  Processeur"; color: Theme.blue; Layout.fillWidth: true }
-                BarText { text: Math.round(root.cpu * 100) + "%" }
+                BarText { text: Theme.ic(0xf035b) + "  Processeur"; color: Theme.blue; Layout.fillWidth: true; font.family: Theme.labelFont }
+                BarText { text: Math.round(root.cpu * 100) + "%"; font.family: Theme.labelFont }
             }
             Slider { Layout.fillWidth: true; interactive: false; value: root.cpu; accent: root.cpu > 0.8 ? Theme.red : Theme.blue }
         }
@@ -109,23 +109,23 @@ Pill {
             Layout.fillWidth: true
             spacing: 4
             RowLayout {
-                BarText { text: Theme.ic(0xf0f86) + "  Mémoire"; color: Theme.pink; Layout.fillWidth: true }
-                BarText { text: root.ramUsed.toFixed(1) + " / " + root.ramTotal.toFixed(1) + " Go" }
+                BarText { text: Theme.ic(0xf0f86) + "  Mémoire"; color: Theme.pink; Layout.fillWidth: true; font.family: Theme.labelFont }
+                BarText { text: root.ramUsed.toFixed(1) + " / " + root.ramTotal.toFixed(1) + " Go"; font.family: Theme.labelFont }
             }
             Slider { Layout.fillWidth: true; interactive: false; value: root.ram; accent: root.ram > 0.85 ? Theme.red : Theme.pink }
         }
 
         Separator {}
-        BarText { text: "Processus les plus actifs"; color: Theme.subtext; font.pixelSize: 12 }
+        BarText { text: "Processus les plus actifs"; color: Theme.subtext; font.pixelSize: 12; font.family: Theme.labelFont }
 
         Repeater {
             model: root.topProcs
             RowLayout {
                 required property var modelData
                 Layout.fillWidth: true
-                BarText { text: modelData.name; Layout.fillWidth: true; elide: Text.ElideRight; font.pixelSize: 12 }
-                BarText { text: modelData.cpu.toFixed(1) + "%"; color: Theme.blue; font.pixelSize: 12; Layout.preferredWidth: 50; horizontalAlignment: Text.AlignRight }
-                BarText { text: modelData.mem.toFixed(1) + " Go"; color: Theme.pink; font.pixelSize: 12; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
+                BarText { text: modelData.name; Layout.fillWidth: true; elide: Text.ElideRight; font.pixelSize: 12; font.family: Theme.labelFont }
+                BarText { text: modelData.cpu.toFixed(1) + "%"; color: Theme.blue; font.pixelSize: 12; Layout.preferredWidth: 50; horizontalAlignment: Text.AlignRight; font.family: Theme.labelFont }
+                BarText { text: modelData.mem.toFixed(1) + " Go"; color: Theme.pink; font.pixelSize: 12; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight; font.family: Theme.labelFont }
             }
         }
 

@@ -114,7 +114,7 @@ Rectangle {
                 onStopped: parent.opacity = 1
             }
         }
-        BarText { visible: root.label !== ""; text: root.label; font.pixelSize: 12 }
+        BarText { visible: root.label !== ""; text: root.label; font.pixelSize: 12; font.family: Theme.labelFont }
     }
 
     MouseArea {

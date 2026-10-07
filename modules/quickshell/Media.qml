@@ -339,11 +339,13 @@ Pill {
                 spacing: 3
                 BarText { Layout.fillWidth: true; text: root.title; font.family: Theme.titleFont; font.bold: true; font.pixelSize: 15; elide: Text.ElideRight; maximumLineCount: 2; wrapMode: Text.Wrap }
                 BarText {
+                    font.family: Theme.labelFont
                     Layout.fillWidth: true; text: root.artist; elide: Text.ElideRight; visible: text !== ""
                     color: root.artistColor
                     Behavior on color { ColorAnimation { duration: 400 } }
                 }
                 BarText {
+                    font.family: Theme.labelFont
                     Layout.fillWidth: true; text: root.album; font.pixelSize: 12; elide: Text.ElideRight; visible: text !== ""
                     color: root.albumColor
                     Behavior on color { ColorAnimation { duration: 400 } }
@@ -351,7 +353,7 @@ Pill {
                 RowLayout {
                     spacing: 5
                     BarText { text: root.sourceIcon(root.source); color: root.accent; font.pixelSize: 14 }
-                    BarText { text: root.sourceLabel; color: root.accent; font.pixelSize: 12; font.bold: true }
+                    BarText { text: root.sourceLabel; color: root.accent; font.pixelSize: 12; font.bold: true; font.family: Theme.labelFont }
                 }
             }
         }
@@ -378,9 +380,9 @@ Pill {
             }
             RowLayout {
                 Layout.fillWidth: true
-                BarText { text: Theme.fmtTime(root.player?.position); color: Theme.subtext; font.pixelSize: 11 }
+                BarText { text: Theme.fmtTime(root.player?.position); color: Theme.subtext; font.pixelSize: 11; font.family: Theme.labelFont }
                 Item { Layout.fillWidth: true }
-                BarText { text: Theme.fmtTime(root.player?.length); color: Theme.subtext; font.pixelSize: 11 }
+                BarText { text: Theme.fmtTime(root.player?.length); color: Theme.subtext; font.pixelSize: 11; font.family: Theme.labelFont }
             }
         }
 

@@ -118,10 +118,11 @@ Pill {
                 Layout.fillWidth: true
                 spacing: 0
                 BarText {
+                    font.family: Theme.labelFont
                     text: root.actionLabel(root.schedAction) + " à " + Qt.formatDateTime(new Date(root.schedAt), "HH:mm")
                     font.bold: true
                 }
-                BarText { text: "dans " + root.fmtRemaining(root.remaining); color: Theme.subtext; font.pixelSize: 11 }
+                BarText { text: "dans " + root.fmtRemaining(root.remaining); color: Theme.subtext; font.pixelSize: 11; font.family: Theme.labelFont }
             }
             ActionButton {
                 icon: Theme.ic(0xf0156)
@@ -132,6 +133,7 @@ Pill {
         }
 
         BarText {
+            font.family: Theme.labelFont
             // Boutons en icônes seules : l'action choisie est rappelée ici
             text: (root.schedAction === "" ? "Programmer" : "Reprogrammer")
                   + (root.planAction !== "" ? " : " + root.actionLabel(root.planAction) : "")
