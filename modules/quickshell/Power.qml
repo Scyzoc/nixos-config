@@ -14,7 +14,9 @@ Pill {
     readonly property string armedLabel: ({ logout: "Déconnexion", reboot: "Redémarrer", poweroff: "Éteindre" }[armed] ?? "")
     // Désarme la confirmation si le 2e clic ne vient pas
     Timer { id: disarm; interval: 3000; onTriggered: root.armed = "" }
+    property bool planMode: false            // mode programmation (bouton minuteur)
     property string planAction: ""           // action choisie (déplie le planificateur ; "" = replié)
+    property int planIdx: 6                  // délai choisi : index dans planSteps
     property string schedAction: ""          // action programmée en cours ("" = aucune)
     property real schedAt: 0                 // échéance (ms epoch)
 
@@ -61,7 +63,18 @@ Pill {
         scheduler.command = [Paths.powerSchedule].concat(args);
         scheduler.running = true;
         planAction = "";
+        planMode = false;
     }
+
+    // Délais proposés par la glissière (minutes)
+    readonly property var planSteps: [5, 10, 15, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360, 480]
+    readonly property int planMin: planSteps[planIdx]
+    function fmtMin(m) {
+        const h = Math.floor(m / 60), r = m % 60;
+        return h === 0 ? r + " min" : h + " h" + (r ? " " + (r < 10 ? "0" : "") + r : "");
+    }
+    function schedulable(id) { return id === "suspend" || id === "reboot" || id === "poweroff"; }
+    function actionColor(a) { return a === "suspend" ? Theme.mauve : a === "reboot" ? Theme.peach : Theme.red; }
 
     BarText { text: Theme.ic(0x23fb); color: Theme.red }
     BarText {
@@ -75,6 +88,17 @@ Pill {
     onClicked: popup.toggle()
 
     function run(action) {
+        if (action.id === "plan") {
+            planMode = !planMode;
+            planAction = "";
+            armed = "";
+            return;
+        }
+        // Mode programmation : le bouton choisit l'action au lieu de l'exécuter
+        if (planMode) {
+            if (schedulable(action.id)) planAction = planAction === action.id ? "" : action.id;
+            return;
+        }
         if (action.confirm && armed !== action.id) { armed = action.id; disarm.restart(); return; }
         armed = "";
         popup.visible = false;
@@ -89,11 +113,12 @@ Pill {
         onVisibleChanged: {
             root.armed = "";
             root.hoveredLabel = "";
+            root.planMode = false;
             root.planAction = "";
             if (visible) status.running = true;
         }
 
-        // Icônes seules : verrouiller / veille / déconnexion, puis éteindre / redémarrer
+        // Icônes seules : verrouiller / veille / déconnexion, puis éteindre / redémarrer / minuteur
         Repeater {
             model: [
                 [
@@ -103,7 +128,8 @@ Pill {
                 ],
                 [
                     { id: "poweroff", label: "Éteindre", icon: 0xf0425, color: Theme.red, confirm: true, cmd: [Paths.systemctl, "poweroff"] },
-                    { id: "reboot", label: "Redémarrer", icon: 0xf0709, color: Theme.peach, confirm: true, cmd: [Paths.systemctl, "reboot"] }
+                    { id: "reboot", label: "Redémarrer", icon: 0xf0709, color: Theme.peach, confirm: true, cmd: [Paths.systemctl, "reboot"] },
+                    { id: "plan", label: "Programmer", icon: 0xf13ab, color: Theme.yellow, confirm: false, cmd: [] }    // md-timer
                 ]
             ]
             RowLayout {
@@ -114,7 +140,10 @@ Pill {
                     model: parent.modelData
                     // Boutons de même largeur (base identique + partage égal)
                     ActionButton {
+                        id: btn
                         required property var modelData
+                        readonly property bool isPlan: modelData.id === "plan"
+                        readonly property bool canPlan: root.schedulable(modelData.id)
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         implicitHeight: 44
@@ -124,26 +153,119 @@ Pill {
                         // Armé (1er clic d'une action à confirmer) : lueur pulsée
                         glowing: root.armed === modelData.id
                         glowColor: modelData.color
+                        // Mode programmation : minuteur allumé, action choisie allumée,
+                        // actions non programmables estompées
+                        highlighted: isPlan ? root.planMode : root.planMode && root.planAction === modelData.id
+                        opacity: root.planMode && !isPlan && !canPlan ? 0.25 : 1
+                        Behavior on opacity { NumberAnimation { duration: 220 } }
                         onHoveredChanged: root.hoveredLabel = hovered ? modelData.label : (root.hoveredLabel === modelData.label ? "" : root.hoveredLabel)
                         onClicked: root.run(modelData)
+
+                        // Badge minuteur sur les actions programmables (arrive en zoom)
+                        BarText {
+                            anchors.top: parent.top
+                            anchors.right: parent.right
+                            anchors.topMargin: 3
+                            anchors.rightMargin: 5
+                            text: Theme.ic(0xf13ab)
+                            color: Theme.yellow
+                            font.pixelSize: 10
+                            readonly property bool shown: root.planMode && btn.canPlan
+                            opacity: shown ? 1 : 0
+                            scale: shown ? 1 : 0.3
+                            Behavior on opacity { NumberAnimation { duration: 200 } }
+                            Behavior on scale { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
+                        }
+                        // Programmation en cours sur cette action : point jaune
+                        Rectangle {
+                            visible: root.schedAction === btn.modelData.id && !root.planMode
+                            anchors.top: parent.top
+                            anchors.right: parent.right
+                            anchors.margins: 5
+                            width: 6; height: 6; radius: 3
+                            color: Theme.yellow
+                        }
                     }
                 }
             }
         }
 
-        // Nom de l'action survolée, ou demande de confirmation (hauteur fixe : pas de saut)
+        // Nom de l'action survolée, consigne ou demande de confirmation (hauteur fixe : pas de saut)
         BarText {
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
             font.family: Theme.labelFont
             font.pixelSize: 12
-            text: root.armed !== "" ? "Recliquer pour confirmer : " + root.armedLabel : (root.hoveredLabel || " ")
-            color: root.armed !== "" ? Theme.red : Theme.subtext
+            text: root.armed !== "" ? "Recliquer pour confirmer : " + root.armedLabel
+                : root.planMode && root.planAction === "" ? "Choisis l'action à programmer"
+                : (root.hoveredLabel || " ")
+            color: root.armed !== "" ? Theme.red : root.planMode ? Theme.yellow : Theme.subtext
         }
 
-        Separator {}
+        // Planificateur : déplié une fois l'action choisie (même animation que les
+        // réglages Bluetooth / Wi-Fi)
+        Item {
+            id: planner
+            readonly property bool open: root.planMode && root.planAction !== ""
+            readonly property color accent: root.actionColor(root.planAction)
+            Layout.fillWidth: true
+            Layout.preferredHeight: open ? plannerBody.implicitHeight : 0
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+            visible: Layout.preferredHeight > 0
+            clip: true
+            opacity: open ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+
+            ColumnLayout {
+                id: plannerBody
+                width: parent.width
+                y: planner.open ? 0 : -14
+                Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+                spacing: 8
+
+                // Lecture en direct : délai en gros, heure d'échéance à droite
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 2
+                    BarText {
+                        text: "dans " + root.fmtMin(root.planMin)
+                        font.family: Theme.titleFont
+                        font.pixelSize: 22
+                        font.bold: true
+                        color: planner.accent
+                        Behavior on color { ColorAnimation { duration: 200 } }
+                        Layout.fillWidth: true
+                    }
+                    BarText {
+                        text: "à " + Qt.formatDateTime(new Date(clock.date.getTime() + root.planMin * 60000), "HH:mm")
+                        font.family: Theme.labelFont
+                        font.pixelSize: 13
+                        color: Theme.subtext
+                    }
+                }
+
+                // Glissière crantée (délais de planSteps) ; molette = cran suivant
+                Slider {
+                    Layout.fillWidth: true
+                    accent: planner.accent
+                    value: root.planIdx / (root.planSteps.length - 1)
+                    onMoved: v => root.planIdx = Math.round(v * (root.planSteps.length - 1))
+                }
+
+                ActionButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 36
+                    icon: Theme.ic(0xf13ab)
+                    label: root.actionLabel(root.planAction) + " dans " + root.fmtMin(root.planMin)
+                    accent: planner.accent
+                    highlighted: true
+                    onClicked: root.schedule([root.planAction, String(root.planMin)])
+                }
+            }
+        }
 
         // Programmation en cours
+        Separator { visible: root.schedAction !== "" }
         RowLayout {
             visible: root.schedAction !== ""
             Layout.fillWidth: true
@@ -164,120 +286,6 @@ Pill {
                 label: "Annuler"
                 accent: Theme.red
                 onClicked: root.schedule(["cancel"])
-            }
-        }
-
-        BarText {
-            font.family: Theme.labelFont
-            // Boutons en icônes seules : l'action choisie est rappelée ici
-            text: (root.schedAction === "" ? "Programmer" : "Reprogrammer")
-                  + (root.planAction !== "" ? " : " + root.actionLabel(root.planAction) : "")
-            color: Theme.subtext
-            font.pixelSize: 12
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
-            Repeater {
-                model: [
-                    { id: "poweroff", label: "Arrêt", icon: 0xf0425, color: Theme.red },
-                    { id: "suspend", label: "Veille", icon: 0xf04b2, color: Theme.mauve },
-                    { id: "reboot", label: "Redémarrer", icon: 0xf0709, color: Theme.peach }
-                ]
-                // Icône seule, 3 boutons de même largeur (base identique + partage égal)
-                ActionButton {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 1
-                    icon: Theme.ic(modelData.icon)
-                    accent: modelData.color
-                    highlighted: root.planAction === modelData.id
-                    onClicked: root.planAction = root.planAction === modelData.id ? "" : modelData.id
-                }
-            }
-        }
-
-        // Planificateur : déplié par le choix Arrêt / Veille / Redémarrer (même animation
-        // que les réglages Bluetooth / Wi-Fi)
-        Item {
-            id: planner
-            readonly property bool open: root.planAction !== ""
-            Layout.fillWidth: true
-            Layout.preferredHeight: open ? plannerBody.implicitHeight : 0
-            Behavior on Layout.preferredHeight { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-            visible: Layout.preferredHeight > 0
-            clip: true
-            opacity: open ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 200 } }
-
-            ColumnLayout {
-                id: plannerBody
-                width: parent.width
-                y: planner.open ? 0 : -14
-                Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-                spacing: 6
-
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: 3
-                    columnSpacing: 6
-                    rowSpacing: 6
-                    Repeater {
-                        model: [
-                            { min: 15, label: "15 min" }, { min: 30, label: "30 min" }, { min: 45, label: "45 min" },
-                            { min: 60, label: "1 h" }, { min: 90, label: "1 h 30" }, { min: 120, label: "2 h" }
-                        ]
-                        ActionButton {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            label: modelData.label
-                            onClicked: root.schedule([root.planAction, String(modelData.min)])
-                        }
-                    }
-                }
-
-                // Durée libre en minutes
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 6
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 32
-                        radius: 8
-                        color: Qt.rgba(1, 1, 1, 0.06)
-                        border.color: custom.activeFocus ? Theme.subtext : Theme.pillBorder
-                        TextInput {
-                            id: custom
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 10
-                            verticalAlignment: TextInput.AlignVCenter
-                            color: Theme.text
-                            font.family: Theme.font
-                            font.pixelSize: 12
-                            validator: IntValidator { bottom: 1; top: 1440 }
-                            onAccepted: okBtn.clicked()
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: custom.text === ""
-                                text: "Autre durée (min)"
-                                color: Theme.muted
-                                font: custom.font
-                            }
-                        }
-                    }
-                    ActionButton {
-                        id: okBtn
-                        icon: Theme.ic(0xf012c)
-                        accent: Theme.green
-                        onClicked: {
-                            if (!custom.acceptableInput) return;
-                            root.schedule([root.planAction, custom.text]);
-                            custom.text = "";
-                        }
-                    }
-                }
             }
         }
     }
