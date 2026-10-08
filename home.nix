@@ -303,7 +303,13 @@ let notionTodo = ./modules/notion-todo.nix; in
         geom=$(${pkgs.slurp}/bin/slurp)
         ${pkgs.procps}/bin/pkill wayfreeze
         if [ -n "$geom" ]; then
+          # Le screen_shader de Crépuscule (filtre lumière bleue) est inclus dans la
+          # capture : coupé le temps de grim (~150 ms), puis remis.
+          shader=$(${pkgs.hyprland}/bin/hyprctl getoption decoration:screen_shader | ${pkgs.gnused}/bin/sed -n 's/^str: //p')
+          case "$shader" in ""|"[[EMPTY]]") shader="" ;; esac
+          [ -n "$shader" ] && ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader "[[EMPTY]]" >/dev/null
           ${pkgs.grim}/bin/grim -g "$geom" "$file"
+          [ -n "$shader" ] && ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader "$shader" >/dev/null
           if [ "$mode" = "save" ]; then
             # Demande l'emplacement ; défaut ~/Pictures/Screenshots/
             dir="$HOME/Pictures/Screenshots"
