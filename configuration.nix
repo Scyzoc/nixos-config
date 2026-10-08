@@ -214,6 +214,38 @@
         "node.stream.restore-target" = false;
       };
     };
+    # Un périphérique Bluetooth qui se connecte devient la sortie par défaut,
+    # même si une autre sortie avait été choisie à la main avant
+    wireplumber.extraScripts."bt-autoswitch.lua" = ''
+      local metadata_om = ObjectManager {
+        Interest { type = "metadata", Constraint { "metadata.name", "=", "default" } }
+      }
+      local sinks_om = ObjectManager {
+        Interest {
+          type = "node",
+          Constraint { "media.class", "=", "Audio/Sink" },
+          Constraint { "device.api", "=", "bluez5" },
+        }
+      }
+      sinks_om:connect("object-added", function (_, node)
+        local metadata = metadata_om:lookup()
+        local name = node.properties["node.name"]
+        if metadata and name then
+          metadata:set(0, "default.configured.audio.sink", "Spa:String:JSON",
+            Json.Object { name = name }:to_string())
+        end
+      end)
+      metadata_om:activate()
+      sinks_om:activate()
+    '';
+    wireplumber.extraConfig."52-bt-autoswitch" = {
+      "wireplumber.components" = [{
+        name = "bt-autoswitch.lua";
+        type = "script/lua";
+        provides = "custom.bt-autoswitch";
+      }];
+      "wireplumber.profiles".main."custom.bt-autoswitch" = "required";
+    };
   };
 
   # ==========================================================================

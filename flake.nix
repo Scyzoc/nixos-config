@@ -22,6 +22,8 @@
         home-manager.useGlobalPkgs = true;
         home-manager.useUserPackages = true;
         home-manager.backupFileExtension = "backup";
+        # Commit de la config, affiché par `ipinfo --version`
+        home-manager.extraSpecialArgs.flakeRev = self.shortRev or self.dirtyShortRev or "inconnu";
         home-manager.users.user = import ./home.nix;
       };
       mkSystem = host: nixpkgs.lib.nixosSystem {
