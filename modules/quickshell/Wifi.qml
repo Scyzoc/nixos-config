@@ -17,6 +17,8 @@ Pill {
     property string pendingSsid: ""
     property string errorText: ""
     property bool showIpSettings: false
+    property bool showInfo: false
+    readonly property bool infoShown: showInfo && current !== null
     property bool airplane: false
     tooltip: current !== null ? ip : ""
     readonly property color tint: airplane ? Theme.peach
@@ -105,7 +107,7 @@ Pill {
             }
         }
     }
-    Timer { interval: 3000; running: popup.visible && root.current !== null; repeat: true; triggeredOnStart: true; onTriggered: apProc.running = true }
+    Timer { interval: 3000; running: popup.visible && root.infoShown; repeat: true; triggeredOnStart: true; onTriggered: apProc.running = true }
     readonly property var apRows: {
         if (!current) return [];
         const f = ap.freq || 0;
@@ -294,7 +296,7 @@ Pill {
 
         onVisibleChanged: {
             if (root.wifiDev) root.wifiDev.scannerEnabled = visible;
-            if (!visible) { root.pendingSsid = ""; root.errorText = ""; root.showIpSettings = false; }
+            if (!visible) { root.pendingSsid = ""; root.errorText = ""; root.showIpSettings = false; root.showInfo = false; }
             else { rfkillState.running = true; VpnState.refresh(); connCheck.running = true; }
         }
 
@@ -406,18 +408,8 @@ Pill {
             }
         }
 
-        Separator { visible: root.current !== null }
-        NetDetails {
-            Layout.fillWidth: true
-            visible: root.current !== null
-            iface: root.wifiDev?.name ?? ""
-            active: popup.visible && root.current !== null
-            online: root.current !== null
-            linkRows: root.apRows
-        }
-
         Separator {}
-        // Mode avion / VPN / avancé : 3 boutons icône seule de même largeur (comme les profils d'énergie)
+        // Mode avion / VPN / infos : 3 boutons icône seule de même largeur (comme les profils d'énergie)
         RowLayout {
             Layout.fillWidth: true
             spacing: 6
@@ -439,6 +431,16 @@ Pill {
                 highlighted: VpnState.active
                 onClicked: if (!VpnState.busy) VpnState.toggle()
             }
+            // Détails de la connexion : remplacent la liste des réseaux
+            ActionButton {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                icon: Theme.ic(0xf02fd)    // md-information_outline
+                accent: Theme.blue
+                highlighted: root.infoShown
+                opacity: root.current !== null ? 1 : 0.4
+                onClicked: if (root.current !== null) root.showInfo = !root.showInfo
+            }
         }
 
         Separator { visible: root.enabled_ }
@@ -451,138 +453,163 @@ Pill {
             font.pixelSize: 12
         }
 
-        Flickable {
+        // Liste des réseaux, ou détails de la connexion (bouton infos) à la même place
+        Item {
+            id: swap
+            readonly property real listH: Math.min(list.implicitHeight, 460)
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(list.implicitHeight, 460)
-            contentHeight: list.implicitHeight
+            Layout.preferredHeight: root.infoShown ? info.implicitHeight : listH
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+            visible: root.enabled_ || root.infoShown
             clip: true
-            visible: root.enabled_
 
-            ColumnLayout {
-                id: list
+            NetDetails {
+                id: info
                 width: parent.width
-                spacing: 2
+                iface: root.wifiDev?.name ?? ""
+                active: popup.visible && root.infoShown
+                online: root.current !== null
+                linkRows: root.apRows
+                opacity: root.infoShown ? 1 : 0
+                visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 200 } }
+            }
 
-                Repeater {
-                    // Un seul point d'accès par SSID (le plus fort), réseau connecté en tête
-                    // ScriptModel : délégués conservés entre mises à jour (garde saisie et panneau ouverts)
-                    model: ScriptModel {
-                        values: {
-                            const best = {};
-                            for (const n of root.networks) {
-                                if (!n.name) continue;
-                                if (!best[n.name] || n.connected || root.strength(n) > root.strength(best[n.name]))
-                                    if (!best[n.name]?.connected) best[n.name] = n;
-                            }
-                            return Object.values(best).sort((a, b) => (b.connected - a.connected) || (root.strength(b) - root.strength(a)));
-                        }
-                    }
+            Flickable {
+                width: parent.width
+                height: swap.listH
+                contentHeight: list.implicitHeight
+                clip: true
+                opacity: root.infoShown ? 0 : 1
+                visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 200 } }
 
-                    ColumnLayout {
-                        id: entry
-                        required property var modelData
-                        Layout.fillWidth: true
-                        spacing: 4
+                ColumnLayout {
+                    id: list
+                    width: parent.width
+                    spacing: 2
 
-                        Connections {
-                            target: entry.modelData
-                            function onConnectionFailed(reason) {
-                                // Mot de passe absent ou refusé → champ de saisie tout de suite
-                                const askPass = root.secured(entry.modelData)
-                                    && (reason === ConnectionFailReason.NoSecrets
-                                        || reason === ConnectionFailReason.WifiClientFailed
-                                        || reason === ConnectionFailReason.WifiAuthTimeout);
-                                root.errorText = askPass ? "" : "Échec de connexion à " + entry.modelData.name + " (" + ConnectionFailReason.toString(reason) + ")";
-                                if (askPass) root.pendingSsid = entry.modelData.name;
-                            }
-                        }
-
-                        ListRow {
-                            icon: root.sigIcon(root.strength(entry.modelData))
-                            iconColor: entry.modelData.connected ? Theme.green : Theme.subtext
-                            label: entry.modelData.name
-                            labelFont: Theme.labelFont
-                            detail: root.secured(entry.modelData) ? Theme.ic(0xf033e) : ""
-                            active: entry.modelData.connected
-                            busy: entry.modelData.stateChanging
-                            actionIcon: entry.modelData.connected ? Theme.ic(0xf0493) : ""
-                            actionActive: root.showIpSettings
-                            onActionClicked: root.showIpSettings = !root.showIpSettings
-                            onClicked: {
-                                root.errorText = "";
-                                if (entry.modelData.connected) entry.modelData.disconnect();
-                                else if (entry.modelData.known || !root.secured(entry.modelData)) entry.modelData.connect();
-                                else root.pendingSsid = root.pendingSsid === entry.modelData.name ? "" : entry.modelData.name;
+                    Repeater {
+                        // Un seul point d'accès par SSID (le plus fort), réseau connecté en tête
+                        // ScriptModel : délégués conservés entre mises à jour (garde saisie et panneau ouverts)
+                        model: ScriptModel {
+                            values: {
+                                const best = {};
+                                for (const n of root.networks) {
+                                    if (!n.name) continue;
+                                    if (!best[n.name] || n.connected || root.strength(n) > root.strength(best[n.name]))
+                                        if (!best[n.name]?.connected) best[n.name] = n;
+                                }
+                                return Object.values(best).sort((a, b) => (b.connected - a.connected) || (root.strength(b) - root.strength(a)));
                             }
                         }
 
-                        // Réglages IP : dépliage animé (même animation que le Bluetooth)
-                        Item {
-                            id: ipPanel
-                            readonly property bool open: entry.modelData.connected && root.showIpSettings
+                        ColumnLayout {
+                            id: entry
+                            required property var modelData
                             Layout.fillWidth: true
-                            Layout.preferredHeight: open ? (ipSettings.item?.implicitHeight ?? 0) : 0
-                            Behavior on Layout.preferredHeight { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-                            visible: Layout.preferredHeight > 0
-                            clip: true
-                            opacity: open ? 1 : 0
-                            Behavior on opacity { NumberAnimation { duration: 200 } }
+                            spacing: 4
 
-                            Loader {
-                                id: ipSettings
-                                width: parent.width
-                                y: ipPanel.open ? 0 : -14
-                                Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-                                active: ipPanel.open || ipPanel.Layout.preferredHeight > 0
-                                sourceComponent: IpSettings {
-                                    iface: root.wifiDev?.name ?? ""
-                                    network: entry.modelData
-                                    onForgotten: root.showIpSettings = false
+                            Connections {
+                                target: entry.modelData
+                                function onConnectionFailed(reason) {
+                                    // Mot de passe absent ou refusé → champ de saisie tout de suite
+                                    const askPass = root.secured(entry.modelData)
+                                        && (reason === ConnectionFailReason.NoSecrets
+                                            || reason === ConnectionFailReason.WifiClientFailed
+                                            || reason === ConnectionFailReason.WifiAuthTimeout);
+                                    root.errorText = askPass ? "" : "Échec de connexion à " + entry.modelData.name + " (" + ConnectionFailReason.toString(reason) + ")";
+                                    if (askPass) root.pendingSsid = entry.modelData.name;
                                 }
                             }
-                        }
 
-                        // Saisie du mot de passe pour un réseau inconnu
-                        RowLayout {
-                            visible: root.pendingSsid === entry.modelData.name
-                            Layout.fillWidth: true
-                            Layout.leftMargin: 10
-                            onVisibleChanged: if (visible) pass.forceActiveFocus()
+                            ListRow {
+                                icon: root.sigIcon(root.strength(entry.modelData))
+                                iconColor: entry.modelData.connected ? Theme.green : Theme.subtext
+                                label: entry.modelData.name
+                                labelFont: Theme.labelFont
+                                detail: root.secured(entry.modelData) ? Theme.ic(0xf033e) : ""
+                                active: entry.modelData.connected
+                                busy: entry.modelData.stateChanging
+                                actionIcon: entry.modelData.connected ? Theme.ic(0xf0493) : ""
+                                actionActive: root.showIpSettings
+                                onActionClicked: root.showIpSettings = !root.showIpSettings
+                                onClicked: {
+                                    root.errorText = "";
+                                    if (entry.modelData.connected) entry.modelData.disconnect();
+                                    else if (entry.modelData.known || !root.secured(entry.modelData)) entry.modelData.connect();
+                                    else root.pendingSsid = root.pendingSsid === entry.modelData.name ? "" : entry.modelData.name;
+                                }
+                            }
 
-                            Rectangle {
+                            // Réglages IP : dépliage animé (même animation que le Bluetooth)
+                            Item {
+                                id: ipPanel
+                                readonly property bool open: entry.modelData.connected && root.showIpSettings
                                 Layout.fillWidth: true
-                                implicitHeight: 30
-                                radius: 8
-                                color: Qt.rgba(1, 1, 1, 0.08)
-                                border.color: pass.activeFocus ? Theme.blue : Theme.pillBorder
-                                TextInput {
-                                    id: pass
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 10
-                                    anchors.rightMargin: 10
-                                    verticalAlignment: TextInput.AlignVCenter
-                                    color: Theme.text
-                                    font.family: Theme.font
-                                    font.pixelSize: 12
-                                    echoMode: TextInput.Password
-                                    onAccepted: connectBtn.clicked()
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        visible: pass.text === ""
-                                        text: "Mot de passe"
-                                        color: Theme.muted
-                                        font: pass.font
+                                Layout.preferredHeight: open ? (ipSettings.item?.implicitHeight ?? 0) : 0
+                                Behavior on Layout.preferredHeight { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+                                visible: Layout.preferredHeight > 0
+                                clip: true
+                                opacity: open ? 1 : 0
+                                Behavior on opacity { NumberAnimation { duration: 200 } }
+
+                                Loader {
+                                    id: ipSettings
+                                    width: parent.width
+                                    y: ipPanel.open ? 0 : -14
+                                    Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+                                    active: ipPanel.open || ipPanel.Layout.preferredHeight > 0
+                                    sourceComponent: IpSettings {
+                                        iface: root.wifiDev?.name ?? ""
+                                        network: entry.modelData
+                                        onForgotten: root.showIpSettings = false
                                     }
                                 }
                             }
-                            ActionButton {
-                                id: connectBtn
-                                icon: Theme.ic(0xf012c)
-                                accent: Theme.green
-                                onClicked: {
-                                    entry.modelData.connectWithPsk(pass.text);
-                                    pass.text = "";
-                                    root.pendingSsid = "";
+
+                            // Saisie du mot de passe pour un réseau inconnu
+                            RowLayout {
+                                visible: root.pendingSsid === entry.modelData.name
+                                Layout.fillWidth: true
+                                Layout.leftMargin: 10
+                                onVisibleChanged: if (visible) pass.forceActiveFocus()
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    implicitHeight: 30
+                                    radius: 8
+                                    color: Qt.rgba(1, 1, 1, 0.08)
+                                    border.color: pass.activeFocus ? Theme.blue : Theme.pillBorder
+                                    TextInput {
+                                        id: pass
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 10
+                                        anchors.rightMargin: 10
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        color: Theme.text
+                                        font.family: Theme.font
+                                        font.pixelSize: 12
+                                        echoMode: TextInput.Password
+                                        onAccepted: connectBtn.clicked()
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            visible: pass.text === ""
+                                            text: "Mot de passe"
+                                            color: Theme.muted
+                                            font: pass.font
+                                        }
+                                    }
+                                }
+                                ActionButton {
+                                    id: connectBtn
+                                    icon: Theme.ic(0xf012c)
+                                    accent: Theme.green
+                                    onClicked: {
+                                        entry.modelData.connectWithPsk(pass.text);
+                                        pass.text = "";
+                                        root.pendingSsid = "";
+                                    }
                                 }
                             }
                         }
