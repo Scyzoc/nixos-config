@@ -305,15 +305,20 @@ Pill {
             Layout.fillWidth: true
             spacing: 12
             BarText {
+                id: headIcon
                 text: root.airplane ? Theme.ic(0xf001d)
                     : root.current ? root.sigIcon(root.strength(root.current)) : Theme.ic(0xf092e)
                 font.pixelSize: 40
                 color: root.tint
+                Layout.alignment: Qt.AlignTop
             }
             ColumnLayout {
                 Layout.fillWidth: true
+                // Ligne du SSID centrée sur la grosse icône (la ligne VPN dépasse en dessous)
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: Math.max(0, (headIcon.implicitHeight - menuName.implicitHeight) / 2)
                 spacing: 2
-                // SSID + icône « connecté » juste après
+                // SSID + icône « connecté » juste après ; recherche + interrupteur à droite, sur la même ligne
                 // Item (pas de layout) : la largeur du nom ne dépend pas de sa propre colonne
                 Item {
                     Layout.fillWidth: true
@@ -321,7 +326,7 @@ Pill {
                     implicitHeight: menuName.implicitHeight
                     BarText {
                         id: menuName
-                        width: Math.min(implicitWidth, parent.width - (menuCheck.visible ? 26 : 0))
+                        width: Math.min(implicitWidth, parent.width - headCtrl.width - 12 - (menuCheck.visible ? 26 : 0))
                         elide: Text.ElideRight
                         text: root.current?.name
                         ?? (root.airplane ? "Mode avion" : root.enabled_ ? "Déconnecté" : "Wi-Fi désactivé")
@@ -338,6 +343,24 @@ Pill {
                         color: root.tint
                         font.pixelSize: 16
                     }
+                    Row {
+                        id: headCtrl
+                        anchors.right: parent.right
+                        anchors.verticalCenter: menuName.verticalCenter
+                        spacing: 12
+                        // Recherche de réseaux en cours : icône de chargement qui tourne
+                        Spinner {
+                            visible: root.wifiDev?.scannerEnabled ?? false
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        // Interrupteur Wi-Fi (comme le menu Bluetooth)
+                        Toggle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: root.enabled_
+                            accent: Theme.green    // vert si activé, gris sinon
+                            onToggled: Networking.wifiEnabled = !root.enabled_
+                        }
+                    }
                 }
                 RowLayout {
                     visible: VpnState.active
@@ -345,20 +368,6 @@ Pill {
                     BarText { text: Theme.ic(0xf0582); color: Theme.green; font.pixelSize: 11 }
                     BarText { text: "VPN  ·  " + VpnState.ip; color: Theme.green; font.pixelSize: 11; font.family: Theme.labelFont }
                 }
-            }
-            // Recherche de réseaux en cours : icône de chargement qui tourne
-            Spinner {
-                visible: root.wifiDev?.scannerEnabled ?? false
-                Layout.alignment: Qt.AlignTop
-                Layout.topMargin: 6
-            }
-            // Interrupteur Wi-Fi, à droite du nom (comme le menu Bluetooth)
-            Toggle {
-                Layout.alignment: Qt.AlignTop
-                Layout.topMargin: 2
-                checked: root.enabled_
-                accent: Theme.green    // vert si activé, gris sinon
-                onToggled: Networking.wifiEnabled = !root.enabled_
             }
         }
 

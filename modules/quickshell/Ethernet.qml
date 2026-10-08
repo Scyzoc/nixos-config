@@ -116,13 +116,18 @@ Pill {
             Layout.fillWidth: true
             spacing: 12
             BarText {
+                id: headIcon
                 text: Theme.ic(0xf0200)
                 font.pixelSize: 40
                 color: root.tint
                 opacity: root.blink
+                Layout.alignment: Qt.AlignTop
             }
             ColumnLayout {
                 Layout.fillWidth: true
+                // Ligne du nom centrée sur la grosse icône (l'état dépasse en dessous)
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: Math.max(0, (headIcon.implicitHeight - menuName.implicitHeight) / 2)
                 spacing: 2
                 Item {
                     Layout.fillWidth: true
@@ -130,7 +135,7 @@ Pill {
                     implicitHeight: menuName.implicitHeight
                     BarText {
                         id: menuName
-                        width: Math.min(implicitWidth, parent.width - (menuCheck.visible ? 26 : 0))
+                        width: Math.min(implicitWidth, parent.width - headCtrl.width - 12 - (menuCheck.visible ? 26 : 0))
                         elide: Text.ElideRight
                         text: details.conn || "Ethernet"
                         font.family: Theme.titleFont
@@ -146,6 +151,23 @@ Pill {
                         color: root.tint
                         font.pixelSize: 16
                     }
+                    Row {
+                        id: headCtrl
+                        anchors.right: parent.right
+                        anchors.verticalCenter: menuName.verticalCenter
+                        spacing: 12
+                        Spinner {
+                            visible: root.connecting || devAction.running
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        // Interrupteur : connecter / déconnecter la carte
+                        Toggle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: root.online || root.connecting
+                            accent: Theme.green
+                            onToggled: if (!devAction.running) root.setConnected(!(root.online || root.connecting))
+                        }
+                    }
                 }
                 BarText {
                     font.family: Theme.labelFont
@@ -153,19 +175,6 @@ Pill {
                     color: root.connecting ? Theme.peach : Theme.subtext
                     font.pixelSize: 12
                 }
-            }
-            Spinner {
-                visible: root.connecting || devAction.running
-                Layout.alignment: Qt.AlignTop
-                Layout.topMargin: 6
-            }
-            // Interrupteur : connecter / déconnecter la carte
-            Toggle {
-                Layout.alignment: Qt.AlignTop
-                Layout.topMargin: 2
-                checked: root.online || root.connecting
-                accent: Theme.green
-                onToggled: if (!devAction.running) root.setConnected(!(root.online || root.connecting))
             }
         }
 
