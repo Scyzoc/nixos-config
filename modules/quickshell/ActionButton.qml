@@ -12,6 +12,8 @@ Rectangle {
     property bool busy: false            // pulsation de l'icône pendant une action en cours
     property bool glowing: false         // lueur pulsée autour du bouton (ex. connexion VPN)
     property color glowColor: Theme.peach
+    property int iconSize: 15
+    readonly property bool hovered: ma.containsMouse
     signal clicked()
 
     implicitHeight: 32
@@ -105,7 +107,7 @@ Rectangle {
             font.family: root.iconFont
             color: root.glowing ? root.glowColor : root.accent
             Behavior on color { ColorAnimation { duration: 200 } }
-            font.pixelSize: 15
+            font.pixelSize: root.iconSize
             SequentialAnimation on opacity {
                 running: root.busy
                 loops: Animation.Infinite

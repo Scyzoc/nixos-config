@@ -10,6 +10,10 @@ Pill {
     id: root
 
     property string armed: ""
+    property string hoveredLabel: ""
+    readonly property string armedLabel: ({ logout: "Déconnexion", reboot: "Redémarrer", poweroff: "Éteindre" }[armed] ?? "")
+    // Désarme la confirmation si le 2e clic ne vient pas
+    Timer { id: disarm; interval: 3000; onTriggered: root.armed = "" }
     property string planAction: ""           // action choisie (déplie le planificateur ; "" = replié)
     property string schedAction: ""          // action programmée en cours ("" = aucune)
     property real schedAt: 0                 // échéance (ms epoch)
@@ -71,7 +75,7 @@ Pill {
     onClicked: popup.toggle()
 
     function run(action) {
-        if (action.confirm && armed !== action.id) { armed = action.id; return; }
+        if (action.confirm && armed !== action.id) { armed = action.id; disarm.restart(); return; }
         armed = "";
         popup.visible = false;
         if (action.id === "logout") Hyprland.dispatch("exit");
@@ -84,26 +88,57 @@ Pill {
         contentWidth: 250
         onVisibleChanged: {
             root.armed = "";
+            root.hoveredLabel = "";
             root.planAction = "";
             if (visible) status.running = true;
         }
 
+        // Icônes seules : verrouiller / veille / déconnexion, puis éteindre / redémarrer
         Repeater {
             model: [
-                { id: "lock", label: "Verrouiller", icon: 0xf033e, color: Theme.blue, confirm: false, cmd: [Paths.hyprlock] },
-                { id: "suspend", label: "Veille", icon: 0xf04b2, color: Theme.mauve, confirm: false, cmd: [Paths.systemctl, "suspend"] },
-                { id: "logout", label: "Déconnexion", icon: 0xf0343, color: Theme.yellow, confirm: true, cmd: [] },
-                { id: "reboot", label: "Redémarrer", icon: 0xf0709, color: Theme.peach, confirm: true, cmd: [Paths.systemctl, "reboot"] },
-                { id: "poweroff", label: "Éteindre", icon: 0xf0425, color: Theme.red, confirm: true, cmd: [Paths.systemctl, "poweroff"] }
+                [
+                    { id: "lock", label: "Verrouiller", icon: 0xf033e, color: Theme.blue, confirm: false, cmd: [Paths.hyprlock] },
+                    { id: "suspend", label: "Veille", icon: 0xf04b2, color: Theme.mauve, confirm: false, cmd: [Paths.systemctl, "suspend"] },
+                    { id: "logout", label: "Déconnexion", icon: 0xf0343, color: Theme.yellow, confirm: true, cmd: [] }
+                ],
+                [
+                    { id: "poweroff", label: "Éteindre", icon: 0xf0425, color: Theme.red, confirm: true, cmd: [Paths.systemctl, "poweroff"] },
+                    { id: "reboot", label: "Redémarrer", icon: 0xf0709, color: Theme.peach, confirm: true, cmd: [Paths.systemctl, "reboot"] }
+                ]
             ]
-            ListRow {
+            RowLayout {
                 required property var modelData
-                icon: Theme.ic(modelData.icon)
-                iconColor: modelData.color
-                label: root.armed === modelData.id ? "Confirmer ?" : modelData.label
-                active: root.armed === modelData.id
-                onClicked: root.run(modelData)
+                Layout.fillWidth: true
+                spacing: 6
+                Repeater {
+                    model: parent.modelData
+                    // Boutons de même largeur (base identique + partage égal)
+                    ActionButton {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        implicitHeight: 44
+                        iconSize: 20
+                        icon: Theme.ic(modelData.icon)
+                        accent: modelData.color
+                        // Armé (1er clic d'une action à confirmer) : lueur pulsée
+                        glowing: root.armed === modelData.id
+                        glowColor: modelData.color
+                        onHoveredChanged: root.hoveredLabel = hovered ? modelData.label : (root.hoveredLabel === modelData.label ? "" : root.hoveredLabel)
+                        onClicked: root.run(modelData)
+                    }
+                }
             }
+        }
+
+        // Nom de l'action survolée, ou demande de confirmation (hauteur fixe : pas de saut)
+        BarText {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            font.family: Theme.labelFont
+            font.pixelSize: 12
+            text: root.armed !== "" ? "Recliquer pour confirmer : " + root.armedLabel : (root.hoveredLabel || " ")
+            color: root.armed !== "" ? Theme.red : Theme.subtext
         }
 
         Separator {}
