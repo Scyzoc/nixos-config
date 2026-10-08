@@ -7,6 +7,8 @@ Item {
     property real value: 0
     property color accent: Theme.blue
     property bool interactive: true
+    // Reflet qui balaie la partie remplie en boucle (ex. batterie en charge)
+    property bool flowing: false
     signal moved(real v)
 
     implicitHeight: 18
@@ -23,10 +25,38 @@ Item {
         color: Qt.rgba(1, 1, 1, 0.12)
 
         Rectangle {
+            id: fill
             width: parent.width * root.shown
             height: parent.height
             radius: 3
             color: root.accent
+            clip: root.flowing
+
+            Rectangle {
+                id: shine
+                visible: root.flowing && fill.width > 0
+                width: Math.max(24, track.width * 0.35)
+                height: parent.height
+                radius: 3
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0; color: "transparent" }
+                    GradientStop { position: 0.5; color: Qt.rgba(1, 1, 1, 0.55) }
+                    GradientStop { position: 1; color: "transparent" }
+                }
+                // Départ hors de la barre à gauche, sortie au bout de la partie remplie
+                SequentialAnimation on x {
+                    running: shine.visible && root.visible
+                    loops: Animation.Infinite
+                    NumberAnimation {
+                        from: -shine.width
+                        to: fill.width
+                        duration: 900 + 900 * root.shown
+                        easing.type: Easing.InOutSine
+                    }
+                    PauseAnimation { duration: 400 }
+                }
+            }
         }
     }
 

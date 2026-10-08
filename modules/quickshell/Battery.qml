@@ -270,7 +270,7 @@ Pill {
             }
         }
 
-        Slider { Layout.fillWidth: true; interactive: false; value: root.pct / 100; accent: root.tint }
+        Slider { Layout.fillWidth: true; interactive: false; value: root.pct / 100; accent: root.tint; flowing: root.charging }
 
         Separator {}
         // Boutons en icônes seules : le profil actif est rappelé ici
