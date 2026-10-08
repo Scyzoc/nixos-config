@@ -36,7 +36,6 @@ let notionTodo = ./modules/notion-todo.nix; in
     ./modules/theme-automation.nix
     ./modules/internet-check.nix
     ./modules/netfix.nix
-    ./modules/ethernet-menu.nix
     ./modules/display-switch.nix
     ./modules/crepuscule.nix
     ./modules/update-check.nix

@@ -254,6 +254,7 @@ let
         readonly property string powerSchedule: "${power-schedule}"
         readonly property string netIpconfig: "${net-ipconfig}"
         readonly property string nmcli: "${pkgs.networkmanager}/bin/nmcli"
+        readonly property string wlCopy: "${pkgs.wl-clipboard}/bin/wl-copy"
         readonly property string rfkill: "${pkgs.util-linux}/bin/rfkill"
         readonly property string brightnessctl: "${pkgs.brightnessctl}/bin/brightnessctl"
         readonly property string airpodsAnc: "${airpods-anc}"
