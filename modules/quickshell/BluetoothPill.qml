@@ -619,8 +619,10 @@ Pill {
             Layout.fillWidth: true
             spacing: 12
             Item {
+                id: heroBox
                 Layout.preferredWidth: root.isAirpods ? 38 * 218 / 126 : heroIcon.implicitWidth
                 Layout.preferredHeight: 40
+                Layout.alignment: Qt.AlignTop
                 // AirPods : même logo que leur menu
                 Image {
                     visible: root.isAirpods
@@ -645,8 +647,11 @@ Pill {
             }
             ColumnLayout {
                 Layout.fillWidth: true
+                // Ligne du nom centrée sur la grosse icône (les détails dépassent en dessous)
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: Math.max(0, (heroBox.Layout.preferredHeight - menuName.implicitHeight) / 2)
                 spacing: 2
-                // Nom + icône « connecté » juste après
+                // Nom + icône « connecté » juste après ; recherche + interrupteur à droite, sur la même ligne
                 // Item (pas de layout) : la largeur du nom ne dépend pas de sa propre colonne
                 Item {
                     Layout.fillWidth: true
@@ -654,7 +659,7 @@ Pill {
                     implicitHeight: menuName.implicitHeight
                     BarText {
                         id: menuName
-                        width: Math.min(implicitWidth, parent.width - (menuCheck.visible ? 26 : 0))
+                        width: Math.min(implicitWidth, parent.width - headCtrl.width - 12 - (menuCheck.visible ? 26 : 0))
                         elide: Text.ElideRight
                         text: !root.powered ? (root.blocked ? "Bluetooth bloqué" : "Bluetooth")
                         : root.main?.name ?? "Bluetooth"
@@ -670,6 +675,24 @@ Pill {
                         text: Theme.ic(0xf05e0)    // md-check-circle
                         color: Theme.bluetooth
                         font.pixelSize: 16
+                    }
+                    Row {
+                        id: headCtrl
+                        anchors.right: parent.right
+                        anchors.verticalCenter: menuName.verticalCenter
+                        spacing: 12
+                        // Recherche d'appareils en cours : icône de chargement qui tourne
+                        Spinner {
+                            visible: root.adapter?.discovering ?? false
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        // Interrupteur Bluetooth
+                        Toggle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: root.powered
+                            accent: Theme.bluetooth
+                            onToggled: root.setPower(!root.powered)
+                        }
                     }
                 }
                 BarText {
@@ -695,20 +718,6 @@ Pill {
                     color: Theme.muted
                     font.pixelSize: 11
                 }
-            }
-            // Recherche d'appareils en cours : icône de chargement qui tourne
-            Spinner {
-                visible: root.adapter?.discovering ?? false
-                Layout.alignment: Qt.AlignTop
-                Layout.topMargin: 6
-            }
-            // Interrupteur Bluetooth, à droite du nom
-            Toggle {
-                Layout.alignment: Qt.AlignTop
-                Layout.topMargin: 2
-                checked: root.powered
-                accent: Theme.bluetooth
-                onToggled: root.setPower(!root.powered)
             }
         }
 
