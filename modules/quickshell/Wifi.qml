@@ -339,13 +339,6 @@ Pill {
                         font.pixelSize: 16
                     }
                 }
-                BarText {
-                    font.family: Theme.labelFont
-                    visible: root.current !== null
-                    text: root.ip || "N/A"
-                    color: Theme.subtext
-                    font.pixelSize: 12
-                }
                 RowLayout {
                     visible: VpnState.active
                     spacing: 4
