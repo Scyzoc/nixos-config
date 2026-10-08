@@ -10,7 +10,6 @@ Pill {
     id: root
 
     property string armed: ""
-    property string hoveredLabel: ""
     readonly property string armedLabel: ({ logout: "Déconnexion", reboot: "Redémarrer", poweroff: "Éteindre" }[armed] ?? "")
     // Désarme la confirmation si le 2e clic ne vient pas
     Timer { id: disarm; interval: 3000; onTriggered: root.armed = "" }
@@ -112,7 +111,6 @@ Pill {
         contentWidth: 250
         onVisibleChanged: {
             root.armed = "";
-            root.hoveredLabel = "";
             root.planMode = false;
             root.planAction = "";
             if (visible) status.running = true;
@@ -158,7 +156,6 @@ Pill {
                         highlighted: isPlan ? root.planMode : root.planMode && root.planAction === modelData.id
                         opacity: root.planMode && !isPlan && !canPlan ? 0.25 : 1
                         Behavior on opacity { NumberAnimation { duration: 220 } }
-                        onHoveredChanged: root.hoveredLabel = hovered ? modelData.label : (root.hoveredLabel === modelData.label ? "" : root.hoveredLabel)
                         onClicked: root.run(modelData)
 
                         // Badge minuteur sur les actions programmables (arrive en zoom)
@@ -190,16 +187,29 @@ Pill {
             }
         }
 
-        // Nom de l'action survolée, consigne ou demande de confirmation (hauteur fixe : pas de saut)
-        BarText {
+        // Consigne (mode programmation) ou demande de confirmation : dépliée seulement si besoin
+        Item {
+            id: hint
+            readonly property string msg: root.armed !== "" ? "Recliquer pour confirmer : " + root.armedLabel
+                                        : root.planMode && root.planAction === "" ? "Choisis l'action à programmer" : ""
+            property string shownMsg: ""    // garde le texte pendant le repli
+            onMsgChanged: if (msg !== "") shownMsg = msg
             Layout.fillWidth: true
-            horizontalAlignment: Text.AlignHCenter
-            font.family: Theme.labelFont
-            font.pixelSize: 12
-            text: root.armed !== "" ? "Recliquer pour confirmer : " + root.armedLabel
-                : root.planMode && root.planAction === "" ? "Choisis l'action à programmer"
-                : (root.hoveredLabel || " ")
-            color: root.armed !== "" ? Theme.red : root.planMode ? Theme.yellow : Theme.subtext
+            Layout.preferredHeight: msg !== "" ? hintText.implicitHeight : 0
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+            visible: Layout.preferredHeight > 0
+            clip: true
+            BarText {
+                id: hintText
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                font.family: Theme.labelFont
+                font.pixelSize: 12
+                text: hint.shownMsg
+                color: root.armed !== "" ? Theme.red : Theme.yellow
+                opacity: hint.msg !== "" ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 150 } }
+            }
         }
 
         // Planificateur : déplié une fois l'action choisie (même animation que les
