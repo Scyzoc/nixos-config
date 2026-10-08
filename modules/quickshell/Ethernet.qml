@@ -40,10 +40,7 @@ Pill {
         }
     }
     Timer { interval: 10000; running: root.online; repeat: true; triggeredOnStart: true; onTriggered: ipProc.running = true }
-    onOnlineChanged: {
-        if (!online) ip = "";
-        if (popup.visible) details.refresh();
-    }
+    onOnlineChanged: if (!online) ip = ""
     onConnectingChanged: if (popup.visible) details.refresh()
 
     // Attribution d'IP : l'icône (orange) clignote
@@ -62,91 +59,16 @@ Pill {
         opacity: root.blink
         Behavior on color { ColorAnimation { duration: 250 } }
     }
-    BarText { text: root.ip; color: root.tint; visible: root.online && root.ip !== "" && !root.compact }
-
-    // ---- Détails (nmcli), lus à l'ouverture du menu ----
+    BarText {
+        text: root.ip
+        color: root.tint
+        visible: root.online && root.ip !== "" && !root.compact
+        font.family: Theme.labelFont
+        font.weight: Font.Medium
+    }
 
     readonly property int speed: wired?.linkSpeed ?? 0     // Mb/s
     readonly property string speedText: speed <= 0 ? "" : speed >= 1000 ? (speed / 1000) + " Gb/s" : speed + " Mb/s"
-
-    QtObject {
-        id: details
-        property var v: ({})            // champs nmcli bruts (clé → valeur ou liste)
-        property string method: ""      // auto / manual
-        function refresh() {
-            if (root.ifname === "") return;
-            devProc.running = true;
-        }
-        function first(k) { const x = v[k]; return Array.isArray(x) ? (x[0] ?? "") : (x ?? ""); }
-        function all(k) { const x = v[k]; return Array.isArray(x) ? x : (x ? [x] : []); }
-        // Option DHCP4 « nom = valeur »
-        function dhcp(name) {
-            for (const o of all("DHCP4.OPTION")) {
-                const i = o.indexOf(" = ");
-                if (i > 0 && o.slice(0, i) === name) return o.slice(i + 3);
-            }
-            return "";
-        }
-    }
-
-    Process {
-        id: devProc
-        command: [Paths.nmcli, "-t", "-f", "GENERAL,IP4,IP6,DHCP4", "dev", "show", root.ifname || "lo"]
-        environment: ({ LC_ALL: "C" })
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const v = {};
-                for (const l of text.split("\n")) {
-                    const i = l.indexOf(":");
-                    if (i <= 0) continue;
-                    const val = l.slice(i + 1);
-                    // IP4.DNS[1], IP4.DNS[2]… → liste
-                    const m = l.slice(0, i).match(/^([^\[]+)\[\d+\]$/);
-                    if (m) (v[m[1]] = v[m[1]] ?? []).push(val);
-                    else v[l.slice(0, i)] = val;
-                }
-                details.v = v;
-                const conn = v["GENERAL.CONNECTION"] ?? "";
-                if (conn) { methodProc.command = [Paths.nmcli, "-g", "ipv4.method", "con", "show", conn]; methodProc.running = true; }
-                else details.method = "";
-            }
-        }
-    }
-    Process {
-        id: methodProc
-        environment: ({ LC_ALL: "C" })
-        stdout: StdioCollector { onStreamFinished: details.method = text.trim() }
-    }
-
-    // Débit en direct (compteurs du noyau), seulement menu ouvert
-    property real rxRate: 0
-    property real txRate: 0
-    property var lastStat: null
-    Process {
-        id: statProc
-        command: [Paths.cat, "/sys/class/net/" + root.ifname + "/statistics/rx_bytes", "/sys/class/net/" + root.ifname + "/statistics/tx_bytes"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const n = text.trim().split("\n").map(Number);
-                if (n.length < 2 || n.some(isNaN)) return;
-                const now = Date.now();
-                if (root.lastStat) {
-                    const dt = (now - root.lastStat.t) / 1000;
-                    if (dt > 0) {
-                        root.rxRate = Math.max(0, (n[0] - root.lastStat.rx) / dt);
-                        root.txRate = Math.max(0, (n[1] - root.lastStat.tx) / dt);
-                    }
-                }
-                root.lastStat = { t: now, rx: n[0], tx: n[1] };
-            }
-        }
-    }
-    Timer { interval: 1000; running: popup.visible && root.ifname !== ""; repeat: true; triggeredOnStart: true; onTriggered: statProc.running = true }
-    function rate(b) {
-        if (b >= 1e6) return (b / 1e6).toFixed(1).replace(".", ",") + " Mo/s";
-        if (b >= 1e3) return Math.round(b / 1e3) + " ko/s";
-        return Math.round(b) + " o/s";
-    }
 
     // Accès internet (même test que le menu Wi-Fi)
     property string connectivity: "full"
@@ -176,37 +98,6 @@ Pill {
     }
 
     property bool showIpSettings: false
-    property string copied: ""          // libellé de la ligne copiée (coche ~1,2 s)
-    Timer { id: copiedReset; interval: 1200; onTriggered: root.copied = "" }
-    function copy(label, value) {
-        Quickshell.execDetached([Paths.wlCopy, value]);
-        copied = label;
-        copiedReset.restart();
-    }
-
-    // Lignes du tableau de détails : [icône, libellé, valeur] ; valeur vide → ligne masquée
-    readonly property var rows: {
-        const d = details;
-        const addr = d.first("IP4.ADDRESS");
-        const v6 = d.all("IP6.ADDRESS");
-        const v6g = v6.find(a => !a.startsWith("fe80")) ?? "";
-        const expiry = Number(d.dhcp("expiry"));
-        const lease = expiry > 0 ? "jusqu'à " + Qt.formatDateTime(new Date(expiry * 1000), "HH:mm") : "";
-        const product = (d.first("GENERAL.PRODUCT").split(/ PCI| Gigabit| Ethernet/)[0] || "");
-        return [
-            [0xf062e, "Méthode", d.method === "manual" ? "IP statique" : d.method === "auto" ? "DHCP" : ""],      // md-tune
-            [0xf0a60, "IPv4", addr],                                                                              // md-ip_network
-            [0xf11e2, "Passerelle", d.first("IP4.GATEWAY")],                                                      // md-router
-            [0xf01d6, "DNS", d.all("IP4.DNS").join(", ")],                                                        // md-dns
-            [0xf059f, "Domaine", d.all("IP4.DOMAIN").join(", ")],                                                 // md-web
-            [0xf0a5f, "IPv6", v6g],                                                                               // md-ip
-            [0xf0150, "Bail DHCP", d.method === "auto" ? lease : ""],                                             // md-clock_outline
-            [0xf04e2, "Trafic", online ? "↓ " + rate(rxRate) + "   ↑ " + rate(txRate) : ""],                      // md-swap_vertical
-            [0xf04c5, "Vitesse", speedText],                                                                      // md-speedometer
-            [0xf0efe, "MAC", d.first("GENERAL.HWADDR")],                                                          // md-identifier
-            [0xf061a, "Carte", [product, d.first("GENERAL.DRIVER")].filter(x => x).join("  ·  ")],                // md-chip
-        ].filter(r => r[2] !== "");
-    }
 
     onClicked: popup.toggle()
 
@@ -216,11 +107,9 @@ Pill {
         contentWidth: 330
 
         onVisibleChanged: {
-            if (visible) { details.refresh(); connCheck.running = true; }
-            else { root.showIpSettings = false; root.errorText = ""; root.lastStat = null; root.rxRate = 0; root.txRate = 0; }
+            if (visible) connCheck.running = true;
+            else { root.showIpSettings = false; root.errorText = ""; }
         }
-        // Champs (bail, IP…) qui évoluent pendant l'attribution
-        Timer { interval: 3000; running: popup.visible; repeat: true; onTriggered: details.refresh() }
 
         // En-tête (style menu Wi-Fi) : grosse icône, profil et état à côté
         RowLayout {
@@ -243,7 +132,7 @@ Pill {
                         id: menuName
                         width: Math.min(implicitWidth, parent.width - (menuCheck.visible ? 26 : 0))
                         elide: Text.ElideRight
-                        text: details.first("GENERAL.CONNECTION") || "Ethernet"
+                        text: details.conn || "Ethernet"
                         font.family: Theme.titleFont
                         font.pixelSize: 22
                         font.bold: true
@@ -331,65 +220,13 @@ Pill {
 
         Separator {}
 
-        // Détails : clic sur une ligne = copie de la valeur
-        ColumnLayout {
+        NetDetails {
+            id: details
             Layout.fillWidth: true
-            spacing: 0
-            Repeater {
-                model: root.rows
-                Rectangle {
-                    id: row
-                    required property var modelData
-                    readonly property bool isCopied: root.copied === modelData[1]
-                    Layout.fillWidth: true
-                    implicitHeight: 26
-                    radius: 6
-                    color: rowMouse.containsMouse ? Theme.rowHover : "transparent"
-                    Behavior on color { ColorAnimation { duration: 120 } }
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 6
-                        anchors.rightMargin: 6
-                        spacing: 8
-                        BarText {
-                            text: Theme.ic(row.modelData[0])
-                            color: Theme.subtext
-                            font.pixelSize: 13
-                            Layout.preferredWidth: 16
-                            horizontalAlignment: Text.AlignHCenter
-                        }
-                        BarText {
-                            text: row.modelData[1]
-                            color: Theme.muted
-                            font.family: Theme.labelFont
-                            font.pixelSize: 12
-                            Layout.preferredWidth: 72
-                        }
-                        BarText {
-                            text: row.modelData[2]
-                            color: Theme.text
-                            font.family: Theme.labelFont
-                            font.pixelSize: 12
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        BarText {
-                            visible: rowMouse.containsMouse || row.isCopied
-                            text: row.isCopied ? Theme.ic(0xf012c) : Theme.ic(0xf018f)    // md-check / md-content_copy
-                            color: row.isCopied ? Theme.green : Theme.subtext
-                            font.pixelSize: 12
-                        }
-                    }
-                    MouseArea {
-                        id: rowMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.copy(row.modelData[1], row.modelData[2])
-                    }
-                }
-            }
+            iface: root.ifname
+            active: popup.visible
+            online: root.online
+            linkRows: [[0xf04c5, "Vitesse", root.speedText]]    // md-speedometer
         }
 
         // Réglages IP (DHCP / statique) : seulement avec une connexion active
@@ -412,7 +249,7 @@ Pill {
                 busy: devAction.running
                 // Renouvelle le bail : réactivation du profil
                 onClicked: {
-                    const conn = details.first("GENERAL.CONNECTION");
+                    const conn = details.conn;
                     if (devAction.running || !conn) return;
                     root.errorText = "";
                     devAction.command = [Paths.nmcli, "con", "up", conn];

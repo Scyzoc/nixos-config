@@ -89,6 +89,36 @@ Pill {
     }
     function secured(n) { return n.security !== WifiSecurityType.Open && n.security !== WifiSecurityType.Unknown; }
 
+    // Point d'accès actif (menu ouvert) : canal, bande, débit négocié, sécurité, BSSID
+    property var ap: ({})
+    Process {
+        id: apProc
+        command: [Paths.nmcli, "-t", "-f", "IN-USE,BSSID,CHAN,FREQ,RATE,SECURITY", "dev", "wifi", "list", "--rescan", "no", "ifname", root.wifiDev?.name ?? "wlan0"]
+        environment: ({ LC_ALL: "C" })
+        stdout: StdioCollector {
+            onStreamFinished: {
+                // « \: » échappé dans le BSSID
+                const l = text.split("\n").find(x => x.startsWith("*:"));
+                if (!l) { root.ap = ({}); return; }
+                const f = l.replace(/\\:/g, "\x01").split(":").map(x => x.replace(/\x01/g, ":"));
+                root.ap = { bssid: f[1], chan: f[2], freq: parseInt(f[3]), rate: parseInt(f[4]), security: f[5] };
+            }
+        }
+    }
+    Timer { interval: 3000; running: popup.visible && root.current !== null; repeat: true; triggeredOnStart: true; onTriggered: apProc.running = true }
+    readonly property var apRows: {
+        if (!current) return [];
+        const f = ap.freq || 0;
+        const band = f >= 5925 ? "6 GHz" : f >= 4900 ? "5 GHz" : f > 0 ? "2,4 GHz" : "";
+        return [
+            [0xf0928, "Signal", Math.round(strength(current)) + " %"],                                         // md-wifi_strength_4
+            [0xf0318, "Bande", band ? band + (ap.chan ? "  ·  canal " + ap.chan : "") : ""],                  // md-lan_connect
+            [0xf04c5, "Débit", ap.rate ? (ap.rate >= 1000 ? (ap.rate / 1000).toFixed(1).replace(".", ",") + " Gb/s" : ap.rate + " Mb/s") : ""],  // md-speedometer
+            [0xf033e, "Sécurité", ap.bssid ? (ap.security || "Ouvert") : ""],                                 // md-lock
+            [0xf11e2, "BSSID", ap.bssid ?? ""],                                                               // md-router
+        ];
+    }
+
     Process {
         id: ipProc
         command: [Paths.ip, "-4", "-o", "addr", "show", "dev", root.wifiDev?.name ?? "wlan0"]
@@ -374,6 +404,16 @@ Pill {
                     }
                 }
             }
+        }
+
+        Separator { visible: root.current !== null }
+        NetDetails {
+            Layout.fillWidth: true
+            visible: root.current !== null
+            iface: root.wifiDev?.name ?? ""
+            active: popup.visible && root.current !== null
+            online: root.current !== null
+            linkRows: root.apRows
         }
 
         Separator {}
