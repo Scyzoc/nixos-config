@@ -5,9 +5,10 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 
-// Menu des écrans (SUPER+P), en trois onglets : affichage (carte live des écrans et modes
+// Menu des écrans (SUPER+P), en quatre onglets : affichage (carte live des écrans et modes
 // PC / externe / miroir / étendu), réglages de l'écran sélectionné (résolution, fréquence,
-// échelle, on/off) et dispositions enregistrées (nom, groupes de workspaces). Les données viennent de `display-state` (JSON), les actions
+// échelle, on/off), dispositions enregistrées (nom, groupes de workspaces) et liaisons de
+// workspaces (paires 1 ↔ 6, modules/workspace-link.nix). Les données viennent de `display-state` (JSON), les actions
 // passent par `display-apply` (modules/display-switch.nix) qui pose le verrou anti-boucle.
 // Touches : Tab section suivante, ← → choisir un mode (onglet Écran), Entrée valider, 1-4 modes, Échap fermer.
 PanelWindow {
@@ -56,13 +57,15 @@ PanelWindow {
     property string selected: ""    // nom du connecteur sélectionné
     property int cursor: 0          // carte de mode sélectionnée au clavier (onglet Écran)
     property bool cursorSet: false
-    property int tab: 0             // 0 affichage, 1 réglages, 2 dispositions
+    property int tab: 0             // 0 affichage, 1 réglages, 2 dispositions, 3 liaisons
     property real pos: 0            // position animée (transitions entre onglets)
     onTabChanged: { pos = tab; if (tab !== 2) { dd.opened = false; dd.endEdit(true); } }
     Behavior on pos { NumberAnimation { duration: 340; easing.type: Easing.OutCubic } }
     property string selLayout: ""   // signature (nom de fichier) de la disposition éditée
     property bool confirmDel: false
     readonly property var layout: layouts.find(l => l.file === selLayout) ?? null
+    // Liaisons de workspaces : { enabled, pairs: [[1, 6], …], monitors: { "6": "DP-3" } }
+    property var links: ({ enabled: true, pairs: [], monitors: {} })
 
     readonly property var externals: monitors.filter(m => m.name !== "eDP-1")
     readonly property bool hasExternal: externals.length > 0
@@ -98,7 +101,30 @@ PanelWindow {
             }
         }
     }
-    function refresh() { if (!stateProc.running) stateProc.running = true; }
+    Process {
+        id: linkProc
+        command: [Paths.userBin + "/workspace-link", "state"]
+        environment: ({ LC_ALL: "C" })
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { win.links = JSON.parse(text); } catch (e) {}
+            }
+        }
+    }
+    function refresh() {
+        if (!stateProc.running) stateProc.running = true;
+        if (!linkProc.running) linkProc.running = true;
+    }
+    function link(...args) {
+        Quickshell.execDetached([Paths.userBin + "/workspace-link", ...args]);
+        quick.restart();
+    }
+    // Écran associé à un workspace lié (libellé court, vide si inconnu / débranché)
+    function wsMonLabel(ws) {
+        const n = links.monitors ? links.monitors[String(ws)] : null;
+        const m = monitors.find(x => x.name === n);
+        return m ? monLabel(m) : "";
+    }
 
     // Les actions déclenchent un `sleep 1` côté script : on relit l'état après
     Timer { id: later; interval: 1700; onTriggered: win.refresh() }
@@ -134,7 +160,7 @@ PanelWindow {
     // Tab / Maj+Tab : section suivante / précédente (le champ éventuellement en cours valide sa saisie)
     function cycleTab(d) {
         keys.forceActiveFocus();
-        tab = (tab + d + 3) % 3;
+        tab = (tab + d + 4) % 4;
     }
 
     // Règle "WxH@RR,XxY,scale" pour l'écran sélectionné avec des valeurs modifiées
@@ -218,9 +244,9 @@ PanelWindow {
         anchors.centerIn: parent
         width: Math.min(760, parent.width - 80)
         // Hauteur par onglet, interpolée avec `pos` : le panneau s'adapte en glissant
-        readonly property var heights: [236, 450, 500]
+        readonly property var heights: [236, 450, 500, 420]
         height: {
-            const i = Math.max(0, Math.min(1.999, win.pos)), lo = Math.floor(i);
+            const i = Math.max(0, Math.min(2.999, win.pos)), lo = Math.floor(i);
             return heights[lo] + (heights[lo + 1] - heights[lo]) * (i - lo);
         }
         radius: 20
@@ -247,7 +273,7 @@ PanelWindow {
 
                 Rectangle {
                     id: tabBar
-                    implicitWidth: 3 * 56 + 8
+                    implicitWidth: 4 * 56 + 8
                     implicitHeight: 44
                     radius: 22
                     color: Theme.pill
@@ -266,7 +292,7 @@ PanelWindow {
                         border.width: 1
                     }
                     Repeater {
-                        model: [0xf0379, 0xf0493, 0xf056e]    // moniteur, réglages, dispositions
+                        model: [0xf0379, 0xf0493, 0xf056e, 0xf0339]    // moniteur, réglages, dispositions, liaisons
                         Item {
                             required property int modelData
                             required property int index
@@ -866,6 +892,175 @@ PanelWindow {
                         Item { Layout.fillHeight: true }
                     }
                 }
+                // Page 3 : liaisons de workspaces
+                Item {
+                    id: page3
+                    readonly property real d: 3 - win.pos
+                    width: host.width
+                    height: host.height
+                    x: d * 70
+                    opacity: Math.max(0, 1 - Math.abs(d) * 1.6)
+                    visible: opacity > 0.01
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 14
+                        // En-tête : explication + interrupteur général
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            BarText { text: Theme.ic(0xf0339); font.pixelSize: 18; color: Theme.mauve }
+                            BarText {
+                                Layout.fillWidth: true
+                                text: win.liveMons.filter(m => m.mirrorOf === "none").length < 2
+                                      ? "Un seul écran : liaisons en pause"
+                                      : "Aller sur un workspace affiche son jumeau sur l'autre écran"
+                                font.pixelSize: 11
+                                color: Theme.subtext
+                                elide: Text.ElideRight
+                            }
+                            Chip {
+                                glyph: 0xf0425    // md-power
+                                label: win.links.enabled ? "actif" : "inactif"
+                                accent: win.links.enabled ? Theme.green : Theme.red
+                                active: true
+                                onClicked: win.link("toggle")
+                            }
+                        }
+
+                        // Nouvelle paire : A ↔ B, Entrée ou + pour ajouter
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            NumBox { id: newA; onAccepted: newB.focusInput() }
+                            BarText { text: Theme.ic(0xf04e1); font.pixelSize: 16; color: Theme.subtext }    // md-swap-horizontal
+                            NumBox { id: newB; onAccepted: addPair() }
+                            Chip {
+                                glyph: 0xf0415    // md-plus
+                                label: ""
+                                accent: Theme.green
+                                onClicked: addPair()
+                            }
+                            Item { Layout.fillWidth: true }
+                            function addPair() {
+                                const a = parseInt(newA.text), b = parseInt(newB.text);
+                                if (!(a > 0 && b > 0 && a !== b)) return;
+                                win.link("add", String(a), String(b));
+                                newA.text = "";
+                                newB.text = "";
+                                keys.forceActiveFocus();
+                            }
+                        }
+
+                        // Paires enregistrées
+                        Flickable {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            contentHeight: pairCol.implicitHeight
+                            clip: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            Column {
+                                id: pairCol
+                                width: parent.width
+                                spacing: 6
+                                Repeater {
+                                    model: win.links.pairs
+                                    Rectangle {
+                                        id: pairRow
+                                        required property var modelData
+                                        width: pairCol.width
+                                        height: 40
+                                        radius: 12
+                                        color: Theme.pill
+                                        border.color: Theme.pillBorder
+                                        border.width: 1
+                                        opacity: win.links.enabled ? 1 : 0.5
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 12
+                                            anchors.rightMargin: 6
+                                            spacing: 10
+                                            WsTag { ws: pairRow.modelData[0] }
+                                            BarText { text: Theme.ic(0xf04e1); font.pixelSize: 16; color: Theme.mauve }
+                                            WsTag { ws: pairRow.modelData[1] }
+                                            Item { Layout.fillWidth: true }
+                                            Chip {
+                                                glyph: 0xf01b4    // md-delete
+                                                label: ""
+                                                accent: Theme.red
+                                                onClicked: win.link("del", String(pairRow.modelData[0]), String(pairRow.modelData[1]))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        BarText {
+                            visible: win.links.pairs.length === 0
+                            Layout.alignment: Qt.AlignHCenter
+                            text: "Aucune liaison"
+                            font.pixelSize: 12
+                            color: Theme.muted
+                        }
+                        Item { visible: win.links.pairs.length === 0; Layout.fillHeight: true }
+                    }
+                }
+            }
+        }
+    }
+
+    // Numéro de workspace + écran associé (groupes de la disposition)
+    component WsTag: RowLayout {
+        property int ws: 0
+        spacing: 6
+        Rectangle {
+            implicitWidth: 28
+            implicitHeight: 24
+            radius: 7
+            color: Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.22)
+            border.color: Theme.mauve
+            border.width: 1
+            BarText { anchors.centerIn: parent; text: ws; font.pixelSize: 12; color: Theme.text }
+        }
+        BarText {
+            readonly property string mon: win.wsMonLabel(ws)
+            text: mon !== "" ? Theme.ic(0xf0379) + "  " + mon : "écran absent"
+            font.pixelSize: 11
+            color: mon !== "" ? Theme.subtext : Theme.muted
+        }
+    }
+
+    // Petite saisie numérique (numéro de workspace)
+    component NumBox: Rectangle {
+        id: nb
+        property alias text: nbInp.text
+        signal accepted()
+        function focusInput() { nbInp.forceActiveFocus(); }
+        implicitWidth: 56
+        implicitHeight: 34
+        radius: 10
+        color: Theme.pill
+        border.color: nbInp.activeFocus ? Theme.mauve : Theme.pillBorder
+        border.width: 1
+        Behavior on border.color { ColorAnimation { duration: 150 } }
+        TextInput {
+            id: nbInp
+            anchors.fill: parent
+            horizontalAlignment: TextInput.AlignHCenter
+            verticalAlignment: TextInput.AlignVCenter
+            color: Theme.text
+            font.family: Theme.labelFont
+            font.pixelSize: 13
+            maximumLength: 3
+            validator: IntValidator { bottom: 1; top: 999 }
+            selectByMouse: true
+            onAccepted: nb.accepted()
+            Keys.onEscapePressed: { text = ""; keys.forceActiveFocus(); }
+            BarText {
+                anchors.centerIn: parent
+                visible: nbInp.text === ""
+                text: "ws"
+                font.pixelSize: 12
+                color: Theme.muted
             }
         }
     }

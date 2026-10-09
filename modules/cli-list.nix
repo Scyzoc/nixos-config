@@ -178,7 +178,8 @@ let
       "notion-todo|Tâches Notion" \
       "ws-cycle|Cycler les workspaces" \
       "ws-compact|Compacter les workspaces" \
-      "ws-move|Déplacer les fenêtres d'un workspace vers un autre"
+      "ws-move|Déplacer les fenêtres d'un workspace vers un autre" \
+      "workspace-link|Workspaces liés par paires (SUPER+P → Liaisons)"
 
     dossier "Hors Nix — nix profile" "$HOME/.nix-profile/bin"
     dossier "Hors Nix — npm global" "$HOME/.npm-global/bin"
