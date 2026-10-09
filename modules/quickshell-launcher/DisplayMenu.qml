@@ -119,6 +119,15 @@ PanelWindow {
         Quickshell.execDetached([Paths.userBin + "/workspace-link", ...args]);
         quick.restart();
     }
+    // Ajoute la paire saisie dans l'onglet Liaisons
+    function addPair() {
+        const a = parseInt(newA.text), b = parseInt(newB.text);
+        if (!(a > 0 && b > 0 && a !== b)) return;
+        link("add", String(a), String(b));
+        newA.text = "";
+        newB.text = "";
+        keys.forceActiveFocus();
+    }
     // Écran associé à un workspace lié (libellé court, vide si inconnu / débranché)
     function wsMonLabel(ws) {
         const n = links.monitors ? links.monitors[String(ws)] : null;
@@ -933,22 +942,14 @@ PanelWindow {
                             spacing: 8
                             NumBox { id: newA; onAccepted: newB.focusInput() }
                             BarText { text: Theme.ic(0xf04e1); font.pixelSize: 16; color: Theme.subtext }    // md-swap-horizontal
-                            NumBox { id: newB; onAccepted: addPair() }
+                            NumBox { id: newB; onAccepted: win.addPair() }
                             Chip {
                                 glyph: 0xf0415    // md-plus
                                 label: ""
                                 accent: Theme.green
-                                onClicked: addPair()
+                                onClicked: win.addPair()
                             }
                             Item { Layout.fillWidth: true }
-                            function addPair() {
-                                const a = parseInt(newA.text), b = parseInt(newB.text);
-                                if (!(a > 0 && b > 0 && a !== b)) return;
-                                win.link("add", String(a), String(b));
-                                newA.text = "";
-                                newB.text = "";
-                                keys.forceActiveFocus();
-                            }
                         }
 
                         // Paires enregistrées
