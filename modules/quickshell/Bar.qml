@@ -12,6 +12,9 @@ PanelWindow {
 
     WlrLayershell.namespace: "quickshell-bar"
     WlrLayershell.layer: WlrLayer.Top
+    // Sans focus clavier, Hyprland n'envoie aucune touche aux menus (popups) de la barre :
+    // champs de saisie inutilisables (mot de passe Wi-Fi…). OnDemand seulement menu ouvert.
+    WlrLayershell.keyboardFocus: PopupState.current ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     anchors {
         top: true
