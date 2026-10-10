@@ -117,7 +117,8 @@ PanelWindow {
         { id: "claude", label: "Claude Code", icon: 0xf06a9, color: Theme.peach, field: "Arguments (ex : --continue)" },
         { id: "browser", label: "Navigateur", icon: 0xf059f, color: Theme.blue, field: "Adresse (ex : http://localhost:3000)" },
         { id: "atlas", label: "Page Atlas", icon: 0xf0256, color: Theme.mauve, field: "" },
-        { id: "app", label: "Application", icon: 0xf03d6, color: Theme.teal, field: "Commande (ex : code .)" }
+        { id: "app", label: "Application", icon: 0xf03d6, color: Theme.teal, field: "Commande (ex : code .)" },
+        { id: "pause", label: "Pause", icon: 0xf051f, color: Theme.yellow, field: "Secondes avant la suite (ex : 3)" }
     ]
     function typeOf(id) { return types.find(t => t.id === id) ?? types[0]; }
 
@@ -139,7 +140,7 @@ PanelWindow {
         draft = d;
     }
     function addWindow(type) {
-        draft = draft.concat([{ type: type, cmd: "", url: "" }]);
+        draft = draft.concat([{ type: type, cmd: "", url: "", seconds: type === "pause" ? 3 : "" }]);
     }
     function removeWindow(i) {
         const d = draft.slice();
@@ -159,6 +160,7 @@ PanelWindow {
         const windows = draft.map(w => {
             const o = { type: w.type };
             if (w.type === "browser") o.url = (w.url ?? "").trim();
+            else if (w.type === "pause") o.seconds = Math.max(0, parseFloat(String(w.seconds ?? "").replace(",", ".")) || 1);
             else if (w.type !== "atlas" && (w.cmd ?? "").trim() !== "") o.cmd = w.cmd.trim();
             return o;
         }).filter(w => w.type !== "browser" || w.url);
@@ -521,7 +523,7 @@ PanelWindow {
                 }
             }
 
-            BarText { text: "Fenêtres (ouvertes dans cet ordre)"; color: Theme.subtext; font.pixelSize: 12 }
+            BarText { text: "Étapes (dans cet ordre ; « Pause » attend avant la suivante)"; color: Theme.subtext; font.pixelSize: 12 }
 
             ListView {
                 id: winList
@@ -597,8 +599,8 @@ PanelWindow {
                                 font.pixelSize: 12
                                 clip: true
                                 selectByMouse: true
-                                readonly property string key: row.w.type === "browser" ? "url" : "cmd"
-                                text: row.w[key] ?? ""
+                                readonly property string key: row.w.type === "browser" ? "url" : row.w.type === "pause" ? "seconds" : "cmd"
+                                text: String(row.w[key] ?? "")
                                 onTextEdited: win.setDraft(row.index, key, text)
                                 Keys.onEscapePressed: win.closeEditor()
                                 Keys.onReturnPressed: event => { if (event.modifiers & Qt.ControlModifier) win.save(true); }

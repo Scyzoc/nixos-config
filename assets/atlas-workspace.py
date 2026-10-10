@@ -15,6 +15,7 @@ Fenêtres : {"type": "terminal", "cmd": "pnpm dev"}   kitty dans le dossier (cmd
            {"type": "browser", "url": "http://..."}   nouvelle fenêtre Brave
            {"type": "atlas"}                          page du projet dans Atlas (appli Brave)
            {"type": "app", "cmd": "code ."}           commande lancée dans le dossier
+           {"type": "pause", "seconds": 3}            attend avant l'étape suivante
 """
 import json
 import os
@@ -230,13 +231,21 @@ def cmd_launch(pid):
     windows = r["windows"] or [{"type": "terminal"}]
     ws = empty_workspace()
     hypr("dispatch", "workspace", str(ws))
-    for i, w in enumerate(windows):
+    first = True
+    for w in windows:
+        if w.get("type") == "pause":
+            try:
+                time.sleep(min(max(float(w.get("seconds", 1)), 0), 600))
+            except (TypeError, ValueError):
+                pass
+            continue
         argv = window_cmd(w, p, d)
         if not argv:
             continue
         # Une à une : la disposition (dwindle) suit l'ordre de la recette
-        if i:
+        if not first:
             time.sleep(0.35)
+        first = False
         hypr("dispatch", "exec", f"[workspace {ws} silent] " + shlex.join(argv))
     print(json.dumps({"ok": True, "workspace": ws}))
 
