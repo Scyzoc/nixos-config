@@ -1,7 +1,7 @@
 """atlas-workspace : espaces de travail par projet Atlas (menu Quickshell, SUPER+H).
 
-  atlas-workspace list [--refresh]   projets Atlas + leur recette (JSON) ; --refresh
-                                     relit Atlas (atlas-task meta), sinon le cache
+  atlas-workspace list [--refresh]   projets Atlas + recette + logo (JSON) ; --refresh
+                                     relit Atlas (atlas-task meta + logos), sinon le cache
   atlas-workspace save ID '<json>'   enregistre la recette du projet ID
   atlas-workspace launch ID          ouvre les fenêtres du projet sur le workspace
                                      vide le plus proche (écran actif)
@@ -23,6 +23,8 @@ import subprocess
 import sys
 import time
 import unicodedata
+import urllib.parse
+import urllib.request
 
 HYPRCTL = os.environ.get("HYPRCTL", "hyprctl")
 KITTY = os.environ.get("KITTY", "kitty")
@@ -33,6 +35,7 @@ PROJECTS_DIR = os.path.expanduser("~/Documents/PROJETS")
 CONF = os.path.expanduser("~/.config/atlas/workspaces.json")
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
                      "atlas-task", "meta.json")
+LOGOS = os.path.join(os.path.dirname(CACHE), "logos")
 HIDDEN = ("termine", "archive", "brouillon")
 
 
@@ -49,6 +52,57 @@ def load_conf():
         return {}
 
 
+def atlas_client():
+    """Client MCP d'atlas-task.py (même dossier assets/, chemin donné par le module nix)."""
+    import importlib.util
+    path = os.environ.get("ATLAS_TASK_PY",
+                          os.path.join(os.path.dirname(os.path.abspath(__file__)), "atlas-task.py"))
+    spec = importlib.util.spec_from_file_location("atlas_task", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def refresh_logos():
+    """Logos des projets (table project : emoji, icône ou image d'/uploads/) → cache local."""
+    at = atlas_client()
+    with at.Client() as c:
+        rows = c.tool("query_database", {
+            "sql": "SELECT id, logo_kind, logo_value FROM project"})["rows"]
+    os.makedirs(LOGOS, exist_ok=True)
+    out = {}
+    for r in rows:
+        kind, val = r.get("logo_kind"), r.get("logo_value")
+        if not kind or not val:
+            continue
+        if kind == "image":
+            name = os.path.basename(val)
+            dest = os.path.join(LOGOS, name)
+            if not os.path.exists(dest):
+                try:
+                    with urllib.request.urlopen(at.base_url() + "/uploads/" + urllib.parse.quote(name),
+                                                context=at.CTX, timeout=10) as resp:
+                        data = resp.read()
+                    with open(dest + ".tmp", "wb") as f:
+                        f.write(data)
+                    os.replace(dest + ".tmp", dest)
+                except Exception:
+                    continue
+            val = dest
+        out[str(r["id"])] = {"kind": kind, "value": val}
+    with open(LOGOS + ".json.tmp", "w") as f:
+        json.dump(out, f, ensure_ascii=False)
+    os.replace(LOGOS + ".json.tmp", LOGOS + ".json")
+
+
+def load_logos():
+    try:
+        with open(LOGOS + ".json") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
 def projects(refresh=False):
     if refresh:
         r = subprocess.run([ATLAS_TASK, "meta"], capture_output=True, text=True)
@@ -57,6 +111,10 @@ def projects(refresh=False):
                 raise RuntimeError(json.loads(r.stdout)["error"])
             except (ValueError, KeyError):
                 raise RuntimeError("Atlas injoignable")
+        try:
+            refresh_logos()
+        except Exception:
+            pass    # logos facultatifs : on garde ceux du cache
     try:
         with open(CACHE) as f:
             return json.load(f).get("projects", [])
@@ -88,10 +146,12 @@ def recipe(p, conf):
 def cmd_list(refresh):
     conf = load_conf()
     out = []
-    for p in projects(refresh):
+    ps = projects(refresh)
+    logos = load_logos()
+    for p in ps:
         if p.get("status") in HIDDEN:
             continue
-        out.append({**p, **recipe(p, conf)})
+        out.append({**p, **recipe(p, conf), "logo": logos.get(str(p["id"]))})
     print(json.dumps({"projects": out}, ensure_ascii=False))
 
 

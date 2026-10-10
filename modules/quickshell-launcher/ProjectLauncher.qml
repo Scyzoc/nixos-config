@@ -337,7 +337,7 @@ PanelWindow {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: 8
-                                    Rectangle { implicitWidth: 8; implicitHeight: 8; radius: 4; color: card.st.color }
+                                    ProjectLogo { logo: card.modelData.logo; size: 26 }
                                     BarText {
                                         Layout.fillWidth: true
                                         text: card.modelData.name
@@ -377,6 +377,7 @@ PanelWindow {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: 8
+                                    Rectangle { implicitWidth: 6; implicitHeight: 6; radius: 3; color: card.st.color }
                                     BarText { text: card.st.label; font.pixelSize: 11; color: card.st.color }
                                     Rectangle {
                                         Layout.fillWidth: true
@@ -471,6 +472,7 @@ PanelWindow {
                     BarText { anchors.centerIn: parent; text: Theme.ic(0xf004d); font.pixelSize: 16 }
                     MouseArea { id: backMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: win.closeEditor() }
                 }
+                ProjectLogo { logo: win.editing?.logo ?? null; size: 32 }
                 BarText {
                     Layout.fillWidth: true
                     text: win.editing?.name ?? ""

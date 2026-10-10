@@ -14,6 +14,7 @@ let
     export KITTY=${pkgs.kitty}/bin/kitty
     export BRAVE=${pkgs.brave}/bin/brave
     export ATLAS_TASK=${config.home.profileDirectory}/bin/atlas-task
+    export ATLAS_TASK_PY=${../assets/atlas-task.py}
     exec ${pkgs.python3}/bin/python3 ${../assets/atlas-workspace.py} "$@"
   '';
   hookCmd = "${config.home.profileDirectory}/bin/atlas-workspace context";
