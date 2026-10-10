@@ -24,6 +24,7 @@ let notionTodo = ./modules/notion-todo.nix; in
     ./modules/voice-transcription.nix
     ./modules/assistant.nix
     ./modules/atlas-task.nix
+    ./modules/atlas-workspace.nix
     ./modules/app-launcher.nix
     ./modules/wallpaper-picker.nix
     ./modules/workspace-cycle.nix

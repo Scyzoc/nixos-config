@@ -5,7 +5,7 @@ import Quickshell.Io
 
 // Menus plein écran : applications (SUPER+R), fonds d'écran (SUPER+W), presse-papiers
 // (SUPER+V), emojis (SUPER+;), assistant (SUPER+K) tâche Atlas (SUPER+SHIFT+T), écrans (SUPER+P)
-// et Crépuscule (filtre lumière bleue / mode sombre, depuis le menu d'applications). Config Quickshell séparée de la barre : un bug ici ne la fait pas tomber.
+// projets Atlas (SUPER+H) et Crépuscule (filtre lumière bleue / mode sombre, depuis le menu d'applications). Config Quickshell séparée de la barre : un bug ici ne la fait pas tomber.
 // Reste chargée en arrière-plan, menus affichés par IPC (un seul à la fois) :
 //   quickshell ipc -c launcher call launcher toggle
 //   quickshell ipc -c launcher call wallpaper toggle
@@ -15,6 +15,7 @@ import Quickshell.Io
 //   quickshell ipc -c launcher call atlas toggle
 //   quickshell ipc -c launcher call display toggle
 //   quickshell ipc -c launcher call crepuscule toggle
+//   quickshell ipc -c launcher call projects toggle
 ShellRoot {
     id: root
 
@@ -26,9 +27,10 @@ ShellRoot {
     AtlasTask { id: atlas }
     DisplayMenu { id: display }
     Crepuscule { id: crepuscule }
+    ProjectLauncher { id: projects }
 
     function toggleOnly(menu) {
-        for (const m of [launcher, wallpaper, clipboard, emoji, assistant, atlas, display, crepuscule])
+        for (const m of [launcher, wallpaper, clipboard, emoji, assistant, atlas, display, crepuscule, projects])
             if (m !== menu && m.open) m.hide();
         menu.toggle();
     }
@@ -64,5 +66,9 @@ ShellRoot {
     IpcHandler {
         target: "crepuscule"
         function toggle(): void { root.toggleOnly(crepuscule); }
+    }
+    IpcHandler {
+        target: "projects"
+        function toggle(): void { root.toggleOnly(projects); }
     }
 }

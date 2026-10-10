@@ -15,6 +15,7 @@ let
         readonly property string brave: "${pkgs.brave}/bin/brave"
         readonly property string nwgDisplays: "${pkgs.nwg-displays}/bin/nwg-displays"
         readonly property string userBin: "${config.home.profileDirectory}/bin"
+        readonly property string home: "${config.home.homeDirectory}"
         readonly property string stateDir: "${launcherState}"
         readonly property string usageFile: "${launcherState}/usage.json"
         readonly property string emojiDir: "${config.xdg.dataHome}/emoji-picker"
