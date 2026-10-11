@@ -135,7 +135,7 @@ Singleton {
             `Dans 20 min, il ne te restera que ${fmt(minutesLeft - 20)}.`,
             `Pour ${cycles} cycles, il faut dormir avant ${hm(nextBed)}. Pas après.`
         ];
-        if (ev) bodies.push(`Demain : ${ev}. Ton toi de demain compte sur toi.`);
+        if (ev) bodies.push(`${wakeDate.getDate() === now.getDate() ? "Ce matin" : "Demain"} : ${ev}. Ton toi de demain compte sur toi.`);
         if (lost > 0) bodies.push(`Déjà ${fmt(lost)} de perdues sur ta nuit idéale.`);
         if (l >= 3) bodies.push("Chaque minute ici, c'est une minute de sommeil en moins.");
         if (l >= 4) bodies.push(`Moins de 6 h de sommeil. Demain va piquer : ferme tout, maintenant.`);
