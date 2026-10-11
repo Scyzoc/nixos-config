@@ -17,6 +17,12 @@
     "icon": "claude.svg"
   },
   {
+    "id": "dashfinance",
+    "name": "DashFinance",
+    "url": "https://finances.homelab.lan/",
+    "icon": "dashfinance.svg"
+  },
+  {
     "id": "google-drive",
     "name": "Google Drive",
     "url": "https://drive.google.com",
