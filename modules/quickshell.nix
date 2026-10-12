@@ -150,11 +150,6 @@ let
                     paused = False
                     subprocess.Popen([EAR_CMD, "resume"])
                 in_ear = count
-            elif p[:7] != NOISE and p[:6] != BATTERY:
-                with open("/run/user/1000/airpods-anc.log", "a") as lg:
-                    lg.write(p.hex() + "\n")
-            if False:
-                pass
             elif p[:7] == NOISE and len(p) > 7:
                 print(p[7], flush=True)
             elif p[:6] == BATTERY and len(p) > 6:
