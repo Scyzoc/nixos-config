@@ -82,6 +82,16 @@ let
   # Service périodique : applique le thème attendu, notifie seulement si changement
   themeAuto = pkgs.writeShellScript "theme-auto" ''
     set -eu
+    # Garde-fou : gtk-theme doit toujours suivre color-scheme (Brave/Chromium déduit
+    # son mode du nom du thème GTK ; un Adwaita-dark resté en mode clair le bloquait en sombre)
+    if [ "$(${pkgs.glib}/bin/gsettings get org.gnome.desktop.interface color-scheme)" = "'prefer-dark'" ]; then
+      WANT_GTK=Adwaita-dark
+    else
+      WANT_GTK=Adwaita
+    fi
+    [ "$(${pkgs.glib}/bin/gsettings get org.gnome.desktop.interface gtk-theme)" = "'$WANT_GTK'" ] \
+      || ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme "$WANT_GTK"
+
     ${loadConf}
     [ "$MODE" = manual ] && exit 0
     ${computeMode}
