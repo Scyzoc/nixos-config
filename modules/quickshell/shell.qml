@@ -20,9 +20,9 @@ ShellRoot {
         function list(): string { return TimerState.describe(); }
     }
 
-    // Message de bienvenue : `quickshell ipc -c bar call greeting show` (test, ignore la date)
+    // Message de bienvenue : `quickshell ipc -c bar call greeting hello` (test, ignore la date)
     IpcHandler {
         target: "greeting"
-        function show(): string { GreetingState.check(true); return "ok"; }
+        function hello(): string { GreetingState.check(true); return "ok"; }
     }
 }
