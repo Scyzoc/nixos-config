@@ -100,9 +100,11 @@ let
 
     if [ "$WANTED" = "dark" ]; then
       ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+      ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'
       ${pkgs.libnotify}/bin/notify-send "Thème" "Passage en mode sombre" -u low
     else
       ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface color-scheme 'default'
+      ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita'
       ${pkgs.libnotify}/bin/notify-send "Thème" "Passage en mode clair" -u low
     fi
     printf '%s' "$WANTED" > "${stateFile}"
@@ -118,11 +120,13 @@ let
     case "$MODE" in
       dark)
         $GSETTINGS set org.gnome.desktop.interface color-scheme 'prefer-dark'
+        $GSETTINGS set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'
         $NOTIFY "Thème" "Mode sombre activé" -u low
         ${kdeApply}
         ;;
       light)
         $GSETTINGS set org.gnome.desktop.interface color-scheme 'default'
+        $GSETTINGS set org.gnome.desktop.interface gtk-theme 'Adwaita'
         $NOTIFY "Thème" "Mode clair activé" -u low
         ${kdeApply}
         ;;
