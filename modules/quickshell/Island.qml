@@ -185,7 +185,6 @@ PanelWindow {
                 color: Qt.rgba(1, 1, 1, 0.6)
                 font.family: Theme.labelFont
                 font.pixelSize: 12
-                font.capitalization: Font.Capitalize
             }
         }
 
