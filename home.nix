@@ -1047,7 +1047,7 @@ let notionTodo = ./modules/notion-todo.nix; in
     exec = "env GDK_BACKEND=x11 GTK_THEME=Adwaita vmware %U";
     terminal = false;
     type = "Application";
-    icon = "vmware-workstation";
+    icon = "${pkgs.vmware-workstation}/share/icons/hicolor/256x256/apps/vmware-workstation.png";  # chemin absolu : le thème d'icônes en impose une version stylisée
     startupNotify = true;
     categories = [ "System" ];
     mimeType = [
