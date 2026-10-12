@@ -12,7 +12,7 @@ PanelWindow {
     id: win
 
     required property ShellScreen modelData
-    required property Item clock
+    required property var clock
     required property int barHeight
     screen: modelData
 
@@ -95,8 +95,8 @@ PanelWindow {
     readonly property real startH: clock.height
     readonly property real startX: clock.x
     readonly property real startY: (barHeight - clock.height) / 2
-    readonly property real endW: Math.min(mode === "sleep" ? 400 : 380, width - 20)
-    property real endH: mode === "sleep" ? sleepBox.implicitHeight + 28 : 72
+    readonly property real endW: Math.min(mode === "sleep" ? 400 : 420, width - 20)
+    property real endH: mode === "sleep" ? sleepBox.implicitHeight + 28 : 76
     Behavior on endH { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
     readonly property real endX: Math.max(0, Math.min(width - endW, startX + startW / 2 - endW / 2))
 
@@ -165,26 +165,47 @@ PanelWindow {
 
         HoverHandler { id: hover }
 
-        // --- Bonjour ---
-        Column {
+        // --- Bonjour : icône météo à gauche, texte à droite ---
+        Row {
             visible: win.mode === "greeting"
             anchors.centerIn: parent
-            spacing: 3
+            spacing: 16
             opacity: win.textOpacity
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: GreetingState.title
-                color: "#ffffff"
-                font.family: Theme.titleFont
-                font.pixelSize: 22
-                font.bold: true
+            Column {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: win.clock.weatherSym !== ""
+                spacing: 1
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: win.clock.weatherGlyph(win.clock.weatherSym)
+                    color: "#ffffff"
+                    font.family: Theme.font
+                    font.pixelSize: 30
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: win.clock.weatherTemp
+                    color: Qt.rgba(1, 1, 1, 0.6)
+                    font.family: Theme.labelFont
+                    font.pixelSize: 11
+                }
             }
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: GreetingState.subtitle
-                color: Qt.rgba(1, 1, 1, 0.6)
-                font.family: Theme.labelFont
-                font.pixelSize: 12
+            Column {
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 3
+                Text {
+                    text: GreetingState.title
+                    color: "#ffffff"
+                    font.family: Theme.titleFont
+                    font.pixelSize: 22
+                    font.bold: true
+                }
+                Text {
+                    text: GreetingState.subtitle
+                    color: Qt.rgba(1, 1, 1, 0.6)
+                    font.family: Theme.labelFont
+                    font.pixelSize: 12
+                }
             }
         }
 
