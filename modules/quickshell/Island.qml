@@ -96,7 +96,7 @@ PanelWindow {
     readonly property real startX: clock.x
     readonly property real startY: (barHeight - clock.height) / 2
     readonly property real endW: Math.min(mode === "sleep" ? 400 : 380, width - 20)
-    readonly property real endH: mode === "sleep" ? sleepBox.implicitHeight + 28 : 72
+    property real endH: mode === "sleep" ? sleepBox.implicitHeight + 28 : 72
     Behavior on endH { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
     readonly property real endX: Math.max(0, Math.min(width - endW, startX + startW / 2 - endW / 2))
 
