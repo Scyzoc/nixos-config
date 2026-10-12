@@ -95,8 +95,10 @@ PanelWindow {
     readonly property real startH: clock.height
     readonly property real startX: clock.x
     readonly property real startY: (barHeight - clock.height) / 2
-    readonly property real endW: Math.min(mode === "sleep" ? 400 : 420, width - 20)
-    property real endH: mode === "sleep" ? sleepBox.implicitHeight + 28 : 76
+    // Largeur : celle du contenu (bonjour) ou fixe (bulle de sommeil, texte à la ligne)
+    property real endW: Math.min(mode === "sleep" ? 400 : greetRow.implicitWidth + 52, width - 20)
+    Behavior on endW { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+    property real endH: mode === "sleep" ? sleepBox.implicitHeight + 28 : 68
     Behavior on endH { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
     readonly property real endX: Math.max(0, Math.min(width - endW, startX + startW / 2 - endW / 2))
 
@@ -167,9 +169,10 @@ PanelWindow {
 
         // --- Bonjour : icône météo à gauche, texte à droite ---
         Row {
+            id: greetRow
             visible: win.mode === "greeting"
             anchors.centerIn: parent
-            spacing: 16
+            spacing: 14
             opacity: win.textOpacity
             Column {
                 anchors.verticalCenter: parent.verticalCenter
@@ -189,6 +192,13 @@ PanelWindow {
                     font.family: Theme.labelFont
                     font.pixelSize: 11
                 }
+            }
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: win.clock.weatherSym !== ""
+                width: 1
+                height: 36
+                color: Qt.rgba(1, 1, 1, 0.16)
             }
             Column {
                 anchors.verticalCenter: parent.verticalCenter
