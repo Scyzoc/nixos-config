@@ -13,7 +13,7 @@ Singleton {
     readonly property string stateFile: Paths.stateDir + "/greeting-last"
 
     readonly property int hour: new Date().getHours()
-    readonly property string title: (hour < 5 ? "Bonne nuit" : hour < 18 ? (hour < 12 ? "Bonjour" : "Bon après-midi") : "Bonsoir") + " Lei"
+    readonly property string title: (hour < 5 ? "Bonne nuit" : hour < 18 ? (hour < 12 ? "Bonjour" : "Bon après-midi") : "Bonsoir") + " user"
     readonly property string subtitle: (hour < 5 ? "Pense à dormir" : hour < 18 ? "Bonne journée" : "Bonne soirée")
         + "  ·  " + new Date().toLocaleDateString(Qt.locale("fr_FR"), "dddd d MMMM")
 
