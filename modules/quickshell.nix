@@ -116,7 +116,7 @@ let
     EAR = bytes.fromhex("040004000600")
     EAR_CMD = "${config.home.profileDirectory}/bin/airpods-ear"
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)
-    in_ear = None          # nombre d'écouteurs dans les oreilles
+    in_ear = 2             # nombre d'écouteurs dans les oreilles (2 tant qu'on ne sait pas : on écoute)
     paused = False
     count_before = 0
 
@@ -142,13 +142,13 @@ let
                 break
             if p[:6] == EAR and len(p) >= 8:
                 count = (p[6] == 0) + (p[7] == 0)
-                if in_ear is not None:
-                    if count < in_ear and not paused:
-                        paused, count_before = True, in_ear
-                        subprocess.Popen([EAR_CMD, "pause"])
-                    elif paused and count >= count_before:
-                        paused = False
-                        subprocess.Popen([EAR_CMD, "resume"])
+                print("E", p[6], p[7], file=sys.stderr, flush=True)
+                if count < in_ear and not paused:
+                    paused, count_before = True, in_ear
+                    subprocess.Popen([EAR_CMD, "pause"])
+                elif paused and count >= count_before:
+                    paused = False
+                    subprocess.Popen([EAR_CMD, "resume"])
                 in_ear = count
             elif p[:7] == NOISE and len(p) > 7:
                 print(p[7], flush=True)
