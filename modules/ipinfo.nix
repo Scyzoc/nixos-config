@@ -200,6 +200,8 @@ let
       line
       if [ -n "$PUB" ]; then
         printf "  ''${M}󰖟  IP publique''${R}  ''${B}''${M}%s''${R}\n" "$PUB"
+      elif [ -n "$PENDING" ]; then
+        printf "  ''${M}󰖟  IP publique''${R}  ''${D}recherche…''${R}\n"
       else
         printf "  ''${X}󰖪  IP publique   indisponible''${R}\n"
         printf "      ''${D}Pourquoi''${R}  %s\n" "$WHY"
@@ -225,6 +227,10 @@ let
     trap cleanup INT TERM
 
     printf '\e[?1049h\e[?25l'   # écran alternatif + curseur caché
+    # Premier affichage immédiat : la recherche d'IP publique peut durer ~12 s
+    PENDING=1
+    printf '\e[H\e[J%s\n\n  %s\n' "$(render)" "''${D}q pour quitter · maj toutes les 2 s''${R}"
+    PENDING=""
     while true; do
       refresh_pub
       OUT=$(render)
