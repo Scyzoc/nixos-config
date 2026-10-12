@@ -33,6 +33,7 @@ let notionTodo = ./modules/notion-todo.nix; in
     ./modules/clipboard.nix
     ./modules/airpods-monitor.nix
     ./modules/airpods-ear.nix
+    ./modules/media-tap.nix
     ./modules/power-saving.nix
     ./modules/theme-automation.nix
     ./modules/internet-check.nix
@@ -792,8 +793,8 @@ let notionTodo = ./modules/notion-todo.nix; in
 
       bindl = [
         ", XF86AudioNext, exec, playerctl next"
-        ", XF86AudioPause, exec, playerctl play-pause"
-        ", XF86AudioPlay, exec, playerctl play-pause"
+        ", XF86AudioPause, exec, media-tap"
+        ", XF86AudioPlay, exec, media-tap"
         ", XF86AudioPrev, exec, playerctl previous"
       ];
 
