@@ -288,4 +288,27 @@ in
     systemd.enable = true;
     systemd.target = "hyprland-session.target";
   };
+
+  # Garde-fou anti-doublon : tue toute instance `quickshell` nue (sans argument) lancée hors du
+  # service systemd `quickshell.service` (ex. `hyprctl dispatch exec quickshell`) → jamais 2 barres.
+  systemd.user.services.quickshell-dedup = {
+    Unit.Description = "Tue les barres Quickshell en doublon";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.writeShellScript "quickshell-dedup" ''
+        for d in /proc/[0-9]*; do
+          pid=''${d#/proc/}
+          [ "$(readlink "$d/exe" 2>/dev/null)" = "${config.programs.quickshell.package}/bin/.quickshell-wrapped" ] || continue
+          [ "$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null | wc -w)" -le 1 ] || continue
+          grep -q 'quickshell.service' "$d/cgroup" 2>/dev/null && continue
+          kill "$pid" 2>/dev/null
+        done
+      ''}";
+    };
+  };
+  systemd.user.timers.quickshell-dedup = {
+    Unit.Description = "Vérifie les doublons de barre Quickshell";
+    Timer = { OnBootSec = "20s"; OnUnitActiveSec = "5s"; AccuracySec = "1s"; };
+    Install.WantedBy = [ "timers.target" ];
+  };
 }
