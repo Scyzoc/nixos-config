@@ -81,4 +81,7 @@ PanelWindow {
         Battery { compact: bar.compact }
         Power { compact: bar.compact }
     }
+
+    // Dynamic Island (bonjour, bulles « va dormir ») : fenêtre superposée née de l'horloge
+    Island { modelData: bar.modelData; clock: clock; barHeight: bar.implicitHeight }
 }

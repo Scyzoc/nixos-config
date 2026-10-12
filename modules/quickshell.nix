@@ -245,6 +245,9 @@ let
     Singleton {
         readonly property string curl: "${pkgs.curl}/bin/curl"
         readonly property string ip: "${pkgs.iproute2}/bin/ip"
+        readonly property string sh: "${pkgs.bash}/bin/sh"
+        readonly property string pidof: "${pkgs.procps}/bin/pidof"
+        readonly property string date: "${pkgs.coreutils}/bin/date"
         readonly property string cat: "${pkgs.coreutils}/bin/cat"
         readonly property string top: "${pkgs.procps}/bin/top"
         readonly property string hyprlock: "${pkgs.hyprlock}/bin/hyprlock"

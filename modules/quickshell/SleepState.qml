@@ -94,6 +94,8 @@ Singleton {
     // --- Bulles ----------------------------------------------------------------------------
     // Bulle affichée : { id, level, title, body, sticky } ou null
     property var bubble: null
+    // Détail de la nuit ouvert (SleepCountdown) : la bulle s'efface le temps de sa consultation
+    property bool detailsOpen: false
     property int bubbleId: 0
     property real nextNudge: 0      // ms epoch
 

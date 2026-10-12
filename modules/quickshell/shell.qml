@@ -19,4 +19,10 @@ ShellRoot {
         function stopwatch(cmd: string): string { return TimerState.stopwatch(cmd); }
         function list(): string { return TimerState.describe(); }
     }
+
+    // Message de bienvenue : `quickshell ipc -c bar call greeting show` (test, ignore la date)
+    IpcHandler {
+        target: "greeting"
+        function show(): string { GreetingState.check(true); return "ok"; }
+    }
 }
