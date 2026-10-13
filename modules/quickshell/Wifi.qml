@@ -520,7 +520,7 @@ Pill {
                                         && (reason === ConnectionFailReason.NoSecrets
                                             || reason === ConnectionFailReason.WifiClientFailed
                                             || reason === ConnectionFailReason.WifiAuthTimeout);
-                                    root.errorText = askPass ? "" : "Échec de connexion à " + entry.modelData.name + " (" + ConnectionFailReason.toString(reason) + ")";
+                                    root.errorText = askPass ? "" : "Échec de connexion à " + entry.modelData.name;
                                     if (askPass) root.pendingSsid = entry.modelData.name;
                                 }
                             }
