@@ -293,7 +293,7 @@ in
     systemd.target = "hyprland-session.target";
   };
 
-  # Garde-fou anti-doublon : tue toute instance `quickshell` nue (sans argument) lancée hors du
+  # Garde-fou anti-doublon : tue toute instance de la barre (`quickshell` nu ou `--config bar`) lancée hors du
   # service systemd `quickshell.service` (ex. `hyprctl dispatch exec quickshell`) → jamais 2 barres.
   systemd.user.services.quickshell-dedup = {
     Unit.Description = "Tue les barres Quickshell en doublon";
@@ -303,7 +303,9 @@ in
         for d in /proc/[0-9]*; do
           pid=''${d#/proc/}
           [ "$(readlink "$d/exe" 2>/dev/null)" = "${config.programs.quickshell.package}/bin/.quickshell-wrapped" ] || continue
-          [ "$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null | wc -w)" -le 1 ] || continue
+          # barre = sans argument, ou « --config bar » / « -c bar » (lancé à la main)
+          args=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)
+          [ "$(echo "$args" | wc -w)" -le 1 ] || echo "$args" | grep -Eq -- '(--config|-c|-p|--path) +\S*bar\b' || continue
           grep -q 'quickshell.service' "$d/cgroup" 2>/dev/null && continue
           kill "$pid" 2>/dev/null
         done
