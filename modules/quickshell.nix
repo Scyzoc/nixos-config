@@ -270,6 +270,7 @@ let
         readonly property string stateDir: "${config.xdg.stateHome}/quickshell-bar"
         readonly property string magick: "${pkgs.imagemagick}/bin/magick"
         readonly property string webSource: "${web-source}"
+        readonly property string braveLogo: "file://${pkgs.brave}/share/icons/hicolor/128x128/apps/brave-browser.png"
         // Fond d'écran courant (écrit par wallpaper-apply, wallpaper-picker.nix)
         readonly property string wallpaperState: "${config.xdg.stateHome}/wallpaper/current"
     }
