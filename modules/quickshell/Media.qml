@@ -116,6 +116,11 @@ Pill {
         return Theme.yellow;
     }
 
+    // Favicon du site joué dans Brave (WebSource), à la place du logo de la source
+    readonly property var site: /brave/i.test(player?.dbusName ?? "") && title !== "" ? WebSource.info(title) : null
+    readonly property string siteIcon: site?.icon ? "file://" + site.icon : ""
+    readonly property string braveLogo: Quickshell.iconPath("brave-browser", true)
+
     readonly property color accent: player ? sourceColor(source) : Theme.muted
 
     visible: player !== null && title !== ""
@@ -228,9 +233,18 @@ Pill {
             fillMode: Image.PreserveAspectCrop
             mipmap: true
         }
+        Image {
+            anchors.centerIn: parent
+            width: 18
+            height: 18
+            visible: root.shownArt === "" && root.siteIcon !== ""
+            source: root.siteIcon
+            sourceSize: Qt.size(36, 36)
+            fillMode: Image.PreserveAspectFit
+        }
         BarText {
             anchors.centerIn: parent
-            visible: root.shownArt === ""
+            visible: root.shownArt === "" && root.siteIcon === ""
             text: root.sourceIcon(root.source)
             color: root.accent
             font.pixelSize: 15
@@ -332,9 +346,18 @@ Pill {
                     source: root.shownArt
                     fillMode: Image.PreserveAspectCrop
                 }
+                Image {
+                    anchors.centerIn: parent
+                    width: 44
+                    height: 44
+                    visible: root.art === "" && root.siteIcon !== ""
+                    source: root.siteIcon
+                    sourceSize: Qt.size(88, 88)
+                    fillMode: Image.PreserveAspectFit
+                }
                 BarText {
                     anchors.centerIn: parent
-                    visible: root.art === ""
+                    visible: root.art === "" && root.siteIcon === ""
                     text: root.sourceIcon(root.source)
                     font.pixelSize: 36
                     color: Theme.muted
@@ -358,7 +381,14 @@ Pill {
                 }
                 RowLayout {
                     spacing: 5
-                    BarText { text: root.sourceIcon(root.source); color: root.accent; font.pixelSize: 14 }
+                    Image {
+                        visible: root.siteIcon !== "" && root.braveLogo !== ""
+                        source: root.braveLogo
+                        sourceSize: Qt.size(28, 28)
+                        Layout.preferredWidth: 14
+                        Layout.preferredHeight: 14
+                    }
+                    BarText { visible: !(root.siteIcon !== "" && root.braveLogo !== ""); text: root.sourceIcon(root.source); color: root.accent; font.pixelSize: 14 }
                     BarText { text: root.sourceLabel; color: root.accent; font.pixelSize: 12; font.bold: true; font.family: Theme.labelFont }
                 }
             }
