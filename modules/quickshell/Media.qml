@@ -117,7 +117,7 @@ Pill {
     }
 
     // Favicon du site joué dans Brave (WebSource), à la place du logo de la source
-    readonly property var site: /brave/i.test(player?.dbusName ?? "") && title !== "" ? WebSource.info(title) : null
+    readonly property var site: source === "web" && /brave/i.test(player?.dbusName ?? "") ? WebSource.info(title) : null
     readonly property string siteIcon: site?.icon ? "file://" + site.icon : ""
     readonly property string braveLogo: Paths.braveLogo
 
