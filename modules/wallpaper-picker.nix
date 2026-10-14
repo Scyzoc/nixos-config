@@ -39,11 +39,13 @@ let
   # dock renomme les écrans à chaque branchement → un nouveau nom n'a pas d'image.
   wallpaperState = "${config.xdg.stateHome}/wallpaper/current";
 
-  # Applique un fond d'écran (transition aléatoire) et notifie
+  # Applique un fond d'écran (fondu doux, courbe ease-out) et notifie
   wallpaper-apply = pkgs.writeShellScriptBin "wallpaper-apply" ''
     F="$1"
     [ -f "$F" ] || exit 1
-    ${pkgs.awww}/bin/awww img "$F" --transition-type random --transition-step 90 --transition-fps 60
+    ${pkgs.awww}/bin/awww img "$F" \
+      --transition-type fade --transition-duration 1.2 \
+      --transition-bezier .25,.1,.25,1 --transition-fps 144
     ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "${wallpaperState}")"
     printf '%s\n' "$F" > "${wallpaperState}"
     ${pkgs.libnotify}/bin/notify-send "Wallpaper" "Appliqué : ''${F##*/}" -i "$F"
