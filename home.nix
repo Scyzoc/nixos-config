@@ -50,6 +50,7 @@ let notionTodo = ./modules/notion-todo.nix; in
     ./modules/cli-list.nix
     ./modules/nixinstall.nix
     ./modules/webapps.nix
+    ./modules/binds.nix
   ];
 
   # ==========================================================================
