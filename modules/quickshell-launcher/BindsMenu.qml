@@ -32,6 +32,7 @@ PanelWindow {
     visible: false
 
     function show() {
+        schemeGet.running = true;
         const m = Hyprland.focusedMonitor;
         win.screen = Quickshell.screens.find(s => s.name === m?.name) ?? Quickshell.screens[0];
         search.text = "";
@@ -52,6 +53,39 @@ PanelWindow {
     }
     function toggle() { open ? hide() : show(); }
     Timer { id: closeTimer; interval: 220; onTriggered: if (!win.open) win.visible = false }
+
+    // --- Thème : suit le mode clair / sombre de l'OS (color-scheme, theme-automation.nix) --
+    property bool dark: true
+    Process {
+        id: schemeGet
+        command: [Paths.dconf, "read", "/org/gnome/desktop/interface/color-scheme"]
+        stdout: StdioCollector { onStreamFinished: win.dark = text.indexOf("prefer-dark") >= 0 }
+    }
+    // `dconf watch` : une ligne chemin, puis une ligne valeur à chaque changement
+    Process {
+        id: schemeWatch
+        running: true
+        command: [Paths.dconf, "watch", "/org/gnome/desktop/interface/color-scheme"]
+        stdout: SplitParser {
+            onRead: line => { if (line.indexOf("'") >= 0) win.dark = line.indexOf("prefer-dark") >= 0; }
+        }
+    }
+    Component.onCompleted: schemeGet.running = true
+
+    readonly property var p: dark ? {
+        panel: Qt.rgba(22 / 255, 22 / 255, 22 / 255, 0.82), scrim: Qt.rgba(0, 0, 0, 0.35),
+        border: Qt.rgba(1, 1, 1, 0.2), text: "#ffffff", sub: "#b4b4b4", muted: "#737373",
+        pill: Qt.rgba(1, 1, 1, 0.05), pillBorder: Qt.rgba(1, 1, 1, 0.1), hover: Qt.rgba(1, 1, 1, 0.08),
+        cursor: Qt.rgba(1, 1, 1, 0.16), tip: "#2e2e2e",
+        mauve: Theme.mauve, green: Theme.green, red: Theme.red, blue: Theme.blue, yellow: Theme.yellow, teal: Theme.teal
+    } : {
+        panel: Qt.rgba(248 / 255, 248 / 255, 250 / 255, 0.88), scrim: Qt.rgba(0, 0, 0, 0.18),
+        border: Qt.rgba(0, 0, 0, 0.14), text: "#1c1c1f", sub: "#55555c", muted: "#8a8a92",
+        pill: Qt.rgba(0, 0, 0, 0.045), pillBorder: Qt.rgba(0, 0, 0, 0.1), hover: Qt.rgba(0, 0, 0, 0.06),
+        cursor: Qt.rgba(0, 0, 0, 0.09), tip: "#2a2a2e",
+        mauve: "#7c4dcc", green: "#1a7f37", red: "#cf222e", blue: "#0969da", yellow: "#9a6700", teal: "#0f766e"
+    }
+    function tint(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
 
     // --- Données -----------------------------------------------------------------
     property var all: []
@@ -96,16 +130,18 @@ PanelWindow {
         Quickshell.execDetached([bin, "capture", "stop"]);
     }
 
+    // Onglets du switch : icônes seules, le nom est dans l'infobulle
     readonly property var tabs: [
-        { id: "all", label: "Tous" },
-        { id: "perso", label: "Perso" },
-        { id: "apps", label: "Applications" },
-        { id: "fenetres", label: "Fenêtres" },
-        { id: "workspaces", label: "Workspaces" },
-        { id: "media", label: "Média" },
-        { id: "conflit", label: "Conflits" },
-        { id: "off", label: "Désactivés" }
+        { id: "all", label: "Tous", icon: 0xf0279 },        // md-format-list-bulleted
+        { id: "perso", label: "Mes raccourcis", icon: 0xf04ce },   // md-star
+        { id: "apps", label: "Applications", icon: 0xf003b },      // md-apps
+        { id: "fenetres", label: "Fenêtres", icon: 0xf0293 },      // md-window-maximize
+        { id: "workspaces", label: "Workspaces et souris", icon: 0xf056e },   // md-view-dashboard
+        { id: "media", label: "Média et système", icon: 0xf0387 },  // md-music-note
+        { id: "conflit", label: "Conflits", icon: 0xf0026 },        // md-alert
+        { id: "off", label: "Désactivés", icon: 0xf0209 }           // md-eye-off
     ]
+    readonly property var shownTabs: tabs.filter(t => t.id !== "conflit" || conflicts > 0)
     readonly property var catOrder: ["perso", "apps", "fenetres", "workspaces", "media"]
     readonly property var catNames: ({
         perso: "Mes raccourcis", apps: "Applications", fenetres: "Fenêtres",
@@ -233,13 +269,13 @@ PanelWindow {
     property var fFlags: []
     property bool capturing: false
     readonly property var kindOpts: [
-        { id: "exec", label: "Lancer une commande" },
-        { id: "lua", label: "Action Hyprland (Lua)" }
+        { id: "exec", label: "Lancer une commande", icon: 0xf018d },    // md-console
+        { id: "lua", label: "Action Hyprland (Lua)", icon: 0xf08b1 }    // md-language-lua
     ]
     readonly property var flagOpts: [
-        { id: "locked", label: "Écran verrouillé", tip: "marche aussi quand la session est verrouillée" },
-        { id: "repeating", label: "Répétition", tip: "se répète tant que la touche est tenue" },
-        { id: "release", label: "Au relâchement", tip: "se déclenche quand on lâche la touche" }
+        { id: "locked", label: "Actif écran verrouillé", icon: 0xf033e },        // md-lock
+        { id: "repeating", label: "Répétition tant que la touche est tenue", icon: 0xf0456 },   // md-repeat
+        { id: "release", label: "Déclenché au relâchement", icon: 0xf01da }      // md-eject
     ]
     readonly property var clash: {
         const n = normKeys(fKeys.text);
@@ -287,7 +323,7 @@ PanelWindow {
     // --- Interface -----------------------------------------------------------------------
     Rectangle {
         anchors.fill: parent
-        color: Qt.rgba(0, 0, 0, 0.35)
+        color: win.p.scrim
         opacity: win.open ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 180 } }
         MouseArea { anchors.fill: parent; onClicked: win.hide() }
@@ -295,110 +331,135 @@ PanelWindow {
 
     Rectangle {
         id: panel
-        anchors.centerIn: parent
-        width: Math.min(900, parent.width - 80)
-        height: Math.min(700, parent.height - 100)
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: Math.round(parent.height * 0.1)
+        width: Math.min(860, parent.width - 80)
+        // Hauteur du contenu (plafonnée) : pas de vide sous une liste courte
+        height: Math.min(parent.height * 0.8, Math.max(180, body.implicitHeight + 28))
         radius: 18
-        color: Qt.rgba(22 / 255, 22 / 255, 22 / 255, 0.8)
-        border.color: Theme.border
+        color: win.p.panel
+        border.color: win.p.border
         border.width: 1
+        Behavior on height { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: 200 } }
 
         opacity: win.open ? 1 : 0
         scale: win.open ? 1 : 0.94
+        transformOrigin: Item.Top
         Behavior on opacity { NumberAnimation { duration: 160 } }
         Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutBack } }
 
         MouseArea { anchors.fill: parent }    // le clic dans le panneau ne ferme pas
 
         ColumnLayout {
+            id: body
             anchors.fill: parent
-            anchors.margins: 18
-            spacing: 12
+            anchors.margins: 14
+            spacing: 8
 
-            // En-tête
+            // ===== En-tête : titre, switch des sections (icônes), recherche, actions =====
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
-                BarText { text: Theme.ic(0xf030c); font.pixelSize: 24; color: Theme.mauve }    // md-keyboard
-                BarText {
+                z: 5
+
+                Txt { text: Theme.ic(0xf030c); font.pixelSize: 22; color: win.p.mauve }    // md-keyboard
+                Txt {
                     text: win.mode === "edit" ? (win.editing ? "Modifier le raccourci" : "Nouveau raccourci") : "Raccourcis"
                     font.family: Theme.titleFont
-                    font.pixelSize: 20
+                    font.pixelSize: 18
                     font.weight: Font.DemiBold
                 }
-                BarText {
-                    visible: win.mode === "list"
-                    text: win.all.length + " binds"
-                    color: Theme.muted
-                    font.pixelSize: 12
-                    font.family: Theme.labelFont
-                }
-                Item { Layout.fillWidth: true }
-                Btn {
-                    visible: win.mode === "list"
-                    icon: 0xf0415    // md-plus
-                    text: "Nouveau"
-                    accent: Theme.mauve
-                    onClicked: win.openEdit(null)
-                }
-                Btn {
-                    icon: 0xf0156    // md-close
-                    onClicked: win.mode === "edit" ? win.closeEdit() : win.hide()
-                }
-            }
 
-            // Erreur
-            Rectangle {
-                Layout.fillWidth: true
-                visible: win.error !== ""
-                implicitHeight: errText.implicitHeight + 16
-                radius: 10
-                color: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.14)
-                border.color: Qt.rgba(Theme.red.r, Theme.red.g, Theme.red.b, 0.4)
-                border.width: 1
-                BarText {
-                    id: errText
-                    anchors.fill: parent
-                    anchors.margins: 8
-                    text: Theme.ic(0xf0026) + "  " + win.error    // md-alert
-                    color: Theme.red
-                    font.pixelSize: 12
-                    font.family: Theme.labelFont
-                    wrapMode: Text.Wrap
-                }
-            }
+                // Switch : le curseur glisse d'une section à l'autre
+                Rectangle {
+                    id: seg
+                    visible: win.mode === "list"
+                    readonly property int cell: 34
+                    readonly property int idx: Math.max(0, win.shownTabs.findIndex(t => t.id === win.tab))
+                    implicitWidth: cell * win.shownTabs.length + 6
+                    implicitHeight: 34
+                    radius: 11
+                    color: win.p.pill
+                    border.color: win.p.pillBorder
+                    border.width: 1
+                    z: 5
 
-            // ===== Liste =====
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                visible: win.mode === "list"
-                spacing: 10
+                    Rectangle {
+                        x: 3 + seg.idx * seg.cell
+                        y: 3
+                        width: seg.cell
+                        height: parent.height - 6
+                        radius: 8
+                        color: win.p.cursor
+                        Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                    }
+                    Row {
+                        x: 3
+                        y: 3
+                        Repeater {
+                            model: win.shownTabs
+                            Item {
+                                id: cellItem
+                                required property var modelData
+                                readonly property bool current: win.tab === modelData.id
+                                readonly property color tone: modelData.id === "conflit" ? win.p.yellow
+                                                              : (modelData.id === "off" ? win.p.red : win.p.mauve)
+                                width: seg.cell
+                                height: seg.height - 6
+                                z: cellMa.containsMouse ? 10 : 0
+                                Txt {
+                                    anchors.centerIn: parent
+                                    text: Theme.ic(cellItem.modelData.icon)
+                                    font.pixelSize: 17
+                                    color: cellItem.current || cellMa.containsMouse ? cellItem.tone
+                                           : (cellItem.modelData.id === "conflit" ? win.p.yellow : win.p.muted)
+                                    Behavior on color { ColorAnimation { duration: 160 } }
+                                }
+                                MouseArea {
+                                    id: cellMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: { win.tab = cellItem.modelData.id; search.forceActiveFocus(); }
+                                }
+                                Tip {
+                                    text: cellItem.modelData.label + (cellItem.modelData.id === "all" ? " · " + win.all.length
+                                          : (cellItem.modelData.id === "conflit" ? " · " + win.conflicts : ""))
+                                    shown: cellMa.containsMouse
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Recherche
                 Rectangle {
                     Layout.fillWidth: true
-                    implicitHeight: 42
-                    radius: 12
-                    color: Theme.pill
-                    border.color: search.text !== "" ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.5) : Theme.pillBorder
+                    visible: win.mode === "list"
+                    implicitHeight: 34
+                    radius: 11
+                    color: win.p.pill
+                    border.color: search.text !== "" ? win.tint(win.p.mauve, 0.55) : win.p.pillBorder
                     border.width: 1
                     Behavior on border.color { ColorAnimation { duration: 200 } }
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        spacing: 10
-                        BarText { text: Theme.ic(0xf0349); font.pixelSize: 17; color: Theme.subtext }    // md-magnify
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        spacing: 8
+                        Txt { text: Theme.ic(0xf0349); font.pixelSize: 16; color: win.p.sub }    // md-magnify
                         TextInput {
                             id: search
                             Layout.fillWidth: true
                             verticalAlignment: TextInput.AlignVCenter
-                            color: Theme.text
+                            color: win.p.text
                             font.family: Theme.labelFont
-                            font.pixelSize: 14
+                            font.pixelSize: 13
                             clip: true
                             selectByMouse: true
+                            selectionColor: win.tint(win.p.mauve, 0.4)
+                            selectedTextColor: win.p.text
                             Keys.onPressed: event => {
                                 event.accepted = true;
                                 const ctrl = event.modifiers & Qt.ControlModifier;
@@ -426,473 +487,484 @@ PanelWindow {
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: search.text === ""
-                                text: "Chercher une touche, une action, une commande…"
-                                color: Theme.muted
+                                text: "Touche, action, commande…"
+                                color: win.p.muted
                                 font: search.font
                             }
                         }
                     }
                 }
+                Item { Layout.fillWidth: true; visible: win.mode === "edit" }
 
-                // Filtres
-                Flow {
-                    Layout.fillWidth: true
-                    spacing: 6
-                    Repeater {
-                        model: win.tabs.filter(t => (t.id !== "conflit" || win.conflicts > 0))
-                        Rectangle {
-                            required property var modelData
-                            readonly property bool on: win.tab === modelData.id
-                            implicitWidth: chipText.implicitWidth + 22
-                            implicitHeight: 28
-                            radius: 14
-                            color: on ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.22)
-                                      : (chipMa.containsMouse ? Theme.rowHover : "transparent")
-                            border.color: on ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.6) : Theme.pillBorder
-                            border.width: 1
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            BarText {
-                                id: chipText
-                                anchors.centerIn: parent
-                                text: modelData.label + (modelData.id === "conflit" ? " (" + win.conflicts + ")" : "")
-                                font.pixelSize: 12
-                                font.family: Theme.labelFont
-                                color: parent.on ? Theme.text : (modelData.id === "conflit" ? Theme.yellow : Theme.subtext)
-                            }
-                            MouseArea {
-                                id: chipMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: { win.tab = modelData.id; search.forceActiveFocus(); }
-                            }
-                        }
-                    }
+                Btn {
+                    visible: win.mode === "list"
+                    icon: 0xf0415    // md-plus
+                    tip: "Nouveau raccourci (Ctrl+N)"
+                    accent: win.p.mauve
+                    onClicked: win.openEdit(null)
+                }
+                Btn {
+                    icon: 0xf0156    // md-close
+                    tip: win.mode === "edit" ? "Retour" : "Fermer"
+                    onClicked: win.mode === "edit" ? win.closeEdit() : win.hide()
+                }
+            }
+
+            // Erreur
+            Rectangle {
+                Layout.fillWidth: true
+                visible: win.error !== ""
+                implicitHeight: errText.implicitHeight + 14
+                radius: 10
+                color: win.tint(win.p.red, 0.13)
+                border.color: win.tint(win.p.red, 0.4)
+                border.width: 1
+                Txt {
+                    id: errText
+                    anchors.fill: parent
+                    anchors.margins: 7
+                    text: Theme.ic(0xf0026) + "  " + win.error    // md-alert
+                    color: win.p.red
+                    font.pixelSize: 12
+                    font.family: Theme.labelFont
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            // ===== Liste =====
+            ListView {
+                id: list
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.max(60, contentHeight)
+                Layout.fillHeight: true
+                visible: win.mode === "list"
+                clip: true
+                spacing: 1
+                model: win.rows
+                boundsBehavior: Flickable.StopAtBounds
+
+                Txt {
+                    anchors.centerIn: parent
+                    visible: win.rows.length === 0
+                    text: "Aucun raccourci"
+                    color: win.p.muted
+                    font.family: Theme.labelFont
                 }
 
-                ListView {
-                    id: list
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    spacing: 2
-                    model: win.rows
-                    boundsBehavior: Flickable.StopAtBounds
+                delegate: Item {
+                    id: row
+                    required property var modelData
+                    required property int index
+                    readonly property var b: modelData.bind ?? null
+                    readonly property bool isSel: index === win.sel
+                    width: list.width
+                    height: b ? 38 : 24
 
-                    BarText {
-                        anchors.centerIn: parent
-                        visible: win.rows.length === 0
-                        text: "Aucun raccourci"
-                        color: Theme.muted
+                    // Titre de section
+                    Txt {
+                        visible: !row.b
+                        anchors.left: parent.left
+                        anchors.leftMargin: 8
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 2
+                        text: (modelData.header ?? "").toUpperCase()
+                        font.pixelSize: 10
+                        font.letterSpacing: 1.2
                         font.family: Theme.labelFont
+                        color: win.p.muted
                     }
 
-                    delegate: Item {
-                        id: row
-                        required property var modelData
-                        required property int index
-                        readonly property var b: modelData.bind ?? null
-                        readonly property bool isSel: index === win.sel
-                        width: list.width
-                        height: b ? 46 : 30
+                    Rectangle {
+                        visible: !!row.b
+                        anchors.fill: parent
+                        radius: 9
+                        color: row.isSel ? win.p.hover : "transparent"
+                        Behavior on color { ColorAnimation { duration: 100 } }
 
-                        // Titre de section
-                        BarText {
-                            visible: !row.b
-                            anchors.left: parent.left
-                            anchors.leftMargin: 6
-                            anchors.bottom: parent.bottom
-                            anchors.bottomMargin: 4
-                            text: (modelData.header ?? "").toUpperCase()
-                            font.pixelSize: 10
-                            font.letterSpacing: 1.2
-                            font.family: Theme.labelFont
-                            color: Theme.muted
-                        }
-
-                        Rectangle {
-                            visible: !!row.b
-                            anchors.fill: parent
-                            radius: 10
-                            color: row.isSel ? Theme.rowHover : "transparent"
-                            Behavior on color { ColorAnimation { duration: 100 } }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onEntered: win.sel = row.index
-                                onDoubleClicked: win.openEdit(row.b)
-                            }
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 10
-                                anchors.rightMargin: 10
-                                spacing: 12
-                                opacity: row.b?.enabled ? 1 : 0.45
-
-                                KeyCaps {
-                                    Layout.preferredWidth: 270
-                                    keys: row.b?.pretty ?? ""
-                                }
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 0
-                                    BarText {
-                                        Layout.fillWidth: true
-                                        text: row.b?.label ?? ""
-                                        elide: Text.ElideRight
-                                        font.family: Theme.labelFont
-                                        font.pixelSize: 13
-                                        font.strikeout: !row.b?.enabled
-                                    }
-                                    BarText {
-                                        Layout.fillWidth: true
-                                        visible: text !== ""
-                                        text: row.b?.desc && row.b?.kind === "exec" ? row.b.cmd
-                                              : (row.b?.source === "custom" && row.b?.kind === "lua" ? row.b.lua : "")
-                                        elide: Text.ElideRight
-                                        font.pixelSize: 10
-                                        color: Theme.muted
-                                    }
-                                }
-
-                                // Étiquettes
-                                Badge {
-                                    visible: row.b?.conflict ?? false
-                                    text: "Conflit"
-                                    tint: Theme.yellow
-                                }
-                                Badge {
-                                    visible: (row.b?.replaces ?? "") !== ""
-                                    text: "Remplace " + (row.b?.replacesPretty ?? "")
-                                    tint: Theme.blue
-                                }
-                                Badge {
-                                    visible: row.b?.source === "custom" && !row.b?.replaces
-                                    text: "Perso"
-                                    tint: Theme.mauve
-                                }
-                                Badge {
-                                    visible: !(row.b?.enabled ?? true)
-                                    text: "Désactivé"
-                                    tint: Theme.muted
-                                }
-                                Badge {
-                                    visible: (row.b?.flags ?? []).includes("locked")
-                                    text: "Verrouillé OK"
-                                    tint: Theme.teal
-                                }
-
-                                // Actions
-                                RowLayout {
-                                    spacing: 4
-                                    opacity: row.isSel ? 1 : 0
-                                    Behavior on opacity { NumberAnimation { duration: 120 } }
-                                    Btn {
-                                        icon: 0xf03eb    // md-pencil
-                                        small: true
-                                        onClicked: win.openEdit(row.b)
-                                    }
-                                    Btn {    // désactiver / réactiver (défauts)
-                                        visible: row.b?.source === "default"
-                                        icon: row.b?.enabled ? 0xf0156 : 0xf054c    // md-close / md-undo
-                                        small: true
-                                        accent: row.b?.enabled ? Theme.red : Theme.green
-                                        onClicked: win.flip(row.b)
-                                    }
-                                    Btn {    // supprimer (perso) ; si remplacement, restaure l'original
-                                        visible: row.b?.source === "custom"
-                                        icon: row.b?.replaces ? 0xf054c : 0xf01b4    // md-undo / md-delete
-                                        small: true
-                                        accent: row.b?.replaces ? Theme.green : Theme.red
-                                        onClicked: win.remove(row.b)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Rappel des touches
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 14
-                    Repeater {
-                        model: [["↑ ↓", "choisir"], ["Entrée", "modifier"], ["Espace", "(dés)activer"], ["Suppr", "supprimer"], ["Ctrl+N", "nouveau"], ["Échap", "fermer"]]
-                        RowLayout {
-                            required property var modelData
-                            spacing: 6
-                            Rectangle {
-                                implicitWidth: hintKey.implicitWidth + 10
-                                implicitHeight: 18
-                                radius: 5
-                                color: Theme.pill
-                                border.color: Theme.pillBorder
-                                border.width: 1
-                                BarText { id: hintKey; anchors.centerIn: parent; text: modelData[0]; font.pixelSize: 10; color: Theme.subtext }
-                            }
-                            BarText { text: modelData[1]; font.pixelSize: 11; color: Theme.muted }
-                        }
-                    }
-                    Item { Layout.fillWidth: true }
-                    BarText {
-                        visible: win.all.some(b => b.source === "custom" || !b.enabled)
-                        text: "Tout réinitialiser"
-                        font.pixelSize: 11
-                        font.family: Theme.labelFont
-                        color: resetMa.containsMouse ? Theme.red : Theme.muted
                         MouseArea {
-                            id: resetMa
                             anchors.fill: parent
                             hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: win.call(["reset"])
+                            onEntered: win.sel = row.index
+                            onDoubleClicked: win.openEdit(row.b)
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            spacing: 10
+
+                            KeyCaps {
+                                Layout.preferredWidth: 196
+                                keys: row.b?.pretty ?? ""
+                                opacity: row.b?.enabled ? 1 : 0.45
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                opacity: row.b?.enabled ? 1 : 0.45
+                                Txt {
+                                    Layout.fillWidth: true
+                                    text: row.b?.label ?? ""
+                                    elide: Text.ElideRight
+                                    font.family: Theme.labelFont
+                                    font.pixelSize: 13
+                                    font.strikeout: !row.b?.enabled
+                                }
+                                Txt {
+                                    Layout.fillWidth: true
+                                    visible: text !== ""
+                                    text: row.b?.desc && row.b?.kind === "exec" ? row.b.cmd
+                                          : (row.b?.source === "custom" && row.b?.kind === "lua" ? row.b.lua : "")
+                                    elide: Text.ElideRight
+                                    font.pixelSize: 10
+                                    color: win.p.muted
+                                }
+                            }
+
+                            // Étiquettes
+                            Txt {    // actif écran verrouillé
+                                visible: (row.b?.flags ?? []).includes("locked")
+                                text: Theme.ic(0xf033e)
+                                font.pixelSize: 13
+                                color: win.p.teal
+                            }
+                            Badge {
+                                visible: row.b?.conflict ?? false
+                                text: "Conflit"
+                                tone: win.p.yellow
+                            }
+                            Badge {
+                                visible: (row.b?.replaces ?? "") !== ""
+                                text: "Remplace " + (row.b?.replacesPretty ?? "")
+                                tone: win.p.blue
+                            }
+                            Badge {
+                                visible: row.b?.source === "custom" && !row.b?.replaces
+                                text: "Perso"
+                                tone: win.p.mauve
+                            }
+                            Badge {
+                                visible: !(row.b?.enabled ?? true)
+                                text: "Désactivé"
+                                tone: win.p.muted
+                            }
+
+                            // Actions (ligne choisie)
+                            RowLayout {
+                                spacing: 3
+                                opacity: row.isSel ? 1 : 0
+                                Behavior on opacity { NumberAnimation { duration: 120 } }
+                                Btn {
+                                    icon: 0xf03eb    // md-pencil
+                                    tip: "Modifier"
+                                    small: true
+                                    onClicked: win.openEdit(row.b)
+                                }
+                                Btn {    // désactiver / réactiver (défauts)
+                                    visible: row.b?.source === "default"
+                                    icon: row.b?.enabled ? 0xf0209 : 0xf054c    // md-eye-off / md-undo
+                                    tip: row.b?.enabled ? "Désactiver" : "Réactiver"
+                                    small: true
+                                    accent: row.b?.enabled ? win.p.red : win.p.green
+                                    onClicked: win.flip(row.b)
+                                }
+                                Btn {    // supprimer (perso) ; si remplacement, restaure l'original
+                                    visible: row.b?.source === "custom"
+                                    icon: row.b?.replaces ? 0xf054c : 0xf01b4    // md-undo / md-delete
+                                    tip: row.b?.replaces ? "Restaurer l'original" : "Supprimer"
+                                    small: true
+                                    accent: row.b?.replaces ? win.p.green : win.p.red
+                                    onClicked: win.remove(row.b)
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // ===== Formulaire =====
-            ColumnLayout {
+            // Rappel des touches
+            RowLayout {
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                visible: win.mode === "edit"
-                spacing: 14
-
-                // Bind de la config Nix : l'enregistrer le remplace
-                Rectangle {
-                    Layout.fillWidth: true
-                    visible: win.editing?.source === "default"
-                    implicitHeight: noteText.implicitHeight + 16
-                    radius: 10
-                    color: Qt.rgba(Theme.blue.r, Theme.blue.g, Theme.blue.b, 0.12)
-                    border.color: Qt.rgba(Theme.blue.r, Theme.blue.g, Theme.blue.b, 0.35)
-                    border.width: 1
-                    BarText {
-                        id: noteText
-                        anchors.fill: parent
-                        anchors.margins: 8
-                        text: "Ce raccourci vient de la config Nix : l'enregistrer le remplace par ta version (restaurable depuis la liste)."
-                        color: Theme.blue
-                        font.pixelSize: 12
-                        font.family: Theme.labelFont
-                        wrapMode: Text.Wrap
-                    }
-                }
-
-                // Combinaison
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 5
-                    BarText { text: "Combinaison"; color: Theme.subtext; font.pixelSize: 11; font.family: Theme.labelFont }
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 52
-                        radius: 12
-                        color: win.capturing ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.1) : Theme.pill
-                        border.color: win.capturing ? Theme.mauve : (fKeys.activeFocus ? Theme.subtext : Theme.pillBorder)
-                        border.width: win.capturing ? 2 : 1
-                        Behavior on color { ColorAnimation { duration: 150 } }
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 14
-                            anchors.rightMargin: 10
-                            spacing: 12
-
-                            // Aperçu en touches
-                            KeyCaps {
-                                Layout.preferredWidth: 270
-                                visible: !win.capturing && fKeys.text.trim() !== ""
-                                keys: win.fKeysPretty
-                            }
-                            BarText {
-                                visible: win.capturing
-                                text: "Appuie sur la combinaison…  (Échap : annuler)"
-                                color: Theme.mauve
-                                font.family: Theme.labelFont
-                                font.pixelSize: 13
-                                SequentialAnimation on opacity {
-                                    running: win.capturing
-                                    loops: Animation.Infinite
-                                    NumberAnimation { to: 0.45; duration: 700 }
-                                    NumberAnimation { to: 1; duration: 700 }
-                                }
-                            }
-                            // Saisie manuelle (« SUPER + SHIFT + K ») et recours si la capture ne passe pas
-                            TextInput {
-                                id: fKeys
-                                Layout.fillWidth: true
-                                visible: !win.capturing
-                                verticalAlignment: TextInput.AlignVCenter
-                                color: Theme.text
-                                font.family: Theme.font
-                                font.pixelSize: 12
-                                clip: true
-                                selectByMouse: true
-                                Keys.onTabPressed: fValue.focusInput()
-                                Keys.onEscapePressed: win.closeEdit()
-                                Keys.onReturnPressed: fValue.focusInput()
-                                Text {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    visible: fKeys.text === ""
-                                    text: "ou saisie manuelle : SUPER + SHIFT + K"
-                                    color: Theme.muted
-                                    font: fKeys.font
-                                }
-                            }
-                            Item { Layout.fillWidth: true; visible: win.capturing }
-                            Btn {
-                                icon: 0xf030c    // md-keyboard
-                                text: win.capturing ? "" : "Capturer"
-                                accent: Theme.mauve
-                                onClicked: win.capturing ? win.stopCapture() : win.startCapture()
-                            }
-                        }
-
-                        // Récepteur de touches pendant la capture
-                        FocusScope {
-                            id: capture
-                            anchors.fill: parent
-                            focus: true
-                            Keys.onPressed: event => {
-                                event.accepted = true;
-                                if (!win.capturing) return;
-                                if (win.modKeys.includes(event.key)) return;
-                                const mods = event.modifiers;
-                                if (event.key === Qt.Key_Escape && !(mods & ~Qt.KeypadModifier)) {
-                                    win.stopCapture();
-                                    fKeys.forceActiveFocus();
-                                    return;
-                                }
-                                const name = win.keyName(event);
-                                if (name === "") return;
-                                const parts = [];
-                                if (mods & Qt.MetaModifier) parts.push("SUPER");
-                                if (mods & Qt.ControlModifier) parts.push("CTRL");
-                                if (mods & Qt.AltModifier) parts.push("ALT");
-                                if (mods & Qt.ShiftModifier) parts.push("SHIFT");
-                                fKeys.text = parts.concat([name]).join(" + ");
-                                win.stopCapture();
-                                fValue.focusInput();
-                            }
-                        }
-                    }
-                    BarText {
-                        visible: win.clash !== null
-                        text: Theme.ic(0xf0026) + "  Déjà utilisé par « " + (win.clash?.label ?? "") + " » : les deux s'exécuteraient"    // md-alert
-                        color: Theme.yellow
-                        font.pixelSize: 11
-                        font.family: Theme.labelFont
-                    }
-                }
-
-                // Type d'action
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Repeater {
-                        model: win.kindOpts
+                visible: win.mode === "list"
+                spacing: 12
+                Repeater {
+                    model: [["↑ ↓", "choisir"], ["Entrée", "modifier"], ["Espace", "(dés)activer"], ["Suppr", "supprimer"], ["Échap", "fermer"]]
+                    RowLayout {
+                        required property var modelData
+                        spacing: 5
                         Rectangle {
-                            required property var modelData
-                            readonly property bool on: win.fKind === modelData.id
-                            implicitWidth: kindText.implicitWidth + 28
-                            implicitHeight: 32
-                            radius: 16
-                            color: on ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.22) : (kindMa.containsMouse ? Theme.rowHover : "transparent")
-                            border.color: on ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.6) : Theme.pillBorder
+                            implicitWidth: hintKey.implicitWidth + 10
+                            implicitHeight: 17
+                            radius: 5
+                            color: win.p.pill
+                            border.color: win.p.pillBorder
                             border.width: 1
-                            BarText {
-                                id: kindText
-                                anchors.centerIn: parent
-                                text: modelData.label
-                                font.pixelSize: 12
-                                font.family: Theme.labelFont
-                                color: parent.on ? Theme.text : Theme.subtext
-                            }
-                            MouseArea {
-                                id: kindMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: win.fKind = modelData.id
+                            Txt { id: hintKey; anchors.centerIn: parent; text: modelData[0]; font.pixelSize: 10; color: win.p.sub }
+                        }
+                        Txt { text: modelData[1]; font.pixelSize: 11; color: win.p.muted }
+                    }
+                }
+                Item { Layout.fillWidth: true }
+                Txt {
+                    visible: win.all.some(b => b.source === "custom" || !b.enabled)
+                    text: "Tout réinitialiser"
+                    font.pixelSize: 11
+                    font.family: Theme.labelFont
+                    color: resetMa.containsMouse ? win.p.red : win.p.muted
+                    MouseArea {
+                        id: resetMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: win.call(["reset"])
+                    }
+                }
+            }
+
+            // ===== Formulaire =====
+            // Bind de la config Nix : l'enregistrer le remplace
+            Rectangle {
+                Layout.fillWidth: true
+                visible: win.mode === "edit" && win.editing?.source === "default"
+                implicitHeight: noteText.implicitHeight + 14
+                radius: 10
+                color: win.tint(win.p.blue, 0.11)
+                border.color: win.tint(win.p.blue, 0.35)
+                border.width: 1
+                Txt {
+                    id: noteText
+                    anchors.fill: parent
+                    anchors.margins: 7
+                    text: "Raccourci de la config Nix : l'enregistrer le remplace par ta version (restaurable depuis la liste)."
+                    color: win.p.blue
+                    font.pixelSize: 12
+                    font.family: Theme.labelFont
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            // Combinaison : aperçu en touches, saisie manuelle, bouton de capture
+            Rectangle {
+                Layout.fillWidth: true
+                visible: win.mode === "edit"
+                implicitHeight: 46
+                radius: 11
+                color: win.capturing ? win.tint(win.p.mauve, 0.1) : win.p.pill
+                border.color: win.capturing ? win.p.mauve : (fKeys.activeFocus ? win.p.sub : win.p.pillBorder)
+                border.width: win.capturing ? 2 : 1
+                Behavior on color { ColorAnimation { duration: 150 } }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 8
+                    spacing: 10
+
+                    KeyCaps {
+                        visible: !win.capturing && fKeys.text.trim() !== ""
+                        keys: win.fKeysPretty
+                    }
+                    Txt {
+                        visible: win.capturing
+                        text: "Appuie sur la combinaison…  (Échap : annuler)"
+                        color: win.p.mauve
+                        font.family: Theme.labelFont
+                        font.pixelSize: 13
+                        SequentialAnimation on opacity {
+                            running: win.capturing
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.45; duration: 700 }
+                            NumberAnimation { to: 1; duration: 700 }
+                        }
+                    }
+                    // Saisie manuelle (« SUPER + SHIFT + K ») et recours si la capture ne passe pas
+                    TextInput {
+                        id: fKeys
+                        Layout.fillWidth: true
+                        visible: !win.capturing
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: win.p.text
+                        font.family: Theme.font
+                        font.pixelSize: 12
+                        clip: true
+                        selectByMouse: true
+                        selectionColor: win.tint(win.p.mauve, 0.4)
+                        selectedTextColor: win.p.text
+                        Keys.onTabPressed: fValue.focusInput()
+                        Keys.onEscapePressed: win.closeEdit()
+                        Keys.onReturnPressed: fValue.focusInput()
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: fKeys.text === ""
+                            text: "Saisie manuelle : SUPER + SHIFT + K"
+                            color: win.p.muted
+                            font: fKeys.font
+                        }
+                    }
+                    Item { Layout.fillWidth: true; visible: win.capturing }
+                    Btn {
+                        icon: 0xf030c    // md-keyboard
+                        text: win.capturing ? "" : "Capturer"
+                        tip: win.capturing ? "Annuler la capture" : ""
+                        accent: win.p.mauve
+                        onClicked: win.capturing ? win.stopCapture() : win.startCapture()
+                    }
+                }
+
+                // Récepteur de touches pendant la capture
+                FocusScope {
+                    id: capture
+                    anchors.fill: parent
+                    focus: true
+                    Keys.onPressed: event => {
+                        event.accepted = true;
+                        if (!win.capturing) return;
+                        if (win.modKeys.includes(event.key)) return;
+                        const mods = event.modifiers;
+                        if (event.key === Qt.Key_Escape && !(mods & ~Qt.KeypadModifier)) {
+                            win.stopCapture();
+                            fKeys.forceActiveFocus();
+                            return;
+                        }
+                        const name = win.keyName(event);
+                        if (name === "") return;
+                        const parts = [];
+                        if (mods & Qt.MetaModifier) parts.push("SUPER");
+                        if (mods & Qt.ControlModifier) parts.push("CTRL");
+                        if (mods & Qt.AltModifier) parts.push("ALT");
+                        if (mods & Qt.ShiftModifier) parts.push("SHIFT");
+                        fKeys.text = parts.concat([name]).join(" + ");
+                        win.stopCapture();
+                        fValue.focusInput();
+                    }
+                }
+            }
+            Txt {
+                visible: win.mode === "edit" && win.clash !== null
+                text: Theme.ic(0xf0026) + "  Déjà utilisé par « " + (win.clash?.label ?? "") + " » : les deux s'exécuteraient"    // md-alert
+                color: win.p.yellow
+                font.pixelSize: 11
+                font.family: Theme.labelFont
+            }
+
+            // Action : type (icônes) + commande
+            RowLayout {
+                Layout.fillWidth: true
+                visible: win.mode === "edit"
+                spacing: 8
+                Rectangle {
+                    implicitWidth: 34 * win.kindOpts.length + 6
+                    implicitHeight: 36
+                    radius: 11
+                    color: win.p.pill
+                    border.color: win.p.pillBorder
+                    border.width: 1
+                    z: 5
+                    Rectangle {
+                        x: 3 + Math.max(0, win.kindOpts.findIndex(k => k.id === win.fKind)) * 34
+                        y: 3
+                        width: 34
+                        height: parent.height - 6
+                        radius: 8
+                        color: win.p.cursor
+                        Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                    }
+                    Row {
+                        x: 3
+                        y: 3
+                        Repeater {
+                            model: win.kindOpts
+                            Item {
+                                id: kindItem
+                                required property var modelData
+                                width: 34
+                                height: 30
+                                z: kindMa.containsMouse ? 10 : 0
+                                Txt {
+                                    anchors.centerIn: parent
+                                    text: Theme.ic(kindItem.modelData.icon)
+                                    font.pixelSize: 17
+                                    color: win.fKind === kindItem.modelData.id || kindMa.containsMouse ? win.p.mauve : win.p.muted
+                                    Behavior on color { ColorAnimation { duration: 160 } }
+                                }
+                                MouseArea {
+                                    id: kindMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: win.fKind = kindItem.modelData.id
+                                }
+                                Tip { text: kindItem.modelData.label; shown: kindMa.containsMouse }
                             }
                         }
                     }
                 }
-
-                Field2 {
+                Field {
                     id: fValue
-                    label: win.fKind === "exec" ? "Commande" : "Expression Lua"
-                    placeholder: win.fKind === "exec" ? "ex : kitty --class btop -e btop" : "ex : hl.dsp.window.close()"
+                    placeholder: win.fKind === "exec" ? "Commande : kitty --class btop -e btop" : "Expression Lua : hl.dsp.window.close()"
                     mono: true
                     next: fDesc
                     onAccepted: win.save()
                 }
-                Field2 {
+            }
+
+            // Description + options (icônes)
+            RowLayout {
+                Layout.fillWidth: true
+                visible: win.mode === "edit"
+                spacing: 8
+                Field {
                     id: fDesc
-                    label: "Description (facultatif)"
-                    placeholder: "ex : Moniteur système"
+                    placeholder: "Description (facultatif) : Moniteur système"
                     next: fKeys
                     onAccepted: win.save()
                 }
-
-                // Options
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Repeater {
-                        model: win.flagOpts
-                        Rectangle {
-                            required property var modelData
-                            readonly property bool on: win.fFlags.includes(modelData.id)
-                            implicitWidth: flagText.implicitWidth + 32
-                            implicitHeight: 30
-                            radius: 15
-                            color: on ? Qt.rgba(Theme.teal.r, Theme.teal.g, Theme.teal.b, 0.18) : (flagMa.containsMouse ? Theme.rowHover : "transparent")
-                            border.color: on ? Qt.rgba(Theme.teal.r, Theme.teal.g, Theme.teal.b, 0.55) : Theme.pillBorder
-                            border.width: 1
-                            BarText {
-                                id: flagText
-                                anchors.centerIn: parent
-                                text: (parent.on ? Theme.ic(0xf012c) + "  " : "") + modelData.label    // md-check
-                                font.pixelSize: 12
-                                font.family: Theme.labelFont
-                                color: parent.on ? Theme.teal : Theme.subtext
-                            }
-                            MouseArea {
-                                id: flagMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: win.toggleFlag(modelData.id)
-                            }
+                Repeater {
+                    model: win.flagOpts
+                    Rectangle {
+                        id: flagBtn
+                        required property var modelData
+                        readonly property bool on: win.fFlags.includes(modelData.id)
+                        implicitWidth: 36
+                        implicitHeight: 36
+                        radius: 11
+                        z: flagMa.containsMouse ? 10 : 0
+                        color: on ? win.tint(win.p.teal, 0.18) : (flagMa.containsMouse ? win.p.hover : win.p.pill)
+                        border.color: on ? win.tint(win.p.teal, 0.55) : win.p.pillBorder
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Txt {
+                            anchors.centerIn: parent
+                            text: Theme.ic(flagBtn.modelData.icon)
+                            font.pixelSize: 17
+                            color: flagBtn.on ? win.p.teal : win.p.muted
                         }
-                    }
-                    BarText {
-                        text: "Options du bind"
-                        color: Theme.muted
-                        font.pixelSize: 11
-                        font.family: Theme.labelFont
+                        MouseArea {
+                            id: flagMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: win.toggleFlag(flagBtn.modelData.id)
+                        }
+                        Tip { text: flagBtn.modelData.label; shown: flagMa.containsMouse }
                     }
                 }
+            }
 
-                Item { Layout.fillHeight: true }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Item { Layout.fillWidth: true }
-                    Btn { text: "Annuler"; onClicked: win.closeEdit() }
-                    Btn {
-                        icon: 0xf012c    // md-check
-                        text: win.saving ? "Application…" : "Enregistrer"
-                        accent: Theme.green
-                        enabled: !win.saving && fKeys.text.trim() !== "" && fValue.text.trim() !== ""
-                        onClicked: win.save()
-                    }
+            RowLayout {
+                Layout.fillWidth: true
+                visible: win.mode === "edit"
+                spacing: 8
+                Item { Layout.fillWidth: true }
+                Btn { text: "Annuler"; onClicked: win.closeEdit() }
+                Btn {
+                    icon: 0xf012c    // md-check
+                    text: win.saving ? "Application…" : "Enregistrer"
+                    accent: win.p.green
+                    enabled: !win.saving && fKeys.text.trim() !== "" && fValue.text.trim() !== ""
+                    onClicked: win.save()
                 }
             }
         }
@@ -901,32 +973,56 @@ PanelWindow {
     readonly property string fKeysPretty: {
         const s = fKeys.text.trim();
         if (s === "") return "";
-        return s.split(/\s*\+\s*/).map(k => (k.toUpperCase() === "SUPER" || k.toUpperCase() === "CTRL" || k.toUpperCase() === "ALT" || k.toUpperCase() === "SHIFT") ? k.toUpperCase() : k).join(" + ");
+        const mods = ["SUPER", "CTRL", "ALT", "SHIFT"];
+        return s.split(/\s*\+\s*/).map(k => mods.includes(k.toUpperCase()) ? k.toUpperCase() : k).join(" + ");
     }
 
     // --- Composants ---------------------------------------------------------------------
+    component Txt: Text {
+        color: win.p.text
+        font.family: Theme.font
+        font.pixelSize: Theme.fontSize
+        verticalAlignment: Text.AlignVCenter
+    }
+
+    // Infobulle sous le composant parent
+    component Tip: Rectangle {
+        property string text: ""
+        property bool shown: false
+        visible: shown && text !== ""
+        z: 100
+        anchors.top: parent.bottom
+        anchors.topMargin: 6
+        anchors.horizontalCenter: parent.horizontalCenter
+        implicitWidth: tipText.implicitWidth + 14
+        implicitHeight: 22
+        radius: 7
+        color: win.p.tip
+        Txt { id: tipText; anchors.centerIn: parent; text: parent.text; font.pixelSize: 11; font.family: Theme.labelFont; color: "#ffffff" }
+    }
+
     // Combinaison dessinée en touches
     component KeyCaps: Row {
         property string keys: ""
-        spacing: 4
+        spacing: 3
         Repeater {
             model: parent.keys === "" ? [] : parent.keys.split(" + ")
             Rectangle {
                 required property string modelData
                 readonly property bool isMod: ["SUPER", "CTRL", "ALT", "SHIFT"].includes(modelData)
-                implicitWidth: Math.max(26, capText.implicitWidth + 14)
-                implicitHeight: 26
-                radius: 7
-                color: isMod ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.16) : Theme.pill
-                border.color: isMod ? Qt.rgba(Theme.mauve.r, Theme.mauve.g, Theme.mauve.b, 0.4) : Theme.border
+                implicitWidth: Math.max(24, capText.implicitWidth + 12)
+                implicitHeight: 24
+                radius: 6
+                color: isMod ? win.tint(win.p.mauve, 0.16) : win.p.pill
+                border.color: isMod ? win.tint(win.p.mauve, 0.4) : win.p.border
                 border.width: 1
-                BarText {
+                Txt {
                     id: capText
                     anchors.centerIn: parent
                     text: win.dispNames[modelData] ?? modelData.replace(/^XF86/, "")
                     font.pixelSize: 11
                     font.family: Theme.labelFont
-                    color: parent.isMod ? Theme.mauve : Theme.text
+                    color: parent.isMod ? win.p.mauve : win.p.text
                 }
             }
         }
@@ -934,37 +1030,39 @@ PanelWindow {
 
     component Badge: Rectangle {
         property string text: ""
-        property color tint: Theme.subtext
-        implicitWidth: badgeText.implicitWidth + 14
-        implicitHeight: 20
-        radius: 10
-        color: Qt.rgba(tint.r, tint.g, tint.b, 0.14)
-        border.color: Qt.rgba(tint.r, tint.g, tint.b, 0.4)
+        property color tone: win.p.sub
+        implicitWidth: badgeText.implicitWidth + 12
+        implicitHeight: 18
+        radius: 9
+        color: win.tint(tone, 0.14)
+        border.color: win.tint(tone, 0.4)
         border.width: 1
-        BarText {
+        Txt {
             id: badgeText
             anchors.centerIn: parent
             text: parent.text
             font.pixelSize: 10
             font.family: Theme.labelFont
-            color: parent.tint
+            color: parent.tone
         }
     }
 
-    // Bouton : icône et / ou texte
+    // Bouton : icône et / ou texte, infobulle facultative
     component Btn: Rectangle {
         id: btn
         property int icon: 0
         property string text: ""
-        property color accent: Theme.subtext
+        property string tip: ""
+        property color accent: win.p.sub
         property bool small: false
         signal clicked()
-        implicitWidth: btnRow.implicitWidth + (small ? 14 : 22)
-        implicitHeight: small ? 28 : 34
-        radius: 10
+        implicitWidth: btnRow.implicitWidth + (text !== "" ? 22 : (small ? 14 : 18))
+        implicitHeight: small ? 26 : 34
+        radius: small ? 8 : 11
         opacity: enabled ? 1 : 0.4
-        color: btnMa.containsMouse ? Qt.rgba(accent.r, accent.g, accent.b, 0.22) : Theme.pill
-        border.color: btnMa.containsMouse ? Qt.rgba(accent.r, accent.g, accent.b, 0.5) : Theme.pillBorder
+        z: btnMa.containsMouse ? 10 : 0
+        color: btnMa.containsMouse ? win.tint(accent, 0.2) : win.p.pill
+        border.color: btnMa.containsMouse ? win.tint(accent, 0.5) : win.p.pillBorder
         border.width: 1
         scale: btnMa.pressed ? 0.93 : 1
         Behavior on color { ColorAnimation { duration: 120 } }
@@ -973,18 +1071,18 @@ PanelWindow {
             id: btnRow
             anchors.centerIn: parent
             spacing: 7
-            BarText {
+            Txt {
                 visible: btn.icon !== 0
                 text: btn.icon ? Theme.ic(btn.icon) : ""
-                font.pixelSize: btn.small ? 15 : 17
-                color: btnMa.containsMouse ? btn.accent : Theme.subtext
+                font.pixelSize: btn.small ? 14 : 17
+                color: btnMa.containsMouse ? btn.accent : win.p.sub
             }
-            BarText {
+            Txt {
                 visible: btn.text !== ""
                 text: btn.text
                 font.pixelSize: 12
                 font.family: Theme.labelFont
-                color: btnMa.containsMouse ? Theme.text : Theme.subtext
+                color: btnMa.containsMouse ? win.p.text : win.p.sub
             }
         }
         MouseArea {
@@ -995,49 +1093,48 @@ PanelWindow {
             cursorShape: Qt.PointingHandCursor
             onClicked: btn.clicked()
         }
+        Tip { text: btn.tip; shown: btnMa.containsMouse }
     }
 
     // Champ de texte du formulaire
-    component Field2: ColumnLayout {
+    component Field: Rectangle {
         id: fld
-        property string label: ""
         property string placeholder: ""
         property bool mono: false
         property var next: null
         property alias text: inp.text
         signal accepted()
         Layout.fillWidth: true
-        spacing: 5
+        implicitHeight: 36
+        radius: 11
+        color: win.p.pill
+        border.color: inp.activeFocus ? win.p.sub : win.p.pillBorder
+        border.width: 1
         function focusInput() { inp.forceActiveFocus(); }
-        BarText { text: fld.label; color: Theme.subtext; font.pixelSize: 11; font.family: Theme.labelFont }
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: 38
-            radius: 10
-            color: Theme.pill
-            border.color: inp.activeFocus ? Theme.subtext : Theme.pillBorder
-            border.width: 1
-            TextInput {
-                id: inp
-                anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                verticalAlignment: TextInput.AlignVCenter
-                color: Theme.text
-                font.family: fld.mono ? Theme.font : Theme.labelFont
-                font.pixelSize: 13
-                clip: true
-                selectByMouse: true
-                onAccepted: fld.accepted()
-                Keys.onEscapePressed: win.closeEdit()
-                Keys.onTabPressed: if (fld.next) fld.next.focusInput()
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: inp.text === ""
-                    text: fld.placeholder
-                    color: Theme.muted
-                    font: inp.font
-                }
+        TextInput {
+            id: inp
+            anchors.fill: parent
+            anchors.leftMargin: 12
+            anchors.rightMargin: 12
+            verticalAlignment: TextInput.AlignVCenter
+            color: win.p.text
+            font.family: fld.mono ? Theme.font : Theme.labelFont
+            font.pixelSize: 13
+            clip: true
+            selectByMouse: true
+            selectionColor: win.tint(win.p.mauve, 0.4)
+            selectedTextColor: win.p.text
+            onAccepted: fld.accepted()
+            Keys.onEscapePressed: win.closeEdit()
+            Keys.onTabPressed: if (fld.next) fld.next.focusInput()
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width
+                elide: Text.ElideRight
+                visible: inp.text === ""
+                text: fld.placeholder
+                color: win.p.muted
+                font: inp.font
             }
         }
     }
