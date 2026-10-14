@@ -5,7 +5,7 @@ import Quickshell.Io
 import Quickshell.Hyprland
 
 // Heure + météo + compte à rebours de sommeil ; clic : calendrier (ou détail de la nuit sur
-// le compteur) ; clic droit : calendrier Notion
+// le compteur) ; clic droit : planning Atlas
 Pill {
     id: root
 
@@ -82,7 +82,7 @@ Pill {
 
     onClicked: event => {
         if (event.button === Qt.RightButton)
-            Hyprland.dispatch('hl.dsp.exec_cmd("brave --app=https://calendar.notion.so/")');
+            Hyprland.dispatch('hl.dsp.exec_cmd("brave --app=https://atlas.homelab.lan/planning")');
         else if (root.splitX >= 0 && event.x >= root.splitX)
             sleep.toggleDetails();
         else

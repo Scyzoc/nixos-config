@@ -470,8 +470,9 @@ PanelWindow {
                                 case Qt.Key_Return:
                                 case Qt.Key_Enter: if (win.current) win.openEdit(win.current); break;
                                 case Qt.Key_Delete:
-                                    if (win.current?.source === "custom") win.remove(win.current);
-                                    else event.accepted = false;
+                                    if (!win.current) event.accepted = false;
+                                    else if (win.current.source === "custom") win.remove(win.current);
+                                    else if (win.current.enabled) win.flip(win.current);
                                     break;
                                 case Qt.Key_N:
                                     if (ctrl) win.openEdit(null);
@@ -662,10 +663,10 @@ PanelWindow {
                                     small: true
                                     onClicked: win.openEdit(row.b)
                                 }
-                                Btn {    // désactiver / réactiver (défauts)
+                                Btn {    // supprimer (désactive) / réactiver (défauts)
                                     visible: row.b?.source === "default"
-                                    icon: row.b?.enabled ? 0xf0209 : 0xf054c    // md-eye-off / md-undo
-                                    tip: row.b?.enabled ? "Désactiver" : "Réactiver"
+                                    icon: row.b?.enabled ? 0xf01b4 : 0xf054c    // md-delete / md-undo
+                                    tip: row.b?.enabled ? "Supprimer (restaurable dans Désactivés)" : "Réactiver"
                                     small: true
                                     accent: row.b?.enabled ? win.p.red : win.p.green
                                     onClicked: win.flip(row.b)
