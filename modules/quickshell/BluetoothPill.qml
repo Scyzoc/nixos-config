@@ -396,7 +396,7 @@ Pill {
         // Compact (pas de nom à cliquer) : clic droit → menu Bluetooth
         if (event.button === Qt.RightButton) {
             if (root.compact && root.isAirpods) popup.toggle();
-            else Hyprland.dispatch("exec blueman-manager");
+            else Hyprland.dispatch('hl.dsp.exec_cmd("blueman-manager")');
         }
         // AirPods : clic à gauche du séparateur (icône) → menu AirPods, sinon menu Bluetooth
         // (compact : icône seule → menu AirPods, qui donne accès au Bluetooth)
@@ -742,7 +742,7 @@ Pill {
                 icon: Theme.ic(0xf0493)
                 onClicked: {
                     popup.visible = false;
-                    Hyprland.dispatch("exec blueman-manager");
+                    Hyprland.dispatch('hl.dsp.exec_cmd("blueman-manager")');
                 }
             }
         }

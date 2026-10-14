@@ -187,14 +187,14 @@ PanelWindow {
         if (e.runInTerminal) cmd = Paths.kitty + " -e " + cmd;
         if (e.workingDirectory) cmd = "cd " + shq(e.workingDirectory) + " && " + cmd;
         console.info("Lancement :", cmd);
-        Hyprland.dispatch("exec " + cmd);
+        Hyprland.dispatch("hl.dsp.exec_cmd(" + JSON.stringify(cmd) + ")");
     }
     // Recherche web sur le texte tapé (Ctrl+B, ou Entrée quand aucune application ne correspond)
     function webSearch() {
         const t = query.trim();
         if (t === "") return;
         hide();
-        Hyprland.dispatch("exec " + Paths.brave + " " + shq("https://search.brave.com/search?q=" + encodeURIComponent(t)));
+        Hyprland.dispatch("hl.dsp.exec_cmd(" + JSON.stringify(Paths.brave + " " + shq("https://search.brave.com/search?q=" + encodeURIComponent(t))) + ")");
     }
     function activate() {
         if (results.length > 0 && grid.currentIndex >= 0) launch(results[grid.currentIndex]);
@@ -215,7 +215,7 @@ PanelWindow {
         hide();
         const sh = Paths.userBin + "/uninstall --app " + shq(e.id)
                  + "; echo; read -r -p 'Entrée pour fermer… ' _";
-        Hyprland.dispatch("exec " + Paths.kitty + " --class app-uninstall -e sh -c " + shq(sh));
+        Hyprland.dispatch("hl.dsp.exec_cmd(" + JSON.stringify(Paths.kitty + " --class app-uninstall -e sh -c " + shq(sh)) + ")");
     }
 
     function iconSource(e) {

@@ -21,13 +21,32 @@ let
   # Les anciens fichiers (simple tableau d'écrans) sont normalisés à la volée.
   NORM = ''if type == "array" then {monitors: .} else . end'';
 
+  # Règle écran à chaud. Hyprland en config Lua : plus de `hyprctl keyword monitor`,
+  # on passe par `hyprctl eval 'hl.monitor({...})'`. $2 garde l'ancienne notation :
+  # "disable" | "mode,position,scale[,mirror,<écran>]" (ex : "preferred,auto,1").
+  HL_MONITOR = ''
+    hl_monitor() {
+      local mode pos scale k v lua
+      if [ "$2" = disable ]; then
+        lua="hl.monitor({ output = \"$1\", disabled = true })"
+      else
+        IFS=, read -r mode pos scale k v <<< "$2"
+        # disabled = false / mirror = "" : une règle Lua ne réactive pas un écran
+        # désactivé et ne coupe pas un miroir si ces champs sont absents.
+        [ "$k" = mirror ] || v=""
+        lua="hl.monitor({ output = \"$1\", disabled = false, mode = \"$mode\", position = \"$pos\", scale = \"$scale\", mirror = \"$v\" })"
+      fi
+      ${HYPR} eval "$lua" >/dev/null
+    }
+  '';
+
   # Dernier mode appliqué : relu après un `hyprctl reload` (rebuild NixOS) pour
   # réappliquer le mode courant, sinon les lignes monitor= de home.nix
   # réactivent eDP-1 et on retombe en étendu.
   MODE_FILE = "$HOME/.local/state/display-mode";
 
-  # Verrou anti-boucle : display-apply pose des dizaines de `hyprctl keyword`,
-  # et chaque keyword fait émettre un `configreloaded` par Hyprland. Sans ce
+  # Verrou anti-boucle : display-apply pose des dizaines de `hyprctl eval`,
+  # et chacun fait émettre un `configreloaded` par Hyprland. Sans ce
   # verrou, monitor-watcher réapplique le mode courant → boucle infinie
   # (notif "Capot fermé" en rafale). Le verrou est levé 3 s après la fin, le
   # temps que les événements en retard soient consommés.
@@ -123,7 +142,7 @@ let
   # ==========================================================================
   workspace-bind = pkgs.writeShellScriptBin "workspace-bind" ''
     INTERNAL="eDP-1"
-    CONF="$HOME/.config/hypr/workspaces.conf"
+    CONF="$HOME/.config/hypr/workspaces.lua"
     BLOCK=10
 
     MONS=$(${HYPR} monitors -j)
@@ -218,35 +237,37 @@ let
     EXISTING=" $(${HYPR} workspaces -j | ${JQ} -r '[.[] | select(.id > 0) | .id] | join(" ")') "
 
     declare -A SEEN
-    KW=""
+    LUA=""
     MV=""
     mkdir -p "$(dirname "$CONF")"
     : > "$CONF.tmp"
     for ws in $(seq 1 "$MAXWS"); do
       m="''${OWNER[$ws]:-}"
       if [ -n "$m" ]; then
-        RULE="$ws, monitor:$m, persistent:true"
+        PERSIST=true
         # Premier workspace du groupe = workspace par défaut de l'écran
         if [ -z "''${SEEN[$m]:-}" ]; then
-          RULE="$RULE, default:true"
+          DEFAULT=true
           SEEN[$m]=1
         else
-          RULE="$RULE, default:false"
+          DEFAULT=false
         fi
       else
         m="$LAST"
-        # `keyword workspace` fusionne avec la règle existante : sans false
-        # explicite, un persistent/default hérité d'un ancien écran reste.
-        RULE="$ws, monitor:$m, persistent:false, default:false"
+        # La règle peut fusionner avec l'existante : sans false explicite, un
+        # persistent/default hérité d'un ancien écran reste.
+        PERSIST=false
+        DEFAULT=false
       fi
-      echo "workspace = $RULE" >> "$CONF.tmp"
-      KW+="keyword workspace $RULE ; "
+      RULE="hl.workspace_rule({ workspace = \"$ws\", monitor = \"$m\", persistent = $PERSIST, default = $DEFAULT })"
+      LUA+="$RULE"$'\n'
+      echo "$RULE" >> "$CONF.tmp"
       # Un workspace déjà ouvert ailleurs ne suit pas la règle tout seul.
       case "$EXISTING" in
-        *" $ws "*) MV+="dispatch moveworkspacetomonitor $ws $m ; " ;;
+        *" $ws "*) MV+="dispatch hl.dsp.workspace.move({ workspace = $ws, monitor = \"$m\" }) ; " ;;
       esac
     done
-    # Réécrit seulement si le contenu change : un fichier sourcé modifié peut
+    # Réécrit seulement si le contenu change : un fichier chargé modifié peut
     # recharger la config Hyprland et annuler les règles posées à chaud.
     if cmp -s "$CONF.tmp" "$CONF"; then
       rm -f "$CONF.tmp"
@@ -254,7 +275,7 @@ let
       mv "$CONF.tmp" "$CONF"
     fi
 
-    ${HYPR} --batch "$KW" >/dev/null
+    ${HYPR} eval "$LUA" >/dev/null
     [ -n "$MV" ] && ${HYPR} --batch "$MV" >/dev/null
     exit 0
   '';
@@ -310,14 +331,16 @@ let
       ${HYPR} monitors all -j | ${JQ} -r --arg d "$1" '.[] | select(.description == $d) | .name' | head -1
     }
 
+    ${HL_MONITOR}
+
     # Pose une règle écran par nom de connecteur ET par description :
-    # monitors.conf (nwg-displays) cible les noms, home.nix les descriptions.
+    # monitors.lua (nwg-displays) cible les noms, modules/hyprland.nix les descriptions.
     # Sans les deux, la règle restante peut l'emporter (cause du miroir cassé).
     set_mon() {
       local desc
       desc=$(mon_desc "$1")
-      ${HYPR} keyword monitor "$1,$2" >/dev/null
-      [ -n "$desc" ] && ${HYPR} keyword monitor "desc:$desc,$2" >/dev/null
+      hl_monitor "$1" "$2"
+      [ -n "$desc" ] && hl_monitor "desc:$desc" "$2"
     }
 
     layout_file() {
@@ -396,26 +419,26 @@ let
         for m in $(ext_monitors); do
           set_mon "$m" disable
         done
-        ${HYPR} keyword monitor "$INTERNAL,$INT_RES,$INT_EXT_POS,$INT_SCALE"
+        hl_monitor "$INTERNAL" "$INT_RES,$INT_EXT_POS,$INT_SCALE"
         notify_display "PC uniquement"
         ;;
 
       external-only)
         unmirror_all
-        ${HYPR} keyword monitor "$INTERNAL,disable"
+        hl_monitor "$INTERNAL" disable
         notify_display "Externe uniquement"
         ;;
 
       lid-closed)
         unmirror_all
-        ${HYPR} keyword monitor "$INTERNAL,disable"
+        hl_monitor "$INTERNAL" disable
         notify_display "Capot fermé"
         ;;
 
       mirror)
         # eDP-1 = source ; chaque externe le recopie dans sa résolution
         # préférée (Hyprland met à l'échelle).
-        ${HYPR} keyword monitor "$INTERNAL,$INT_RES,0x0,$INT_SCALE"
+        hl_monitor "$INTERNAL" "$INT_RES,0x0,$INT_SCALE"
         for m in $(ext_monitors); do
           set_mon "$m" "preferred,auto,1,mirror,$INTERNAL"
         done
@@ -429,9 +452,9 @@ let
 
         if [ "$LID_STATE" = "closed" ]; then
           # Capot fermé : eDP-1 inaccessible, le premier externe devient principal
-          ${HYPR} keyword monitor "$INTERNAL,disable"
+          hl_monitor "$INTERNAL" disable
         else
-          ${HYPR} keyword monitor "$INTERNAL,$INT_RES,$INT_EXT_POS,$INT_SCALE"
+          hl_monitor "$INTERNAL" "$INT_RES,$INT_EXT_POS,$INT_SCALE"
         fi
         sleep 1
         place_unknown
@@ -476,7 +499,7 @@ let
         # Réapplique la disposition sauvegardée pour les externes connectés
         # (eDP-1 reste actif).
         if restore_saved; then
-          ${HYPR} keyword monitor "$INTERNAL,$INT_RES,$INT_EXT_POS,$INT_SCALE"
+          hl_monitor "$INTERNAL" "$INT_RES,$INT_EXT_POS,$INT_SCALE"
           notify_display "Disposition restaurée"
         fi
         ;;
@@ -484,7 +507,7 @@ let
       restore-layout-external)
         # Idem, puis désactive eDP-1 (capot fermé).
         if restore_saved; then
-          ${HYPR} keyword monitor "$INTERNAL,disable"
+          hl_monitor "$INTERNAL" disable
           notify_display "Disposition restaurée (externe uniquement)"
         fi
         ;;
@@ -841,8 +864,8 @@ let
 
         configreloaded)
           [ -f "${LOCK_FILE}" ] && continue
-          # Un rebuild NixOS réécrit hyprland.conf → hyprctl reload → les
-          # lignes monitor= de home.nix/monitors.conf reprennent la main
+          # Un rebuild NixOS réécrit hyprland.lua → hyprctl reload → les
+          # règles hl.monitor de modules/hyprland.nix/monitors.lua reprennent la main
           # (eDP-1 réactivé, écran inconnu replacé loin). On réapplique le
           # dernier mode choisi.
           if pgrep -f nwg-displays >/dev/null 2>&1; then continue; fi
@@ -922,16 +945,6 @@ in
   xdg.configFile."rofi/display-input.rasi".text   = rofiTheme { width = "520px"; input = true; };
 
   # --------------------------------------------------------------------------
-  # ~/.config/hypr/monitors.conf doit exister pour que `source` (dans
-  # hyprland.conf) ne plante pas avant le premier "Apply" de nwg-displays.
-  # Juste un touch : le contenu est géré par nwg-displays, pas par nous.
-  # --------------------------------------------------------------------------
-  home.activation.ensureMonitorsConf = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    [ -f "$HOME/.config/hypr/monitors.conf" ] || touch "$HOME/.config/hypr/monitors.conf"
-    [ -f "$HOME/.config/hypr/workspaces.conf" ] || touch "$HOME/.config/hypr/workspaces.conf"
-  '';
-
-  # --------------------------------------------------------------------------
   # Packages
   # --------------------------------------------------------------------------
   home.packages = [ display-apply display-state display-layout-edit display-menu display-layouts monitor-watcher lid-watcher workspace-bind ];
@@ -970,9 +983,9 @@ in
   # --------------------------------------------------------------------------
   # Keybindings : Super+P menu Quickshell, Super+Maj+P enregistrer, Super+Ctrl+P dispositions
   # --------------------------------------------------------------------------
-  wayland.windowManager.hyprland.settings.bind = [
-    "$mainMod, P, exec, display-menu"
-    "$mainMod SHIFT, P, exec, display-apply save-layout"
-    "$mainMod CTRL, P, exec, display-layouts"
-  ];
+  wayland.windowManager.hyprland.extraConfig = ''
+    hl.bind("SUPER + P", hl.dsp.exec_cmd("display-menu"))
+    hl.bind("SUPER + SHIFT + P", hl.dsp.exec_cmd("display-apply save-layout"))
+    hl.bind("SUPER + CTRL + P", hl.dsp.exec_cmd("display-layouts"))
+  '';
 }

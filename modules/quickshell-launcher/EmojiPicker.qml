@@ -230,7 +230,7 @@ PanelWindow {
         // Collage : fermeture sans fondu, la fenêtre récupère le clavier tout de suite
         if (copyOnly) hide();
         else { open = false; visible = false; }
-        Hyprland.dispatch("exec " + Paths.userBin + "/emoji-paste " + hex + (copyOnly ? " copy" : ""));
+        Hyprland.dispatch("hl.dsp.exec_cmd(" + JSON.stringify(Paths.userBin + "/emoji-paste " + hex + (copyOnly ? " copy" : "")) + ")");
     }
 
     // Couleurs de peau : jaune par défaut puis les 5 teintes Fitzpatrick

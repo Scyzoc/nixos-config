@@ -192,7 +192,7 @@ PanelWindow {
     function paste(id, copyOnly) {
         if (!id) return;
         hide();
-        Hyprland.dispatch("exec " + Paths.userBin + "/clipboard-paste " + id + (copyOnly ? " copy" : ""));
+        Hyprland.dispatch("hl.dsp.exec_cmd(" + JSON.stringify(Paths.userBin + "/clipboard-paste " + id + (copyOnly ? " copy" : "")) + ")");
     }
     function remove(id) {
         if (!id) return;

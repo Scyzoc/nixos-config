@@ -18,6 +18,7 @@ let notionTodo = ./modules/notion-todo.nix; in
   };
 
   imports = lib.optional (builtins.pathExists notionTodo) notionTodo ++ [
+    ./modules/hyprland.nix
     ./modules/quickshell.nix
     ./modules/swaync.nix
     ./modules/emoji.nix
@@ -310,9 +311,9 @@ let notionTodo = ./modules/notion-todo.nix; in
           # capture : coupé le temps de grim (~150 ms), puis remis.
           shader=$(${pkgs.hyprland}/bin/hyprctl getoption decoration:screen_shader | ${pkgs.gnused}/bin/sed -n 's/^str: //p')
           case "$shader" in ""|"[[EMPTY]]") shader="" ;; esac
-          [ -n "$shader" ] && ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader "[[EMPTY]]" >/dev/null
+          [ -n "$shader" ] && ${pkgs.hyprland}/bin/hyprctl eval 'hl.config({ decoration = { screen_shader = "" } })' >/dev/null
           ${pkgs.grim}/bin/grim -g "$geom" "$file"
-          [ -n "$shader" ] && ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader "$shader" >/dev/null
+          [ -n "$shader" ] && ${pkgs.hyprland}/bin/hyprctl eval "hl.config({ decoration = { screen_shader = \"$shader\" } })" >/dev/null
           if [ "$mode" = "save" ]; then
             # Demande l'emplacement ; défaut ~/Pictures/Screenshots/
             dir="$HOME/Pictures/Screenshots"
@@ -361,7 +362,7 @@ let notionTodo = ./modules/notion-todo.nix; in
       MSI_CONNECTED=$(${pkgs.hyprland}/bin/hyprctl monitors all -j | \
         ${pkgs.jq}/bin/jq -r '.[] | select(.description == "'"$MSI_DESC"'") | .name')
       if [ -n "$MSI_CONNECTED" ]; then
-        ${pkgs.hyprland}/bin/hyprctl dispatch exec "[workspace 11] discord"
+        ${pkgs.hyprland}/bin/hyprctl dispatch 'hl.dsp.exec_cmd("discord", { workspace = "11" })' 
       else
         discord
       fi
@@ -555,311 +556,8 @@ let notionTodo = ./modules/notion-todo.nix; in
   };
 
   # ==========================================================================
-  # 7. HYPRLAND
+  # 7. HYPRLAND → modules/hyprland.nix (config Lua)
   # ==========================================================================
-  wayland.windowManager.hyprland = {
-    enable = true;
-    configType = "hyprlang";
-    settings = {
-      "$mainMod" = "SUPER";
-      "$terminal" = "kitty";
-      "$fileManager" = "thunar";
-      "$menu" = "app-launcher";
-
-      env = [
-        "XDG_SESSION_TYPE,wayland"
-        "XCURSOR_SIZE,24"
-        "HYPRCURSOR_SIZE,24"
-        "XCURSOR_THEME,Bibata-Modern-Ice"
-        # Contourne un crash Aquamarine/AMD (SDRMConnector::releaseCommitBuffers, SIGABRT)
-        # au branchement d'un écran externe : désactive l'atomic modesetting DRM.
-        "AQ_NO_ATOMIC,1"
-      ];
-
-      monitor = [
-        "eDP-1, 1920x1080@60, 1520x1440, 1"
-        "desc:Xiaomi Corporation Mi monitor 5505610117971, 3440x1440@120.00, 0x0, 1"
-        "desc:Microstep MSI MAG241C 0x00000010, 1920x1080@144, 3440x0, 1, transform, 3"
-        ", preferred, auto, 1"
-      ];
-
-      # Sourcé après les règles ci-dessus : nwg-displays écrit ici quand on
-      # clique "Apply" (mode Hyprland de nwg-displays, écrit un fichier +
-      # hyprctl reload plutôt que d'appliquer en live). Placé en dernier
-      # pour que ses lignes monitor= aient priorité sur les défauts au-dessus.
-      source = [ "~/.config/hypr/monitors.conf" "~/.config/hypr/workspaces.conf" ];
-
-      # Répartition des workspaces : plus de règles en dur ici. Elles sont
-      # générées dynamiquement par workspace-bind (modules/display-switch.nix)
-      # dans ~/.config/hypr/workspaces.conf, un bloc de 10 par écran actif
-      # (eDP-1 : 1-10, externe 1 : 11-20, ...) ou les groupes définis par
-      # disposition via display-layouts (Super+Ctrl+P).
-
-      exec-once = [
-        "dbus-update-activation-environment --systemd --all"
-        "systemctl --user restart xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland"
-        "hyprctl setcursor Bibata-Modern-Ice 24"
-        "xhost +si:localuser:root"
-        "swaync"
-        "awww-daemon"
-        "awww restore || true"
-        "wl-paste --type text --watch cliphist store"
-        "wl-paste --type image --watch cliphist store"
-        "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
-        # --no-agent : la barre Quickshell gère les mots de passe Wi-Fi ; sinon NM
-        # attend la fenêtre de nm-applet avant d'abandonner (demande de mdp très lente)
-        "nm-applet --indicator --no-agent"
-        "workspace-bind"
-      ];
-
-      input = {
-        kb_layout = "fr";
-        kb_variant = "azerty";
-        numlock_by_default = true;
-        follow_mouse = 1;
-        touchpad = {
-          natural_scroll = true;
-          tap-to-click = true;
-          drag_lock = true;
-        };
-      };
-
-      gesture = [
-        "3, horizontal, workspace"
-      ];
-
-      cursor = {
-        inactive_timeout = 2;
-        no_hardware_cursors = true;
-      };
-
-      general = {
-        gaps_in = 5;
-        # = marges gauche/droite de la barre Quickshell (Bar.qml) → bords alignés
-        gaps_out = 10;
-        border_size = 1;
-        "col.active_border" = "rgba(ffffffff)";
-        "col.inactive_border" = "rgba(595959aa)";
-        resize_on_border = false;
-        allow_tearing = false;
-        layout = "dwindle";
-      };
-
-      decoration = {
-        rounding = 10;
-        active_opacity = 1.0;
-        inactive_opacity = 1.0;
-        shadow = { enabled = true; range = 4; render_power = 3; color = "rgba(1a1a1aee)"; };
-        blur = { enabled = true; size = 4; passes = 1; ignore_opacity = false; new_optimizations = true; };
-      };
-
-      animations = {
-        enabled = true;
-        bezier = [
-          "easeOutQuint, 0.23, 1, 0.32, 1"
-          "linear, 0, 0, 1, 1"
-          "snap, 0.19, 1, 0.22, 1"
-          "smoothOut, 0.36, 0, 0.66, -0.56"
-          "smoothIn, 0.25, 1, 0.5, 1"
-        ];
-        animation = [
-          "global, 1, 3, snap"
-          "border, 1, 3, easeOutQuint"
-          "windows, 1, 2, snap"
-          "windowsIn, 1, 2, snap, popin 87%"
-          "windowsOut, 1, 2, easeOutQuint, popin 87%"
-          "fadeIn, 1, 2, linear"
-          "fadeOut, 1, 2, linear"
-          "fade, 1, 2, linear"
-          "layers, 1, 2, snap"
-          "layersIn, 1, 2, snap, fade"
-          "layersOut, 1, 2, easeOutQuint, fade"
-          "fadeLayersIn, 1, 2, linear"
-          "fadeLayersOut, 1, 2, linear"
-          "workspaces, 1, 3, smoothIn, slide"
-          "workspacesIn, 1, 3, smoothIn, slide"
-          "workspacesOut, 1, 3, smoothOut, slide"
-          # Scratchpad : fondu seul, le zoom des fenêtres est fait par special-zoom
-          "specialWorkspace, 1, 2, snap, fade"
-          "specialWorkspaceOut, 1, 2, linear, fade"
-        ];
-      };
-
-      # disable_autoreload : workspace-bind réécrit workspaces.conf (sourcé) ;
-      # l'autoreload rechargeait alors toute la config et effaçait les règles
-      # posées à chaud (mode miroir annulé au bout de 2 s). Le rebuild
-      # home-manager fait déjà `hyprctl reload` lui-même.
-      misc = { force_default_wallpaper = 0; disable_hyprland_logo = true; vrr = 2; disable_autoreload = true; };
-
-      render = {
-        direct_scanout = false;
-      };
-      dwindle = { preserve_split = true; };
-
-
-      bind = [
-        "$mainMod, C, exec, $terminal"
-        "$mainMod, B, exec, brave"
-        "$mainMod, G, exec, brave --app=https://gemini.google.com"
-        "$mainMod, A, exec, brave --app=https://claude.ai/new"
-        "$mainMod, N, exec, brave --app=https://www.notion.so/ID_CENSURE"
-        "$mainMod ALT, P, exec, brave --app=https://calendar.notion.so/"
-        
-        "$mainMod, Y, exec, brave --app=https://www.youtube.com/"
-        "$mainMod, S, exec, spotify"
-        "$mainMod, T, exec, brave --app=https://atlas.homelab.lan"
-        "$mainMod, D, exec, discord-launcher"
-        "$mainMod, R, exec, $menu"
-        "$mainMod, E, exec, thunar"
-        "$mainMod, W, exec, wallpaper-picker"
-        "$mainMod, V, exec, clipboard-manager"
-        "$mainMod, L, exec, hyprlock"
-        "$mainMod, semicolon, exec, emoji-picker"
-        "$mainMod, I, exec, kitty --class internet-check -e internet-check"
-        "$mainMod, U, exec, $terminal --class nmtui -e nmtui"
-        "$mainMod ALT, S, exec, audio-switch"
-        "$mainMod, O, exec, obsidian 'obsidian://open?vault=Obsidian'"
-        "$mainMod SHIFT, O, exec, pwvucontrol"
-        "$mainMod, Q, killactive,"
-        "$mainMod SHIFT, M, exit,"
-        "$mainMod SHIFT, V, exec, voice-to-text"
-        "$mainMod SHIFT, N, exec, notion-todo"
-        "$mainMod, Space, togglefloating,"
-        "$mainMod, J, layoutmsg, togglesplit" # J'ai enlevé le doublon de P (pseudo) qui était utilisé par Notion
-        
-        # Mouvements Focus
-        "$mainMod, left, movefocus, l"
-        "$mainMod, right, movefocus, r"
-        "$mainMod, up, movefocus, u"
-        "$mainMod, down, movefocus, d"
-        
-        # Déplacements de fenêtres (flèches)
-        "$mainMod SHIFT, left, movewindow, l"
-        "$mainMod SHIFT, right, movewindow, r"
-        "$mainMod SHIFT, up, movewindow, u"
-        "$mainMod SHIFT, down, movewindow, d"
-        
-        
-        "$mainMod, F, fullscreen, 1"
-        "$mainMod SHIFT, F, fullscreen,"
-        # Special Workspace (Scratchpad)
-        "$mainMod, X, exec, special-zoom magic" # Scratchpad : fondu + zoom depuis le centre (modules/special-zoom.nix) — X car S est pris par Spotify
-        "$mainMod SHIFT, X, movetoworkspace, special:magic"
-
-        # Switch bureaux avec Super+Tab (par moniteur)
-        "$mainMod, Tab, exec, ws-cycle next"
-        "$mainMod SHIFT, Tab, exec, ws-cycle prev"
-        "$mainMod CTRL, Tab, exec, ws-compact"
-
-        # Souris
-        "$mainMod, mouse_down, workspace, e+1"
-        "$mainMod, mouse_up, workspace, e-1"
-
-        # Screenshots
-        ", Print, exec, screenshot copy"
-        "SHIFT, Print, exec, screenshot save"
-        ] ++ (        # --- ADAPTATION SPÉCIFIQUE AZERTY ---
-        let
-          # Liste des touches physiques sous les chiffres 1 à 0 en AZERTY
-          azertyKeys = [ "ampersand" "eacute" "quotedbl" "apostrophe" "parenleft" "minus" "egrave" "underscore" "ccedilla" "agrave" ];
-        in
-        builtins.concatLists (builtins.genList (i:
-          let
-            ws = i + 1;
-            key = builtins.elemAt azertyKeys i;
-          in [
-            "$mainMod, ${key}, workspace, ${toString ws}"
-            "$mainMod SHIFT, ${key}, movetoworkspace, ${toString ws}"
-            # Workspaces 11 à 20 : même touche + CTRL
-            "$mainMod CTRL, ${key}, workspace, ${toString (ws + 10)}"
-            "$mainMod CTRL SHIFT, ${key}, movetoworkspace, ${toString (ws + 10)}"
-          ]
-        ) 10)
-      );
-
-      bindm = [
-        "$mainMod, mouse:272, movewindow"
-        "$mainMod, mouse:273, resizewindow"
-      ];
-
-      bindel = [
-        ",XF86AudioRaiseVolume, exec, wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && wpctl set-mute @DEFAULT_AUDIO_SINK@ 0"
-        ",XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && [ \"$(wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{print $2}')\" = \"0.00\" ] && wpctl set-mute @DEFAULT_AUDIO_SINK@ 1"
-        ",XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
-        ",XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"
-        ",XF86MonBrightnessUp, exec, brightnessctl -e4 -n2 set 5%+"
-        ",XF86MonBrightnessDown, exec, brightnessctl -e4 -n2 set 5%-"
-      ];
-
-      bindl = [
-        ", XF86AudioNext, exec, playerctl next"
-        ", XF86AudioPause, exec, media-tap"
-        ", XF86AudioPlay, exec, media-tap"
-        ", XF86AudioPrev, exec, playerctl previous"
-      ];
-
-      bindr = [];
-
-      windowrule = [
-        "match:class .*, suppress_event maximize"
-        "match:class ^$, match:title ^$, match:xwayland 1, match:float 1, match:fullscreen 0, match:pin 0, no_focus 1"
-        "match:class nmtui, float 1"
-        "match:class nmtui, size 700 500"
-        "match:class nmtui, center 1"
-        "match:class com.saivert.pwvucontrol, float 1"
-        "match:class com.saivert.pwvucontrol, size 700 500"
-        "match:class com.saivert.pwvucontrol, center 1"
-        "match:class com.saivert.pwvucontrol, animation popin"
-        "match:title wlogout, float 1"
-        "match:title wlogout, center 1"
-
-        # Vérification internet : terminal flottant centré
-        "match:class internet-check, float 1"
-        "match:class internet-check, size 560 340"
-        "match:class internet-check, center 1"
-        "match:class internet-check, animation popin"
-
-        # netfix (menu applications) : terminal flottant centré
-        "match:class netfix, float 1"
-        "match:class netfix, size 720 560"
-        "match:class netfix, center 1"
-        "match:class netfix, animation popin"
-
-        # Désinstallation (clic droit du menu d'applications) : terminal flottant centré
-        "match:class app-uninstall, float 1"
-        "match:class app-uninstall, size 760 480"
-        "match:class app-uninstall, center 1"
-        "match:class app-uninstall, animation popin"
-
-        # Menu Notion TO DO
-        "match:class notion-todo, float 1"
-        "match:class notion-todo, center 1"
-        "match:class notion-todo, animation popin"
-      ];
-      layerrule = [
-        "blur on, match:namespace quickshell-bar"
-        "ignore_alpha 0.1, match:namespace quickshell-bar"
-        # Menus d'applications / presse-papiers : flou derrière le panneau seulement
-        # (pas derrière le fond assombri)
-        "blur on, match:namespace quickshell-launcher"
-        "ignore_alpha 0.4, match:namespace quickshell-launcher"
-        "blur on, match:namespace quickshell-clipboard"
-        "ignore_alpha 0.4, match:namespace quickshell-clipboard"
-        "blur on, match:namespace quickshell-emoji"
-        "ignore_alpha 0.4, match:namespace quickshell-emoji"
-        "blur on, match:namespace swaync"
-        "ignore_alpha 0.1, match:namespace swaync"
-        "blur on, match:namespace swaync-notification-window"
-        "ignore_alpha 0.1, match:namespace swaync-notification-window"
-        "blur on, match:namespace swaync-control-center"
-        "ignore_alpha 0.1, match:namespace swaync-control-center"
-        "blur on, match:namespace launcher"
-        "blur on, match:namespace rofi"
-        "ignore_alpha 0.1, match:namespace rofi"
-        "animation fade, match:namespace rofi"
-      ];
-    };
-  };
   # ==========================================================================
   # 8. HYPRLOCK & HYPRIDLE
   # ==========================================================================
@@ -991,7 +689,7 @@ let notionTodo = ./modules/notion-todo.nix; in
       general = {
         lock_cmd = "pidof hyprlock || hyprlock";
         before_sleep_cmd = "loginctl lock-session";
-        after_sleep_cmd = "hyprctl dispatch dpms on";
+        after_sleep_cmd = "hyprctl dispatch 'hl.dsp.dpms({ action = \"on\" })'";
       };
 
       listener = [
@@ -1001,8 +699,8 @@ let notionTodo = ./modules/notion-todo.nix; in
         }
         {
           timeout = 330; # 5.5 minutes
-          on-timeout = "hyprctl dispatch dpms off";
-          on-resume = "hyprctl dispatch dpms on";
+          on-timeout = "hyprctl dispatch 'hl.dsp.dpms({ action = \"off\" })'";
+          on-resume = "hyprctl dispatch 'hl.dsp.dpms({ action = \"on\" })'";
         }
       ];
     };

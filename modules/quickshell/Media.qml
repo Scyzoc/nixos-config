@@ -133,18 +133,18 @@ Pill {
         const wins = ToplevelManager.toplevels.values;
         if (source === "spotify") {
             const w = wins.find(t => (t.appId || "").toLowerCase().indexOf("spotify") >= 0);
-            if (w) Hyprland.dispatch("focuswindow class:^" + reEsc(w.appId) + "$");
-            else Hyprland.dispatch("exec spotify");
+            if (w) Hyprland.dispatch("hl.dsp.focus({ window = " + JSON.stringify("class:^" + reEsc(w.appId) + "$") + " })");
+            else Hyprland.dispatch('hl.dsp.exec_cmd("spotify")');
             return;
         }
         if (source === "soundcloud") {
             const w = wins.find(t => (t.appId || "").toLowerCase().indexOf("soundcloud") >= 0);
-            if (w) Hyprland.dispatch("focuswindow class:^" + reEsc(w.appId) + "$");
-            else Hyprland.dispatch("exec brave --app=https://soundcloud.com");
+            if (w) Hyprland.dispatch("hl.dsp.focus({ window = " + JSON.stringify("class:^" + reEsc(w.appId) + "$") + " })");
+            else Hyprland.dispatch('hl.dsp.exec_cmd("brave --app=https://soundcloud.com")');
             return;
         }
         const w = title ? wins.find(t => (t.title || "").indexOf(title) >= 0) : null;
-        if (w) Hyprland.dispatch("focuswindow title:^" + reEsc(w.title) + "$");
+        if (w) Hyprland.dispatch("hl.dsp.focus({ window = " + JSON.stringify("title:^" + reEsc(w.title) + "$") + " })");
         else if (player?.canRaise) player.raise();
     }
 

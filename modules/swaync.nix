@@ -11,7 +11,7 @@ let
                    or (.initialClass | ascii_downcase | contains($n | ascii_downcase)))]
         | sort_by(.focusHistoryID) | .[0].address // empty')
       if [ -n "$addr" ]; then
-        hyprctl dispatch focuswindow "address:$addr"
+        hyprctl dispatch "hl.dsp.focus({ window = \"address:$addr\" })"
         exit 0
       fi
     done

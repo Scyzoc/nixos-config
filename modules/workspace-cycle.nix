@@ -34,7 +34,7 @@
         target=''${ws[$(( (idx + 1) % n ))]}
       fi
 
-      ${pkgs.hyprland}/bin/hyprctl dispatch workspace "$target"
+      ${pkgs.hyprland}/bin/hyprctl dispatch "hl.dsp.focus({ workspace = $target })"
     '')
   ];
 }

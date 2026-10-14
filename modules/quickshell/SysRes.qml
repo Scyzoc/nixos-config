@@ -158,7 +158,7 @@ Pill {
             label: "Ouvrir btop"
             onClicked: {
                 popup.visible = false;
-                Hyprland.dispatch("exec [float; center; size 1100 700] kitty -e btop");
+                Hyprland.dispatch('hl.dsp.exec_cmd("kitty -e btop", { float = true, center = true, size = "1100 700" })');
             }
         }
     }

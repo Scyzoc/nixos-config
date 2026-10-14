@@ -171,9 +171,14 @@ def run(cmd, timeout=10):
         return ""
 
 
+def lua_str(s):
+    # Littéral Lua entre guillemets (hyprctl dispatch prend une expression Lua)
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+
+
 def hypr_exec(cmd):
     # Par Hyprland : l'appli lancée ne dépend pas du processus (ni du service) appelant
-    run([HYPRCTL, "dispatch", "exec", cmd])
+    run([HYPRCTL, "dispatch", "hl.dsp.exec_cmd(%s)" % lua_str(cmd)])
 
 
 def spotify_ready(timeout=25):

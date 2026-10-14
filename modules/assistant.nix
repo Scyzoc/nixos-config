@@ -23,8 +23,8 @@ in
 
   # SUPER+K : demande écrite (menu Quickshell, AssistantPrompt.qml)
   # SUPER+SHIFT+K : demande vocale (voice-to-text --assistant : appuyer pour parler, rappuyer pour envoyer)
-  wayland.windowManager.hyprland.settings.bind = [
-    "$mainMod, K, exec, quickshell ipc -c launcher call assistant toggle"
-    "$mainMod SHIFT, K, exec, voice-to-text --assistant"
-  ];
+  wayland.windowManager.hyprland.extraConfig = ''
+    hl.bind("SUPER + K", hl.dsp.exec_cmd("quickshell ipc -c launcher call assistant toggle"))
+    hl.bind("SUPER + SHIFT + K", hl.dsp.exec_cmd("voice-to-text --assistant"))
+  '';
 }

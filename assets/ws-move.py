@@ -27,6 +27,19 @@ def batch(cmds):
                        capture_output=True)
 
 
+# Dispatchers Lua (Hyprland ≥ 0.56 avec hyprland.lua : l'ancienne syntaxe ne marche plus)
+def focus_win(addr):
+    return f'dispatch hl.dsp.focus({{ window = "address:{addr}" }})'
+
+
+def move_silent(dst, addr):
+    return f'dispatch hl.dsp.window.move({{ workspace = {dst}, follow = false, window = "address:{addr}" }})'
+
+
+def layout_msg(msg):
+    return f'dispatch hl.dsp.layout("{msg}")'
+
+
 def rect(c):
     x, y = c["at"]
     w, h = c["size"]
@@ -72,12 +85,12 @@ def build(node, dst, cmds, base):
         return
     d, ratio, a, b = node
     anchor, new = first(a)["address"], first(b)["address"]
-    cmds += [f"dispatch focuswindow address:{anchor}",
-             f"dispatch layoutmsg preselect {d}",
-             f"dispatch movetoworkspacesilent {dst},address:{new}",
-             f"dispatch focuswindow address:{anchor}",
+    cmds += [focus_win(anchor),
+             layout_msg(f"preselect {d}"),
+             move_silent(dst, new),
+             focus_win(anchor),
              # Hyprland 0.56 : splitratio n'accepte qu'un delta (pas « exact »)
-             f"dispatch layoutmsg splitratio {ratio - base:.4f}"]
+             layout_msg(f"splitratio {ratio - base:.4f}")]
     build(a, dst, cmds, base)
     build(b, dst, cmds, base)
 
@@ -89,11 +102,11 @@ def plan(src, dst, wins, base):
     tree = split(tiled) if tiled else None
     cmds = []
     if tree is None:
-        cmds += [f"dispatch movetoworkspacesilent {dst},address:{c['address']}" for c in tiled]
+        cmds += [move_silent(dst, c["address"]) for c in tiled]
     else:
-        cmds.append(f"dispatch movetoworkspacesilent {dst},address:{first(tree)['address']}")
+        cmds.append(move_silent(dst, first(tree)["address"]))
         build(tree, dst, cmds, base)
-    cmds += [f"dispatch movetoworkspacesilent {dst},address:{c['address']}" for c in floating]
+    cmds += [move_silent(dst, c["address"]) for c in floating]
     return cmds
 
 
@@ -130,8 +143,8 @@ def main():
             and (c["fullscreen"] or c["fullscreenClient"])]
     if full:
         batch([cmd for c in full for cmd in (
-            f"dispatch focuswindow address:{c['address']}",
-            "dispatch fullscreenstate 0 0")])
+            focus_win(c["address"]),
+            "dispatch hl.dsp.window.fullscreen_state({ internal = 0, client = 0 })")])
         clients = hypr_json("clients")
 
     base = default_ratio()
@@ -139,8 +152,8 @@ def main():
     for src, dst in moves:
         cmds += plan(src, dst, [c for c in clients if c["workspace"]["id"] == src], base)
     for c in full:
-        cmds += [f"dispatch focuswindow address:{c['address']}",
-                 f"dispatch fullscreenstate {c['fullscreen']} {c['fullscreenClient']}"]
+        cmds += [focus_win(c["address"]),
+                 f"dispatch hl.dsp.window.fullscreen_state({{ internal = {c['fullscreen']}, client = {c['fullscreenClient']} }})"]
 
     # Vues : chaque écran touché réaffiche son workspace (ou sa nouvelle place
     # s'il a été déplacé) ; l'écran actif en dernier pour garder le focus
@@ -148,11 +161,11 @@ def main():
     for m in sorted(monitors, key=lambda m: m["focused"]):
         if m["id"] in touched:
             shown = m["activeWorkspace"]["id"]
-            cmds.append(f"dispatch workspace {dest.get(shown, shown)}")
+            cmds.append(f"dispatch hl.dsp.focus({{ workspace = {dest.get(shown, shown)} }})")
     if active:
-        cmds.append(f"dispatch focuswindow address:{active}")
+        cmds.append(focus_win(active))
     if focused_ws not in dest:
-        cmds.append(f"dispatch movecursor {cursor['x']} {cursor['y']}")
+        cmds.append(f"dispatch hl.dsp.cursor.move({{ x = {cursor['x']}, y = {cursor['y']} }})")
     batch(cmds)
 
 

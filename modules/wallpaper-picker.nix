@@ -62,7 +62,7 @@ let
 
     # Démon absent (planté) : relancé via Hyprland pour qu'il ne dépende pas de l'appelant
     if ! $AWWW query >/dev/null 2>&1; then
-      ${pkgs.hyprland}/bin/hyprctl dispatch exec ${pkgs.awww}/bin/awww-daemon >/dev/null
+      ${pkgs.hyprland}/bin/hyprctl dispatch 'hl.dsp.exec_cmd("${pkgs.awww}/bin/awww-daemon")' >/dev/null
       for _ in 1 2 3 4 5 6 7 8 9 10; do
         $AWWW query >/dev/null 2>&1 && break
         ${pkgs.coreutils}/bin/sleep 0.3

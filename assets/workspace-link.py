@@ -93,16 +93,16 @@ def follow(ws, focused, active):
         mon = ws_monitor(p, workspaces, rules)
         if mon not in active or mon == focused:
             continue
-        cmds += [f"dispatch focusmonitor {mon}",
-                 f"dispatch focusworkspaceoncurrentmonitor {p}"]
+        cmds += [f'dispatch hl.dsp.focus({{ monitor = "{mon}" }})',
+                 f"dispatch hl.dsp.focus({{ workspace = {p}, on_current_monitor = true }})"]
         visible.add(p)
     if not cmds:
         return False
     # Retour sur l'écran d'origine, souris remise où elle était
     pos = hypr_json("cursorpos")
-    cmds.append(f"dispatch focusmonitor {focused}")
+    cmds.append(f'dispatch hl.dsp.focus({{ monitor = "{focused}" }})')
     if isinstance(pos, dict) and "x" in pos:
-        cmds.append(f"dispatch movecursor {pos['x']} {pos['y']}")
+        cmds.append(f"dispatch hl.dsp.cursor.move({{ x = {pos['x']}, y = {pos['y']} }})")
     subprocess.run([HYPRCTL, "--batch", " ; ".join(cmds)], capture_output=True)
     return True
 

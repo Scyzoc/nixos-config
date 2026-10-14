@@ -101,7 +101,7 @@ Pill {
         if (action.confirm && armed !== action.id) { armed = action.id; disarm.restart(); return; }
         armed = "";
         popup.visible = false;
-        if (action.id === "logout") Hyprland.dispatch("exit");
+        if (action.id === "logout") Hyprland.dispatch("hl.dsp.exit()");
         else Quickshell.execDetached(action.cmd);
     }
 

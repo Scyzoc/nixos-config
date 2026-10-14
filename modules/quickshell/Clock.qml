@@ -82,7 +82,7 @@ Pill {
 
     onClicked: event => {
         if (event.button === Qt.RightButton)
-            Hyprland.dispatch("exec brave --app=https://calendar.notion.so/");
+            Hyprland.dispatch('hl.dsp.exec_cmd("brave --app=https://calendar.notion.so/")');
         else if (root.splitX >= 0 && event.x >= root.splitX)
             sleep.toggleDetails();
         else

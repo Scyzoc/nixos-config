@@ -24,7 +24,7 @@ Rectangle {
 
     MouseArea {
         anchors.fill: parent
-        onWheel: event => Hyprland.dispatch(event.angleDelta.y > 0 ? "workspace m-1" : "workspace m+1")
+        onWheel: event => Hyprland.dispatch(event.angleDelta.y > 0 ? 'hl.dsp.focus({ workspace = "m-1" })' : 'hl.dsp.focus({ workspace = "m+1" })')
     }
 
     RowLayout {

@@ -45,11 +45,8 @@ in
     run ${pkgs.python3}/bin/python3 ${add-hook} ${pkgs.lib.escapeShellArg hookCmd}
   '';
 
-  wayland.windowManager.hyprland.settings = {
-    bind = [ "$mainMod, H, exec, quickshell ipc -c launcher call projects toggle" ];
-    layerrule = [
-      "blur on, match:namespace quickshell-projects"
-      "ignore_alpha 0.4, match:namespace quickshell-projects"
-    ];
-  };
+  wayland.windowManager.hyprland.extraConfig = ''
+    hl.bind("SUPER + H", hl.dsp.exec_cmd("quickshell ipc -c launcher call projects toggle"))
+    hl.layer_rule({ name = "layer-quickshell-projects", match = { namespace = "quickshell-projects" }, blur = true, ignore_alpha = 0.4 })
+  '';
 }

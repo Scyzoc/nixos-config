@@ -37,8 +37,8 @@
       shrink() {
         "$jq" -r --argjson cx "$cx" --argjson cy "$cy" --argjson f "$F" '
           .[] | ([(.w * $f | round), 1] | max) as $sw | ([(.h * $f | round), 1] | max) as $sh
-          | "dispatch resizewindowpixel exact \($sw) \($sh),address:\(.a) ; "
-          + "dispatch movewindowpixel exact \($cx - ($sw / 2 | floor)) \($cy - ($sh / 2 | floor)),address:\(.a) ; "' \
+          | "dispatch hl.dsp.window.resize({ x = \($sw), y = \($sh), exact = true, window = \"address:\(.a)\" }) ; "
+          + "dispatch hl.dsp.window.move({ x = \($cx - ($sw / 2 | floor)), y = \($cy - ($sh / 2 | floor)), window = \"address:\(.a)\" }) ; "' \
           | tr -d '\n'
       }
 
@@ -51,7 +51,7 @@
           "$hyprctl" --batch "$(printf '%s' "$wins" | shrink)" >/dev/null
           sleep 0.18
         fi
-        "$hyprctl" dispatch togglespecialworkspace "$WS" >/dev/null
+        "$hyprctl" dispatch "hl.dsp.workspace.toggle_special(\"$WS\")" >/dev/null
         exit 0
       fi
 
@@ -72,10 +72,10 @@
         .[] | ($s[.a] // {x: (.x - $mx), y: (.y - $my), w, h}) as $g
         | ([$g.w, $lw] | min) as $w | ([$g.h, $lh] | min) as $h
         | ([[$g.x, $lw - $w] | min, 0] | max) as $x | ([[$g.y, $lh - $h] | min, 0] | max) as $y
-        | "dispatch resizewindowpixel exact \($w) \($h),address:\(.a) ; "
-        + "dispatch movewindowpixel exact \($x + $mx) \($y + $my),address:\(.a) ; "' | tr -d '\n')
+        | "dispatch hl.dsp.window.resize({ x = \($w), y = \($h), exact = true, window = \"address:\(.a)\" }) ; "
+        + "dispatch hl.dsp.window.move({ x = \($x + $mx), y = \($y + $my), window = \"address:\(.a)\" }) ; "' | tr -d '\n')
 
-      "$hyprctl" --batch "dispatch togglespecialworkspace $WS ; $restore" >/dev/null
+      "$hyprctl" --batch "dispatch hl.dsp.workspace.toggle_special(\"$WS\") ; $restore" >/dev/null
       rm -f "$STATE"
     '')
   ];

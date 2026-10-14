@@ -169,6 +169,11 @@ def cmd_save(pid, raw):
 
 
 # --- Lancement ---------------------------------------------------------------------------
+def lua_str(s):
+    # Littéral Lua entre guillemets (hyprctl dispatch prend une expression Lua)
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+
+
 def hypr(*args):
     return subprocess.run([HYPRCTL, *args], capture_output=True, text=True).stdout
 
@@ -230,7 +235,7 @@ def cmd_launch(pid):
     d = r["dir"] or os.path.expanduser("~")
     windows = r["windows"] or [{"type": "terminal"}]
     ws = empty_workspace()
-    hypr("dispatch", "workspace", str(ws))
+    hypr("dispatch", f"hl.dsp.focus({{ workspace = {ws} }})")
     first = True
     for w in windows:
         if w.get("type") == "pause":
@@ -246,7 +251,7 @@ def cmd_launch(pid):
         if not first:
             time.sleep(0.35)
         first = False
-        hypr("dispatch", "exec", f"[workspace {ws} silent] " + shlex.join(argv))
+        hypr("dispatch", f'hl.dsp.exec_cmd({lua_str(shlex.join(argv))}, {{ workspace = "{ws} silent" }})')
     print(json.dumps({"ok": True, "workspace": ws}))
 
 

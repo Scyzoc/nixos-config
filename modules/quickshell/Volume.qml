@@ -364,7 +364,7 @@ Pill {
                                     popup.visible = false;
                                     // Site : sa fenêtre (PWA ou onglet du morceau)
                                     if (app.site?.win) app.site.win.activate();
-                                    else Hyprland.dispatch("focuswindow address:0x" + app.wins[0].address);
+                                    else Hyprland.dispatch("hl.dsp.focus({ window = " + JSON.stringify("address:0x" + app.wins[0].address) + " })");
                                 }
                             }
                         }
@@ -410,7 +410,7 @@ Pill {
             label: "Mixeur avancé"
             onClicked: {
                 popup.visible = false;
-                Hyprland.dispatch("exec [float; center; size 700 500; animation popin] pwvucontrol");
+                Hyprland.dispatch('hl.dsp.exec_cmd("pwvucontrol", { float = true, center = true, size = "700 500", animation = "popin" })');
             }
         }
     }

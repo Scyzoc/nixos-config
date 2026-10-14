@@ -281,7 +281,7 @@ def hypr(cmd):
             return out.decode(errors="replace")
     except OSError:
         flags, _, rest = cmd.partition("/") if cmd.startswith("j/") else ("", "", cmd)
-        args = rest.split(" ", 2) if rest.startswith("keyword") else rest.split()
+        args = rest.split(" ", 1) if rest.startswith("eval") else rest.split()
         return subprocess.run([HYPRCTL, *args, *(["-j"] if flags else [])],
                               capture_output=True, text=True).stdout
 
@@ -294,7 +294,8 @@ def current_shader():
 
 
 def set_rgb(rgb):
-    hypr("keyword decoration:screen_shader " + ("[[EMPTY]]" if rgb == NEUTRAL else shader_path(rgb)))
+    path = "" if rgb == NEUTRAL else shader_path(rgb)
+    hypr('eval hl.config({ decoration = { screen_shader = "%s" } })' % path)
 
 
 def fade(frm, to):

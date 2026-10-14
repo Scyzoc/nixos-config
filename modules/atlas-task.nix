@@ -15,11 +15,8 @@ in
 
   # SUPER+SHIFT+T : popup de création de tâche (menu Quickshell, AtlasTask.qml)
   # (SUPER+T ouvre l'appli Atlas complète)
-  wayland.windowManager.hyprland.settings = {
-    bind = [ "$mainMod SHIFT, T, exec, quickshell ipc -c launcher call atlas toggle" ];
-    layerrule = [
-      "blur on, match:namespace quickshell-atlas"
-      "ignore_alpha 0.4, match:namespace quickshell-atlas"
-    ];
-  };
+  wayland.windowManager.hyprland.extraConfig = ''
+    hl.bind("SUPER + SHIFT + T", hl.dsp.exec_cmd("quickshell ipc -c launcher call atlas toggle"))
+    hl.layer_rule({ name = "layer-quickshell-atlas", match = { namespace = "quickshell-atlas" }, blur = true, ignore_alpha = 0.4 })
+  '';
 }

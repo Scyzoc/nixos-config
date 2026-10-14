@@ -11,6 +11,12 @@
     ]
   },
   {
+    "id": "chatgpt",
+    "name": "ChatGPT",
+    "url": "https://chatgpt.com/",
+    "icon": "chatgpt.png"
+  },
+  {
     "id": "claude",
     "name": "Claude",
     "url": "https://claude.ai/new",
