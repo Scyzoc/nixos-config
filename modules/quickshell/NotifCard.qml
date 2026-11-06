@@ -17,7 +17,7 @@ Rectangle {
     readonly property string appIcon: NotifState.appIconOf(notif)
     // Vraie image (avatar, pochette…) ; une icône de thème passée en image compte comme icône
     readonly property string photo: notif.image && !notif.image.startsWith("image://icon/") && notif.image !== appIcon ? notif.image : ""
-    readonly property string iconSrc: appIcon || (notif.image.startsWith("image://icon/") ? notif.image : "")
+    readonly property string iconSrc: appIcon || (notif.image.startsWith("image://icon/") && Quickshell.hasThemeIcon(notif.image.slice(13)) ? notif.image : "")
     readonly property string brand: NotifState.brandColor(notif)
     readonly property color accent: brand !== "" ? brand : tint.color
     readonly property bool critical: notif.urgency === NotificationUrgency.Critical

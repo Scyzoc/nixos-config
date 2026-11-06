@@ -118,10 +118,11 @@ Singleton {
                    || DesktopEntries.heuristicLookup(n.appName || "");
         for (const i of [n.appIcon, entry?.icon, slug(n.appName)]) {
             if (!i) continue;
+            if (i.startsWith("image://icon/")) { if (Quickshell.hasThemeIcon(i.slice(13))) return i; continue; }
             if (i.startsWith("file://") || i.startsWith("image://")) return i;
             if (i.startsWith("/")) return "file://" + i;
-            const s = Quickshell.iconPath(i, true);
-            if (s) return s;
+            // iconPath(…, true) renvoie un chemin même pour une icône absente (damier) → hasThemeIcon
+            if (Quickshell.hasThemeIcon(i)) return Quickshell.iconPath(i);
         }
         return "";
     }
