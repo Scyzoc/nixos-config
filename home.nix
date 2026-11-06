@@ -131,6 +131,10 @@ in
       "homelab" = {
         HostName = "HOMELAB_IP_REDACTED";
         User = "homelab";
+        # Forward X11 : xclip côté serveur lit le presse-papiers local
+        # (coller des images dans Claude Code avec Ctrl+V)
+        ForwardX11 = true;
+        ForwardX11Trusted = true;
       };
       "192.168.99.*" = {
         KexAlgorithms = "+diffie-hellman-group1-sha1";
