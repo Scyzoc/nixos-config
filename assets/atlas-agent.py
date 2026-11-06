@@ -63,7 +63,7 @@ def main():
         try:
             with urllib.request.urlopen(f"{BASE}/api/agent?c={int(sys.argv[2])}", context=CTX, timeout=10) as r:
                 d = json.load(r)
-            out({"id": d["id"], "messages": [
+            out({"id": d["id"], "title": d.get("title") or "", "messages": [
                 {"role": m["role"], "content": m["content"], "error": bool(m.get("error"))}
                 for m in d["messages"]]})
         except (urllib.error.URLError, OSError, ValueError):

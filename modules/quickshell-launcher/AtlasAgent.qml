@@ -53,10 +53,15 @@ PanelWindow {
         stdout: StdioCollector { onStreamFinished: win.dark = text.indexOf("dark") >= 0 }
     }
     readonly property color cPanel: dark ? "#1a1a1a" : "#ffffff"
+    readonly property color cHover: dark ? "#242424" : "#f6f5f2"
     readonly property color cChip: dark ? "#2b2b2b" : "#efedea"
+    readonly property color cSoft: dark ? "#2b2b2b" : "#eceae5"
+    readonly property color cAccent: dark ? "#ededed" : "#2c2723"
     readonly property color cText: dark ? "#ededed" : "#37342e"
-    readonly property color cMuted: dark ? "#9a9a9a" : "#8a847c"
-    readonly property color cLine: dark ? "#2e2e2e" : "#e6e3de"
+    readonly property color cMuted: dark ? "#9a9a9a" : "#625d56"
+    readonly property color cFaint: dark ? "#8a8a8a" : "#7b756d"
+    readonly property color cLine: dark ? "#2e2e2e" : "#e8e5e0"
+    readonly property color cLineStrong: dark ? "#3c3c3c" : "#d3cfc8"
     readonly property color cErr: dark ? "#e08a8a" : "#b3392f"
     readonly property var aiStops: dark ? ["#3987e5", "#a08ce8", "#68c191", "#d9a45c"] : ["#2a78d6", "#6b4fc7", "#2b7d52", "#a2691a"]
     readonly property var aiPalette: aiStops.concat([aiStops[0]])
@@ -64,6 +69,7 @@ PanelWindow {
 
     // --- Discussion ----------------------------------------------------------------
     property int conversation: 0
+    property string title: ""
     property bool busy: false
     property bool loaded: false
     ListModel { id: msgs }
@@ -88,6 +94,7 @@ PanelWindow {
     function newChat() {
         if (busy) return;
         conversation = 0;
+        title = "";
         msgs.clear();
         input.forceActiveFocus();
     }
@@ -95,7 +102,7 @@ PanelWindow {
     function onEvent(e) {
         const i = msgs.count - 1;
         if (i < 0) return;
-        if (e.t === "start") conversation = e.conversationId;
+        if (e.t === "start") { conversation = e.conversationId; if (e.title) title = e.title; }
         else if (e.t === "delta") msgs.setProperty(i, "text", msgs.get(i).text + e.text);
         else if (e.t === "tool") {
             const cur = msgs.get(i).tools;
@@ -144,6 +151,7 @@ PanelWindow {
                 try {
                     const d = JSON.parse(text);
                     if (msgs.count > 0) return;
+                    win.title = d.title || "";
                     for (const m of d.messages)
                         msgs.append({ role: m.role, text: m.content, tools: "", failed: m.error });
                     Qt.callLater(win.scrollEnd);
@@ -159,7 +167,7 @@ PanelWindow {
         "Quelles évaluations arrivent dans les deux prochaines semaines ?"
     ]
 
-    // --- Interface -------------------------------------------------------------------
+    // --- Interface (reprend .agent-dock / .agent-pop d'Atlas) ----------------------------
     Rectangle {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.35)
@@ -171,9 +179,9 @@ PanelWindow {
     Rectangle {
         id: panel
         anchors.centerIn: parent
-        width: Math.min(520, parent.width - 80)
-        height: Math.min(760, parent.height - 100)
-        radius: 20
+        width: Math.min(420, parent.width - 32)
+        height: Math.min(640, parent.height - 112)
+        radius: 14
         color: win.cPanel
         border.color: win.cLine
         border.width: 1
@@ -182,41 +190,49 @@ PanelWindow {
         opacity: win.open ? 1 : 0
         scale: win.open ? 1 : 0.94
         Behavior on opacity { NumberAnimation { duration: 160 } }
-        Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutBack } }
+        Behavior on scale { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
 
         MouseArea { anchors.fill: parent }
 
         ColumnLayout {
             anchors.fill: parent
+            anchors.margins: 1
             spacing: 0
 
-            // En-tête
+            // En-tête (.agent-pop-head)
             Item {
                 Layout.fillWidth: true
-                implicitHeight: 64
+                implicitHeight: 52
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 16
-                    anchors.rightMargin: 12
-                    spacing: 12
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 8
+                    spacing: 6
                     Rectangle {
-                        implicitWidth: 36; implicitHeight: 36; radius: 10
-                        color: win.cChip
-                        BarText { anchors.centerIn: parent; text: Theme.ic(0xf06a9); font.pixelSize: 19; color: win.cText }
+                        implicitWidth: 26; implicitHeight: 26; radius: 8
+                        color: win.cSoft
+                        Layout.rightMargin: 4
+                        BarText { anchors.centerIn: parent; text: Theme.ic(0xf069a); font.pixelSize: 15; color: win.cAccent }
                     }
-                    Text { text: "Agent"; font.family: win.sans; font.pixelSize: 17; font.weight: Font.DemiBold; color: win.cText; Layout.fillWidth: true }
+                    Text {
+                        Layout.fillWidth: true
+                        text: win.title !== "" ? win.title : "Agent"
+                        elide: Text.ElideRight
+                        font.family: win.sans; font.pixelSize: 14; font.weight: Font.DemiBold
+                        color: win.cText
+                    }
                     Repeater {
                         model: [
                             { icon: 0xf0415, tip: "new" },
-                            { icon: 0xf03cc, tip: "open" },
+                            { icon: 0xf0293, tip: "open" },
                             { icon: 0xf0156, tip: "close" }
                         ]
                         Rectangle {
                             required property var modelData
-                            implicitWidth: 36; implicitHeight: 36; radius: 10
-                            color: hMa.containsMouse ? win.cChip : "transparent"
+                            implicitWidth: 34; implicitHeight: 34; radius: 8
+                            color: hMa.containsMouse ? win.cHover : "transparent"
                             opacity: modelData.tip === "new" && win.busy ? 0.4 : 1
-                            BarText { anchors.centerIn: parent; text: Theme.ic(modelData.icon); font.pixelSize: 19; color: win.cMuted }
+                            BarText { anchors.centerIn: parent; text: Theme.ic(modelData.icon); font.pixelSize: 17; color: hMa.containsMouse ? win.cText : win.cMuted }
                             MouseArea {
                                 id: hMa
                                 anchors.fill: parent
@@ -242,15 +258,28 @@ PanelWindow {
                 ListView {
                     id: list
                     anchors.fill: parent
-                    anchors.leftMargin: 18
-                    anchors.rightMargin: 18
-                    topMargin: 16
-                    bottomMargin: 12
+                    anchors.leftMargin: 14
+                    anchors.rightMargin: 14
+                    topMargin: 14
+                    bottomMargin: 10
                     clip: true
-                    spacing: 16
+                    spacing: 14
                     model: msgs
                     visible: msgs.count > 0
                     boundsBehavior: Flickable.StopAtBounds
+
+                    // Séparateur de jour (.agent-day)
+                    header: Item {
+                        width: list.width
+                        height: 26
+                        RowLayout {
+                            anchors.fill: parent
+                            spacing: 12
+                            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: win.cLine }
+                            Text { text: "Aujourd’hui"; font.family: win.sans; font.pixelSize: 12; color: win.cFaint }
+                            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: win.cLine }
+                        }
+                    }
 
                     delegate: Item {
                         id: row
@@ -264,23 +293,26 @@ PanelWindow {
                         width: list.width
                         implicitHeight: mine ? bubble.height : reply.implicitHeight
 
+                        // .agent-bubble : 14 14 4 14, fond panel-3
                         Rectangle {
                             id: bubble
                             visible: row.mine
                             anchors.right: parent.right
-                            width: Math.min(parent.width * 0.85, userText.implicitWidth + 28)
-                            height: userText.implicitHeight + 20
-                            radius: 16
+                            width: Math.min(parent.width * 0.88, userText.implicitWidth + 26)
+                            height: userText.implicitHeight + 18
+                            radius: 14
                             color: win.cChip
+                            Rectangle { anchors.right: parent.right; anchors.bottom: parent.bottom; width: 14; height: 14; radius: 4; color: win.cChip }
                             Text {
                                 id: userText
-                                x: 14; y: 10
-                                width: Math.min(parent.parent.width * 0.85 - 28, implicitWidth)
+                                x: 13; y: 9
+                                width: Math.min(row.width * 0.88 - 26, implicitWidth)
                                 wrapMode: Text.Wrap
                                 text: row.text
                                 color: win.cText
                                 font.family: win.sans
-                                font.pixelSize: 14
+                                font.pixelSize: 14.5
+                                lineHeight: 1.3
                             }
                         }
 
@@ -289,9 +321,10 @@ PanelWindow {
                             visible: !row.mine
                             width: parent.width
                             spacing: 8
+                            // .agent-tools
                             Flow {
                                 width: parent.width
-                                spacing: 6
+                                spacing: 5
                                 visible: row.tools !== ""
                                 Repeater {
                                     model: row.tools === "" ? [] : row.tools.split(" · ")
@@ -303,52 +336,57 @@ PanelWindow {
                                         color: "transparent"
                                         border.color: win.cLine
                                         border.width: 1
-                                        Text { id: toolT; anchors.centerIn: parent; text: modelData; color: win.cMuted; font.family: win.sans; font.pixelSize: 11 }
+                                        Text { id: toolT; anchors.centerIn: parent; text: modelData; color: win.cMuted; font.family: win.sans; font.pixelSize: 12 }
                                     }
                                 }
                             }
-                            // Réflexion : orbe + « Thinking… » (dégradé animé)
+                            // .agent-thinking : orbe + texte en dégradé qui glisse + points qui rebondissent
                             Row {
                                 visible: row.waiting
-                                spacing: 10
-                                ThinkingOrb { id: orb; orbSize: 22; running: row.waiting && win.open; palette: win.aiPalette; anchors.verticalCenter: parent.verticalCenter }
+                                spacing: 6
+                                topPadding: 3
+                                bottomPadding: 3
+                                ThinkingOrb { orbSize: 22; running: row.waiting && win.open; palette: win.aiPalette; anchors.verticalCenter: parent.verticalCenter }
                                 Row {
                                     anchors.verticalCenter: parent.verticalCenter
                                     Text {
                                         id: thinkText
                                         text: "Thinking"
                                         font.family: win.sans
-                                        font.pixelSize: 14
-                                        font.weight: Font.Medium
+                                        font.pixelSize: 14.5
+                                        font.weight: Font.DemiBold
                                         color: win.aiStops[0]
                                         SequentialAnimation on color {
                                             running: row.waiting && win.open
                                             loops: Animation.Infinite
-                                            ColorAnimation { to: win.aiStops[1]; duration: 1400 }
-                                            ColorAnimation { to: win.aiStops[2]; duration: 1400 }
-                                            ColorAnimation { to: win.aiStops[3]; duration: 1400 }
-                                            ColorAnimation { to: win.aiStops[0]; duration: 1400 }
+                                            ColorAnimation { to: win.aiStops[1]; duration: 600 }
+                                            ColorAnimation { to: win.aiStops[2]; duration: 600 }
+                                            ColorAnimation { to: win.aiStops[3]; duration: 600 }
+                                            ColorAnimation { to: win.aiStops[0]; duration: 600 }
                                         }
                                     }
                                     Repeater {
                                         model: 3
                                         Text {
+                                            id: dot
                                             required property int index
                                             text: "."
                                             font: thinkText.font
                                             color: thinkText.color
-                                            SequentialAnimation on opacity {
+                                            transform: Translate { id: tr; y: 0 }
+                                            SequentialAnimation {
                                                 running: row.waiting && win.open
                                                 loops: Animation.Infinite
-                                                PauseAnimation { duration: index * 200 }
-                                                NumberAnimation { from: 0.2; to: 1; duration: 350 }
-                                                NumberAnimation { from: 1; to: 0.2; duration: 350 }
-                                                PauseAnimation { duration: (2 - index) * 200 }
+                                                PauseAnimation { duration: dot.index * 150 }
+                                                NumberAnimation { target: tr; property: "y"; to: -3; duration: 360; easing.type: Easing.InOutQuad }
+                                                NumberAnimation { target: tr; property: "y"; to: 0; duration: 360; easing.type: Easing.InOutQuad }
+                                                PauseAnimation { duration: 480 - dot.index * 150 }
                                             }
                                         }
                                     }
                                 }
                             }
+                            // .agent-answer
                             Text {
                                 visible: row.text !== ""
                                 width: parent.width
@@ -358,33 +396,33 @@ PanelWindow {
                                 color: row.failed ? win.cErr : win.cText
                                 linkColor: win.aiStops[1]
                                 font.family: win.sans
-                                font.pixelSize: 14
-                                lineHeight: 1.25
+                                font.pixelSize: 14.5
+                                lineHeight: 1.35
                                 onLinkActivated: link => Qt.openUrlExternally(link.startsWith("/") ? "https://atlas.homelab.lan" + link : link)
                             }
                         }
                     }
                 }
 
-                // Accueil
+                // Accueil (.agent-empty, version compacte)
                 Column {
                     anchors.centerIn: parent
-                    width: parent.width - 36
-                    spacing: 12
+                    width: parent.width - 20
+                    spacing: 6
                     visible: msgs.count === 0
 
                     Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        implicitWidth: 70; implicitHeight: 70; radius: 20
-                        color: win.cChip
-                        BarText { anchors.centerIn: parent; text: Theme.ic(0xf06a9); font.pixelSize: 32; color: win.cText }
+                        implicitWidth: 52; implicitHeight: 52; radius: 14
+                        color: win.cSoft
+                        BarText { anchors.centerIn: parent; text: Theme.ic(0xf069a); font.pixelSize: 24; color: win.cAccent }
                     }
-                    Item { width: 1; height: 4 }
+                    Item { width: 1; height: 2 }
                     Text {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         text: "Que veux-tu faire ?"
-                        font.family: win.sans; font.pixelSize: 19; font.weight: Font.DemiBold
+                        font.family: win.sans; font.pixelSize: 16; font.weight: Font.Bold
                         color: win.cText
                     }
                     Text {
@@ -393,67 +431,99 @@ PanelWindow {
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.Wrap
                         text: "L’agent lit et modifie tes tâches, projets et évaluations, et consulte ton agenda."
-                        font.family: win.sans; font.pixelSize: 15
+                        font.family: win.sans; font.pixelSize: 14.5
                         color: win.cMuted
                     }
-                    Item { width: 1; height: 8 }
-                    Repeater {
-                        model: win.examples
-                        GradBorder {
-                            required property string modelData
-                            width: parent.width
-                            implicitHeight: exText.implicitHeight + 26
-                            radius: 10
-                            bw: 1.5
-                            fill: exMa.containsMouse ? win.cChip : win.cPanel
-                            stops: win.aiStops
-                            strength: exMa.containsMouse ? 0.8 : 0.55
-                            Text {
-                                id: exText
-                                anchors.verticalCenter: parent.verticalCenter
-                                x: 14
-                                width: parent.width - 28
-                                wrapMode: Text.Wrap
-                                text: modelData
-                                color: win.cText
-                                font.family: win.sans
-                                font.pixelSize: 14
-                            }
-                            MouseArea {
-                                id: exMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: win.send(modelData)
+                    Item { width: 1; height: 4 }
+                    Column {
+                        width: parent.width
+                        spacing: 8
+                        Repeater {
+                            model: win.examples
+                            // .agent-suggest : fond panel, anneau shimmer 1,5 px (0,6 → 1 au survol)
+                            Rectangle {
+                                id: sg
+                                required property string modelData
+                                width: parent.width
+                                height: sgText.implicitHeight + 22
+                                radius: 10
+                                color: sgMa.containsMouse ? Qt.tint(win.cPanel, Qt.rgba(win.aiStops[1].r !== undefined ? 0 : 0, 0, 0, 0)) : win.cPanel
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.margins: 1.5
+                                    radius: 8.5
+                                    color: win.aiStops.length > 0 ? Qt.rgba(Qt.color(win.aiStops[1]).r, Qt.color(win.aiStops[1]).g, Qt.color(win.aiStops[1]).b, 0.08) : "transparent"
+                                    opacity: sgMa.containsMouse ? 1 : 0
+                                    Behavior on opacity { NumberAnimation { duration: 140 } }
+                                }
+                                GradRing {
+                                    anchors.fill: parent
+                                    radius: 10
+                                    lineWidth: 1.5
+                                    stops: win.aiStops
+                                    opacity: sgMa.containsMouse ? 1 : 0.6
+                                    Behavior on opacity { NumberAnimation { duration: 140 } }
+                                }
+                                Text {
+                                    id: sgText
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    x: 13
+                                    width: parent.width - 26
+                                    wrapMode: Text.Wrap
+                                    text: sg.modelData
+                                    color: win.cText
+                                    font.family: win.sans
+                                    font.pixelSize: 13.5
+                                    lineHeight: 1.25
+                                }
+                                MouseArea {
+                                    id: sgMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: win.send(sg.modelData)
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // Saisie
+            // Saisie (.agent-composer)
             Item {
                 Layout.fillWidth: true
-                implicitHeight: 84
-                GradBorder {
+                implicitHeight: 70
+                Rectangle {
+                    id: composer
                     anchors.fill: parent
-                    anchors.margins: 14
-                    radius: 24
-                    bw: 2
-                    fill: win.cPanel
-                    stops: win.aiStops
-                    strength: input.activeFocus ? 0.9 : 0.65
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    anchors.bottomMargin: 10
+                    anchors.topMargin: 6
+                    radius: 18
+                    color: win.cPanel
+                    border.width: 1.5
+                    border.color: input.activeFocus ? "transparent" : win.cLineStrong
+
+                    GradRing {
+                        anchors.fill: parent
+                        radius: 18
+                        lineWidth: 1.5
+                        stops: win.aiStops
+                        opacity: input.activeFocus ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: 220 } }
+                    }
 
                     TextInput {
                         id: input
                         anchors.left: parent.left
                         anchors.right: sendBtn.left
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: 16
+                        anchors.leftMargin: 14
                         anchors.rightMargin: 8
                         color: win.cText
                         font.family: win.sans
-                        font.pixelSize: 15
+                        font.pixelSize: 14.5
                         clip: true
                         selectByMouse: true
                         focus: true
@@ -468,25 +538,30 @@ PanelWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             visible: input.text === ""
                             text: "Écris à l’agent…"
-                            color: win.cMuted
+                            color: win.cFaint
                             font: input.font
                         }
                     }
 
+                    // .btn.agent-send : éteint (panel-3, réduit) sans texte, plein (accent) sinon
                     Rectangle {
                         id: sendBtn
+                        readonly property bool ready: input.text.trim() !== "" || win.busy
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.rightMargin: 9
-                        width: 38; height: 38; radius: 19
-                        color: sendMa.containsMouse ? Qt.darker(win.cChip, 1.08) : win.cChip
-                        scale: sendMa.pressed ? 0.9 : 1
-                        Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutBack } }
+                        anchors.rightMargin: 7.5
+                        width: 36; height: 36; radius: 18
+                        color: ready ? win.cAccent : win.cChip
+                        scale: !ready ? 0.86 : (sendMa.pressed ? 0.92 : 1)
+                        Behavior on scale { NumberAnimation { duration: 340; easing.type: Easing.OutBack } }
+                        Behavior on color { ColorAnimation { duration: 200 } }
                         BarText {
                             anchors.centerIn: parent
+                            anchors.verticalCenterOffset: sendBtn.ready && sendMa.containsMouse && !win.busy ? -2 : 0
+                            Behavior on anchors.verticalCenterOffset { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                             text: win.busy ? Theme.ic(0xf04db) : Theme.ic(0xf005d)    // md-stop / md-arrow-up
-                            font.pixelSize: 19
-                            color: win.busy ? win.cErr : win.cMuted
+                            font.pixelSize: 18
+                            color: sendBtn.ready ? win.cPanel : win.cFaint
                         }
                         MouseArea {
                             id: sendMa
