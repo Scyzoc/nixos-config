@@ -11,6 +11,9 @@ Pill {
     // Animation « Tout effacer » en cours (cartes qui partent en cascade)
     property bool clearing: false
 
+    // Chorégraphie (sans aucun saut de mise en page) : les cartes filent à droite en cascade,
+    // le menu commence à se replier pendant leur départ (contenu inchangé), et les notifications
+    // ne sont réellement effacées qu'une fois le menu caché (onShownChanged).
     function clearAll() {
         if (clearing) return;
         clearing = true;
@@ -18,16 +21,20 @@ Pill {
         const n = histRep.count;
         for (let i = 0; i < n; i++) {
             const it = histRep.itemAt(i);
-            if (it) it.sweepOut(Math.min(i, 10) * 45);
+            if (it) it.sweepOut(Math.min(i, 8) * 35);
         }
-        clearDone.interval = Math.min(n - 1, 10) * 45 + 380;
-        clearDone.restart();
+        closeAfter.interval = Math.min(Math.max(n - 1, 0), 8) * 35 + 160;
+        closeAfter.restart();
     }
     Timer {
-        id: clearDone
-        onTriggered: {
+        id: closeAfter
+        onTriggered: menu.visible = false
+    }
+    Connections {
+        target: menu
+        function onShownChanged() {
+            if (menu.shown || !root.clearing) return;
             NotifState.clearAll();
-            menu.visible = false;
             root.clearing = false;
         }
     }
@@ -93,7 +100,8 @@ Pill {
                 move: Transition { NumberAnimation { properties: "y"; duration: 200; easing.type: Easing.OutCubic } }
                 Repeater {
                     id: histRep
-                    model: ScriptModel { values: menu.visible ? NotifState.history : [] }
+                    // `shown` (et pas `visible`) : la liste reste en place pendant l'animation de fermeture
+                    model: ScriptModel { values: menu.shown ? NotifState.history : [] }
                     NotifCard {
                         required property var modelData
                         notif: modelData
