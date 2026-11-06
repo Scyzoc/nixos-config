@@ -24,6 +24,16 @@ Singleton {
     readonly property color barText: (barLum + 0.05) / 0.05 > 1.05 / (barLum + 0.05) ? "#000000" : "#ffffff"
     Behavior on wallLum { NumberAnimation { duration: 600 } }
 
+    // Popups de notification : même règle que la barre, mais mesurée sur la zone du fond d'écran
+    // derrière elles (quart haut droit) ; texte noir ou blanc selon le contraste
+    property real notifLum: 0
+    readonly property real notifAlpha: 0.25 + 0.35 * Math.max(0, Math.min(1, (notifLum - 0.4) / 0.55))
+    readonly property color notifBg: Qt.rgba(0, 0, 0, notifAlpha)
+    readonly property real notifBgLum: Math.pow(notifLum * (1 - notifAlpha), 2.2)
+    readonly property bool notifDarkText: (notifBgLum + 0.05) / 0.05 > 1.05 / (notifBgLum + 0.05)
+    readonly property color notifText: notifDarkText ? "#000000" : "#ffffff"
+    Behavior on notifLum { NumberAnimation { duration: 600 } }
+
     // Fond changé (wallpaper-apply) → luminosité moyenne de la bande haute de l'image
     FileView {
         path: Paths.wallpaperState
@@ -36,6 +46,9 @@ Singleton {
             lumProc.command = [Paths.magick, f + "[0]", "-gravity", "north", "-crop", "100%x6%+0+0",
                                "+repage", "-colorspace", "Gray", "-format", "%[fx:mean]", "info:"];
             lumProc.running = true;
+            notifLumProc.command = [Paths.magick, f + "[0]", "-gravity", "northeast", "-crop", "25%x55%+0+0",
+                                    "+repage", "-colorspace", "Gray", "-format", "%[fx:mean]", "info:"];
+            notifLumProc.running = true;
         }
     }
     Process {
@@ -44,6 +57,16 @@ Singleton {
             onStreamFinished: {
                 const v = parseFloat(text);
                 if (!isNaN(v)) theme.wallLum = v;
+            }
+        }
+    }
+
+    Process {
+        id: notifLumProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const v = parseFloat(text);
+                if (!isNaN(v)) theme.notifLum = v;
             }
         }
     }

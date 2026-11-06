@@ -24,6 +24,16 @@ Rectangle {
     readonly property real timeout: NotifState.timeoutFor(notif)
     readonly property bool hovered: mouse.containsMouse || closeMouse.containsMouse
 
+    // Couleurs du texte : popups = fond de la barre (Theme.notif*, noir plus ou moins opaque selon
+    // le fond d'écran derrière), texte noir si ce fond reste trop clair ; historique = thème du menu
+    readonly property bool darkText: popup && Theme.notifDarkText
+    readonly property color fg: popup ? Theme.notifText : Theme.text
+    readonly property color fgSub: Qt.rgba(fg.r, fg.g, fg.b, darkText ? 0.78 : 0.72)
+    readonly property color fgMuted: Qt.rgba(fg.r, fg.g, fg.b, darkText ? 0.6 : 0.45)
+    readonly property color fill: darkText ? Qt.rgba(0, 0, 0, 0.08) : Qt.rgba(1, 1, 1, 0.06)
+    // Couleur de l'appli assombrie sur texte noir (sinon jaune / vert clair illisibles)
+    readonly property color accentText: darkText ? Qt.darker(accent, 2.2) : accent
+
     // Jauge du délai (1 → 0), en pause au survol
     property real progress: 1
     // Glissement d'entrée / sortie (0 = en place, 1 = hors champ à droite)
@@ -32,7 +42,7 @@ Rectangle {
 
     implicitHeight: content.implicitHeight + 24 + (popup && timeout > 0 ? 4 : 0)
     radius: 14
-    color: hovered && !popup ? Qt.rgba(1, 1, 1, 0.08) : (popup ? Theme.popupBg : Qt.rgba(1, 1, 1, 0.04))
+    color: hovered && !popup ? Qt.rgba(1, 1, 1, 0.08) : (popup ? Theme.notifBg : Qt.rgba(1, 1, 1, 0.04))
     border.color: critical ? Qt.rgba(243 / 255, 139 / 255, 168 / 255, 0.7) : (popup ? Theme.border : Theme.pillBorder)
     border.width: 1
     Behavior on color { ColorAnimation { duration: 150 } }
@@ -182,7 +192,7 @@ Rectangle {
                     spacing: 6
                     BarText {
                         text: card.notif.appName || card.notif.desktopEntry || "Notification"
-                        color: card.accent
+                        color: card.accentText
                         font.family: Theme.labelFont
                         font.pixelSize: 11
                         font.weight: Font.DemiBold
@@ -192,7 +202,7 @@ Rectangle {
                     BarText {
                         text: "·  " + NotifState.ago(card.notif)
                         visible: NotifState.ago(card.notif) !== ""
-                        color: Theme.muted
+                        color: card.fgMuted
                         font.family: Theme.labelFont
                         font.pixelSize: 11
                     }
@@ -203,13 +213,13 @@ Rectangle {
                         radius: 10
                         opacity: card.hovered ? 1 : 0
                         Behavior on opacity { NumberAnimation { duration: 150 } }
-                        color: closeMouse.containsMouse ? Theme.red : Qt.rgba(1, 1, 1, 0.1)
+                        color: closeMouse.containsMouse ? Theme.red : card.fill
                         Behavior on color { ColorAnimation { duration: 150 } }
                         BarText {
                             anchors.centerIn: parent
                             text: Theme.ic(0xf0156)    // md-close
                             font.pixelSize: 12
-                            color: closeMouse.containsMouse ? "#000000" : Theme.subtext
+                            color: closeMouse.containsMouse ? "#000000" : card.fgSub
                         }
                         MouseArea {
                             id: closeMouse
@@ -225,6 +235,7 @@ Rectangle {
                     Layout.fillWidth: true
                     visible: text !== ""
                     text: card.notif.summary
+                    color: card.fg
                     font.family: Theme.labelFont
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
@@ -237,7 +248,7 @@ Rectangle {
                     Layout.fillWidth: true
                     visible: text !== ""
                     text: card.notif.body
-                    color: Theme.subtext
+                    color: card.fgSub
                     font.family: Theme.labelFont
                     font.pixelSize: 12
                     lineHeight: 1.1
@@ -245,7 +256,7 @@ Rectangle {
                     maximumLineCount: card.popup ? 4 : 3
                     elide: Text.ElideRight
                     textFormat: Text.StyledText
-                    linkColor: card.accent
+                    linkColor: card.accentText
                     onLinkActivated: link => Qt.openUrlExternally(link)
                 }
             }
@@ -264,7 +275,7 @@ Rectangle {
                     implicitWidth: actText.implicitWidth + 20
                     implicitHeight: 26
                     radius: 8
-                    color: actMouse.containsMouse ? Qt.rgba(card.accent.r, card.accent.g, card.accent.b, 0.25) : Qt.rgba(1, 1, 1, 0.06)
+                    color: actMouse.containsMouse ? Qt.rgba(card.accent.r, card.accent.g, card.accent.b, 0.25) : card.fill
                     border.color: actMouse.containsMouse ? card.accent : Theme.pillBorder
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
@@ -272,6 +283,7 @@ Rectangle {
                         id: actText
                         anchors.centerIn: parent
                         text: modelData.text
+                        color: card.fg
                         font.family: Theme.labelFont
                         font.pixelSize: 12
                     }
