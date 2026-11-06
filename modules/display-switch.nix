@@ -316,7 +316,7 @@ let
     notify_display() {
       [ "$MODE" = "$PREV_MODE" ] && return 0
       ${NOTIFY} -h string:x-canonical-private-synchronous:display-switch \
-        "Affichage" "$1" -i video-display -t 2000
+        "Affichage" "$1" -i computer-laptop -e -t 2000
     }
 
     INT_RES="1920x1080@60"
