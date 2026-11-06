@@ -23,7 +23,7 @@ Singleton {
         const t = times[n.id];
         if (!t) return "";
         const m = Math.floor((Date.now() - t) / 60000);
-        if (m < 1) return "maintenant";
+        if (m < 1) return "";    // moins d'une minute : rien
         if (m < 60) return "il y a " + m + " min";
         const d = new Date(t);
         return (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes();
