@@ -60,12 +60,8 @@ Pill {
         PopupHeader {
             title: "Notifications"
 
-            // Ne pas déranger : bouton Zzz, teinté quand actif
-            IconButton {
-                implicitWidth: 30
-                implicitHeight: 30
-                icon: Theme.ic(0xf04b2)    // md-sleep (Zzz)
-                accent: Theme.mauve
+            // Ne pas déranger : bouton Zzz animé (DndButton), teinté quand actif
+            DndButton {
                 checked: NotifState.dnd
                 onClicked: NotifState.dnd = !NotifState.dnd
             }
