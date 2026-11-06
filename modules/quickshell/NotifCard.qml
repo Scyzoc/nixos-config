@@ -49,6 +49,19 @@ Rectangle {
         NumberAnimation { target: card; property: "slide"; to: 1; duration: 240; easing.type: Easing.InCubic }
         ScriptAction { script: NotifState.hidePopup(card.notif) }
     }
+    // « Tout effacer » (historique) : la carte prend un léger élan puis file à droite, après `delay` ms
+    function sweepOut(delay) {
+        timer.stop();
+        sweepAnim.delay = delay;
+        sweepAnim.start();
+    }
+    SequentialAnimation {
+        id: sweepAnim
+        property int delay: 0
+        PauseAnimation { duration: sweepAnim.delay }
+        NumberAnimation { target: card; property: "slide"; to: 1; duration: 300; easing.type: Easing.InBack; easing.overshoot: 2.2 }
+    }
+
     // Fin du délai : la carte glisse hors de l'écran (la notif reste dans l'historique)
     function leave() {
         if (leaving) return;

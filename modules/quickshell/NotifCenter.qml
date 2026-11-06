@@ -8,6 +8,29 @@ Pill {
     id: root
 
     readonly property int count: NotifState.count
+    // Animation « Tout effacer » en cours (cartes qui partent en cascade)
+    property bool clearing: false
+
+    function clearAll() {
+        if (clearing) return;
+        clearing = true;
+        trashShake.restart();
+        const n = histRep.count;
+        for (let i = 0; i < n; i++) {
+            const it = histRep.itemAt(i);
+            if (it) it.sweepOut(Math.min(i, 10) * 45);
+        }
+        clearDone.interval = Math.min(n - 1, 10) * 45 + 380;
+        clearDone.restart();
+    }
+    Timer {
+        id: clearDone
+        onTriggered: {
+            NotifState.clearAll();
+            menu.visible = false;
+            root.clearing = false;
+        }
+    }
 
     tooltip: (NotifState.dnd ? "Ne pas déranger activé\n" : "")
              + (count === 0 ? "Aucune notification" : count + " notification" + (count > 1 ? "s" : ""))
@@ -74,6 +97,7 @@ Pill {
                 spacing: 6
                 move: Transition { NumberAnimation { properties: "y"; duration: 200; easing.type: Easing.OutCubic } }
                 Repeater {
+                    id: histRep
                     model: ScriptModel { values: menu.visible ? NotifState.history : [] }
                     NotifCard {
                         required property var modelData
@@ -94,19 +118,39 @@ Pill {
             radius: 10
             color: clearMouse.containsMouse ? Qt.rgba(243 / 255, 139 / 255, 168 / 255, 0.25) : Qt.rgba(243 / 255, 139 / 255, 168 / 255, 0.12)
             Behavior on color { ColorAnimation { duration: 150 } }
-            BarText {
+            ClickFx { id: clearFx; color: Theme.red }
+            Row {
                 anchors.centerIn: parent
-                text: Theme.ic(0xf0a7a) + "  Tout effacer"    // md-trash-can-outline
-                color: Theme.red
-                font.family: Theme.labelFont
-                font.pixelSize: 12
+                spacing: 8
+                BarText {
+                    id: trash
+                    text: Theme.ic(0xf0a7a)    // md-trash-can-outline
+                    color: Theme.red
+                    font.pixelSize: 14
+                    transformOrigin: Item.Bottom
+                    // Poubelle qui s'agite au clic
+                    SequentialAnimation {
+                        id: trashShake
+                        NumberAnimation { target: trash; property: "rotation"; to: -18; duration: 70 }
+                        NumberAnimation { target: trash; property: "rotation"; to: 14; duration: 90 }
+                        NumberAnimation { target: trash; property: "rotation"; to: -8; duration: 80 }
+                        NumberAnimation { target: trash; property: "rotation"; to: 0; duration: 120; easing.type: Easing.OutBack }
+                    }
+                }
+                BarText {
+                    text: "Tout effacer"
+                    color: Theme.red
+                    font.family: Theme.labelFont
+                    font.pixelSize: 12
+                }
             }
             MouseArea {
                 id: clearMouse
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: { NotifState.clearAll(); menu.visible = false; }
+                enabled: !root.clearing
+                onClicked: { clearFx.play(); root.clearAll(); }
             }
         }
     }
