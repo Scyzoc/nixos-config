@@ -25,4 +25,13 @@ ShellRoot {
         target: "greeting"
         function hello(): string { GreetingState.check(true); return "ok"; }
     }
+
+    // Ferme le menu de barre ouvert (appelé par `screenshot` avant de geler l'écran)
+    IpcHandler {
+        target: "popup"
+        function close(): string {
+            if (PopupState.current) PopupState.current.visible = false;
+            return "ok";
+        }
+    }
 }

@@ -40,9 +40,20 @@ in
       --  monitors.lua   : écrit par nwg-displays (bouton Apply)
       --  workspaces.lua : écrit par workspace-bind (modules/display-switch.nix), un bloc
       --                   de 10 workspaces par écran actif ou les groupes de display-layouts
+      -- Garde-fou : monitors.lua désactive eDP-1 (disposition de bureau). Sans écran
+      -- externe branché, plus aucun écran actif → Hyprland 0.56 plante (SEGV dans
+      -- CPopup::onMap, popup de la barre). On ignore donc la désactivation de l'écran
+      -- interne au chargement ; display-switch (monitor-watcher) la réapplique dès
+      -- qu'un externe est présent.
+      local hl_monitor = hl.monitor
+      hl.monitor = function(rule)
+        if type(rule) == "table" and rule.output == "eDP-1" and rule.disabled then return end
+        return hl_monitor(rule)
+      end
       for _, f in ipairs({ "monitors.lua", "workspaces.lua" }) do
         pcall(dofile, home .. "/.config/hypr/" .. f)
       end
+      hl.monitor = hl_monitor
 
       -- Démarrage
       hl.on("hyprland.start", function()
@@ -76,7 +87,36 @@ in
         },
         cursor = { inactive_timeout = 2, no_hardware_cursors = true },
       })
+      -- Geste 3 doigts natif (suit les doigts), sans use_r : le swipe passe sur id±1,
+      -- donc sur le vide voisin du workspace actif ; create_new ouvre le vide au-delà du dernier.
+      hl.config({ gestures = { workspace_swipe_use_r = false, workspace_swipe_create_new = true } })
       hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
+      -- Règle : actif → vide voisin → prochain actif. Si on arrive sur un vide depuis un vide
+      -- (id ± 1), on saute au prochain workspace occupé dans le même sens (sinon retour au vide précédent).
+      local last_ws = {}
+      hl.on("workspace.active", function(ws)
+        if not ws or not ws.monitor then return end
+        local mon = ws.monitor.name
+        local prev = last_ws[mon]
+        last_ws[mon] = ws.id
+        if not prev or ws.windows ~= 0 or math.abs(ws.id - prev) ~= 1 then return end
+        local dir = ws.id - prev
+        local p
+        local target
+        for _, w in ipairs(hl.get_workspaces()) do
+          if w.id == prev then p = w end
+          if w.windows > 0 and w.monitor and w.monitor.name == mon then
+            if dir > 0 and w.id > ws.id and (not target or w.id < target) then target = w.id end
+            if dir < 0 and w.id < ws.id and (not target or w.id > target) then target = w.id end
+          end
+        end
+        if not (p and p.windows == 0) then return end
+        local dest = target or prev
+        if not target then last_ws[mon] = prev end
+        -- différé hors du geste : un focus en plein swipe-end fait SEGV
+        -- (CUnifiedWorkspaceSwipeGesture::end, 0.56.2)
+        hl.exec_cmd("sleep 0.3; hyprctl dispatch 'hl.dsp.focus({ workspace = " .. dest .. " })'")
+      end)
 
       -- Apparence
       hl.config({
@@ -102,7 +142,9 @@ in
         -- l'autoreload rechargeait alors toute la config et effaçait les règles
         -- posées à chaud (mode miroir annulé au bout de 2 s). Le rebuild
         -- home-manager fait déjà `hyprctl reload` lui-même.
-        misc = { force_default_wallpaper = 0, disable_hyprland_logo = true, vrr = 2, disable_autoreload = true },
+        -- allow_session_lock_restore : si hyprlock plante, hyprlock-safe (home.nix) en
+        -- relance un qui reprend le verrou (sinon écran rouge et session perdue).
+        misc = { force_default_wallpaper = 0, disable_hyprland_logo = true, vrr = 2, disable_autoreload = true, allow_session_lock_restore = true },
         render = { direct_scanout = false },
         dwindle = { preserve_split = true },
       })
@@ -132,9 +174,9 @@ in
       anim("layersOut", 2, "easeOutQuint", "fade")
       anim("fadeLayersIn", 2, "linear")
       anim("fadeLayersOut", 2, "linear")
-      anim("workspaces", 3, "smoothIn", "slide")
-      anim("workspacesIn", 3, "smoothIn", "slide")
-      anim("workspacesOut", 3, "smoothOut", "slide")
+      anim("workspaces", 3, "smoothIn", "slide horizontal")
+      anim("workspacesIn", 3, "smoothIn", "slide horizontal")
+      anim("workspacesOut", 3, "smoothOut", "slide horizontal")
       -- Scratchpad : fondu seul, le zoom des fenêtres est fait par special-zoom
       anim("specialWorkspace", 2, "snap", "fade")
       anim("specialWorkspaceOut", 2, "linear", "fade")
@@ -158,9 +200,9 @@ in
       run(mod .. " + E", "thunar")
       run(mod .. " + W", "wallpaper-picker")
       run(mod .. " + V", "clipboard-manager")
-      run(mod .. " + L", "hyprlock")
+      run(mod .. " + L", "pidof hyprlock || hyprlock-safe")
       run(mod .. " + semicolon", "emoji-picker")
-      run(mod .. " + I", "kitty --class internet-check -e internet-check")
+      run(mod .. " + I", "internet-check")
       run(mod .. " + U", terminal .. " --class nmtui -e nmtui")
       run(mod .. " + ALT + S", "audio-switch")
       run(mod .. " + O", "obsidian 'obsidian://open?vault=Obsidian'")
@@ -174,9 +216,9 @@ in
       run(mod .. " + CTRL + Tab", "ws-compact")
       run("Print", "screenshot copy")
       run("SHIFT + Print", "screenshot save")
+      run(mod .. " + SHIFT + Print", "screen-record")
 
       hl.bind(mod .. " + Q", hl.dsp.window.close())
-      hl.bind(mod .. " + SHIFT + M", hl.dsp.exit())
       hl.bind(mod .. " + Space", hl.dsp.window.float({ action = "toggle" }))
       hl.bind(mod .. " + J", hl.dsp.layout("togglesplit"))
       hl.bind(mod .. " + F", hl.dsp.window.fullscreen({ mode = "maximized" }))
@@ -234,7 +276,6 @@ in
       popup({ class = "nmtui" }, "700 500")
       popup({ class = "com.saivert.pwvucontrol" }, "700 500", true)
       popup({ title = "wlogout" })
-      popup({ class = "internet-check" }, "560 340", true)    -- vérification internet
       popup({ class = "netfix" }, "720 560", true)            -- netfix (menu applications)
       popup({ class = "app-uninstall" }, "760 480", true)     -- désinstallation (clic droit du menu d'applications)
       popup({ class = "notion-todo" }, nil, true)             -- menu Notion TO DO
@@ -251,6 +292,7 @@ in
       layer("quickshell-launcher", { blur = true, ignore_alpha = 0.4 })
       layer("quickshell-clipboard", { blur = true, ignore_alpha = 0.4 })
       layer("quickshell-emoji", { blur = true, ignore_alpha = 0.4 })
+      layer("quickshell-speedtest", { blur = true, ignore_alpha = 0.4 })
       layer("swaync", { blur = true, ignore_alpha = 0.1 })
       layer("swaync-notification-window", { blur = true, ignore_alpha = 0.1 })
       layer("swaync-control-center", { blur = true, ignore_alpha = 0.1 })

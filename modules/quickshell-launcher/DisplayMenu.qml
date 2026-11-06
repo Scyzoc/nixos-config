@@ -194,7 +194,7 @@ PanelWindow {
                 const h = Math.round(parseFloat(modeHz(s)));
                 if (!out.some(o => o.n === h)) out.push({ n: h, raw: modeHz(s) });
             }
-        return out;
+        return out.sort((a, b) => b.n - a.n);
     }
     // Nom affiché d'un écran : « PC » pour l'interne, sinon la marque (1er mot de la description,
     // numérotée si plusieurs écrans de la même marque)

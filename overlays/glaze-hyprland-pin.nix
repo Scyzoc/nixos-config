@@ -4,6 +4,8 @@ final: prev: {
   # par le sandbox nix). On repin sur la dernière 7.x compatible.
   glaze = prev.glaze.overrideAttrs (old: {
     version = "7.9.1";
+    # nixpkgs ajoute un patch (Qt/vicinae) écrit pour 8.x+, il ne s'applique pas à la 7.9.1
+    patches = [ ];
     src = prev.fetchFromGitHub {
       owner = "stephenberry";
       repo = "glaze";

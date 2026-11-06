@@ -17,6 +17,7 @@ import Quickshell.Io
 //   quickshell ipc -c launcher call crepuscule toggle
 //   quickshell ipc -c launcher call projects toggle
 //   quickshell ipc -c launcher call binds toggle
+//   quickshell ipc -c launcher call speedtest toggle      (test de débit, SUPER+I)
 ShellRoot {
     id: root
 
@@ -30,9 +31,10 @@ ShellRoot {
     Crepuscule { id: crepuscule }
     ProjectLauncher { id: projects }
     BindsMenu { id: binds }
+    SpeedTest { id: speedtest }
 
     function toggleOnly(menu) {
-        for (const m of [launcher, wallpaper, clipboard, emoji, assistant, atlas, display, crepuscule, projects, binds])
+        for (const m of [launcher, wallpaper, clipboard, emoji, assistant, atlas, display, crepuscule, projects, binds, speedtest])
             if (m !== menu && m.open) m.hide();
         menu.toggle();
     }
@@ -76,5 +78,9 @@ ShellRoot {
     IpcHandler {
         target: "binds"
         function toggle(): void { root.toggleOnly(binds); }
+    }
+    IpcHandler {
+        target: "speedtest"
+        function toggle(): void { root.toggleOnly(speedtest); }
     }
 }

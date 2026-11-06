@@ -61,6 +61,8 @@ let
       show)
         IF="$2"
         CONN=$($NMCLI -g GENERAL.CONNECTION dev show "$IF" 2>/dev/null)
+        # Pas de connexion active (DHCP en échec) : profil filaire lié à l'interface
+        [ -z "$CONN" ] && CONN=$($NMCLI -t -f NAME,TYPE,DEVICE con show 2>/dev/null | $SED -n "s/^\(.*\):802-3-ethernet:$IF\$/\1/p" | head -n1)
         [ -z "$CONN" ] && exit 1
         printf 'conn=%s\n' "$CONN"
         printf 'method=%s\n' "$($NMCLI -g ipv4.method con show "$CONN")"
@@ -75,7 +77,7 @@ let
           LABEL="DHCP"
         else
           DNS=$(echo "$6" | ${pkgs.coreutils}/bin/tr -s ' ,' ',' | $SED 's/^,//; s/,$//')
-          ERR=$($NMCLI con mod "$CONN" ipv4.method manual ipv4.addresses "$4" ipv4.gateway "$5" ipv4.dns "$DNS" 2>&1)
+          ERR=$($NMCLI con mod "$CONN" ipv4.method manual ipv4.addresses "$4" ipv4.gateway "$5" ipv4.dns "$DNS" ipv4.may-fail yes 2>&1)
           LABEL="IP statique $4"
         fi
         if [ -n "$ERR" ]; then
@@ -131,9 +133,14 @@ let
     s.send(HANDSHAKE)
     s.send(NOTIFICATIONS)
 
+    # Connecté trop tôt (AirPods pas prêts) : socket ouverte mais muette → quitter, AncState relance
+    heard = False
     while True:
-        r, _, _ = select.select([s, sys.stdin], [], [])
+        r, _, _ = select.select([s, sys.stdin], [], [], None if heard else 8)
+        if not r:
+            sys.exit(1)
         if s in r:
+            heard = True
             try:
                 p = s.recv(1024)
             except OSError:
@@ -247,15 +254,19 @@ let
         readonly property string ip: "${pkgs.iproute2}/bin/ip"
         readonly property string sh: "${pkgs.bash}/bin/sh"
         readonly property string pidof: "${pkgs.procps}/bin/pidof"
+        readonly property string stat: "${pkgs.coreutils}/bin/stat"
         readonly property string date: "${pkgs.coreutils}/bin/date"
         readonly property string cat: "${pkgs.coreutils}/bin/cat"
         readonly property string top: "${pkgs.procps}/bin/top"
-        readonly property string hyprlock: "${pkgs.hyprlock}/bin/hyprlock"
+        readonly property string hyprlock: "${config.home.profileDirectory}/bin/hyprlock-safe"
         readonly property string systemctl: "/run/current-system/sw/bin/systemctl"
         readonly property string sudo: "/run/wrappers/bin/sudo"
         readonly property string userBin: "${config.home.profileDirectory}/bin"
         readonly property string powerSchedule: "${power-schedule}"
         readonly property string netIpconfig: "${net-ipconfig}"
+        readonly property string lsblk: "${pkgs.util-linux}/bin/lsblk"
+        readonly property string udisksctl: "/run/current-system/sw/bin/udisksctl"
+        readonly property string thunar: "/run/current-system/sw/bin/thunar"
         readonly property string nmcli: "${pkgs.networkmanager}/bin/nmcli"
         readonly property string wlCopy: "${pkgs.wl-clipboard}/bin/wl-copy"
         readonly property string rfkill: "${pkgs.util-linux}/bin/rfkill"
@@ -264,6 +275,7 @@ let
         readonly property string batteryLimit: "/run/current-system/sw/bin/battery-limit"
         readonly property string mkdir: "${pkgs.coreutils}/bin/mkdir"
         readonly property string notifySend: "${pkgs.libnotify}/bin/notify-send"
+        readonly property string cava: "${pkgs.cava}/bin/cava"
         readonly property string pwPlay: "${pkgs.pipewire}/bin/pw-play"
         readonly property string alarmSound: "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
         readonly property string bubbleSound: "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/message-new-instant.oga"

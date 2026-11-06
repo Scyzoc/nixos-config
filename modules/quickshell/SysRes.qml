@@ -24,6 +24,13 @@ Pill {
 
     alert: critical
 
+    // Pastille visible seulement en situation critique (maintenue 8 s après le dernier pic pour ne pas
+    // clignoter), ou tant que son menu est ouvert / en train de se refermer
+    property bool recentCritical: false
+    onCriticalChanged: if (critical) { recentCritical = true; hideTimer.restart(); }
+    Timer { id: hideTimer; interval: 8000; onTriggered: root.recentCritical = critical }
+    visible: recentCritical || PopupState.current === popup || popup.closing
+
     Process {
         id: statProc
         command: [Paths.cat, "/proc/stat", "/proc/meminfo"]

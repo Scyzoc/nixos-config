@@ -11,7 +11,9 @@ import Quickshell.Services.Mpris
 Pill {
     id: root
 
-    readonly property var players: Mpris.players.values
+    // « Web Authentication Redirect » : page de redirection d'auth (passkey/OAuth) de Brave,
+    // publiée comme lecteur MPRIS alors qu'il n'y a aucun média → ignorée
+    readonly property var players: Mpris.players.values.filter(p => (p.trackTitle ?? "") !== "Web Authentication Redirect")
     // Lecteurs réels : Brave garde son MPRIS après fermeture de l'onglet vidéo (arrêté, sans
     // titre) → ignoré. L'état vide transitoire d'un changement de morceau n'est pas « arrêté ».
     readonly property var livePlayers: players.filter(p => p.playbackState !== MprisPlaybackState.Stopped || (p.trackTitle ?? "") !== "")
@@ -32,7 +34,15 @@ Pill {
         if (p && (p.trackTitle ?? "") !== "") {
             clearMeta.stop();
             title = p.trackTitle;
-            artist = p.trackArtist ?? "";
+            // Tous les artistes (feat. inclus) : xesam:artist est une liste
+            const al = p.metadata["xesam:artist"];
+            artist = Array.isArray(al) && al.length > 0 ? al.join(", ") : (p.trackArtist ?? "");
+            // Spotify ne publie que le 1er artiste en MPRIS : la page du morceau donne tous les feats
+            const u = p.metadata["xesam:url"] ?? "";
+            if (/^https:\/\/open\.spotify\.com\/track\//.test(u)) {
+                if (artistCache[u]) artist = artistCache[u];
+                else if (artistFetch.url !== u) { artistFetch.running = false; artistFetch.url = u; artistFetch.running = true; }
+            }
             album = p.trackAlbum ?? "";
             art = p.trackArtUrl ?? "";
         } else if (!p) {
@@ -40,6 +50,32 @@ Pill {
             clearMeta.triggered();
         } else {
             clearMeta.restart();
+        }
+    }
+    // Spectre audio (cava, sortie par défaut, graves/instru 30-220 Hz) : partagé barre + popup
+    property var levels: []
+    Process {
+        running: root.visible && (root.player?.isPlaying ?? false)
+        command: [Paths.sh, "-c", "c=$(mktemp); printf '[general]\\nbars=12\\nframerate=60\\nnoise_reduction=12\\nautosens=1\\nlower_cutoff_freq=30\\nhigher_cutoff_freq=220\\n[output]\\nmethod=raw\\ndata_format=ascii\\nascii_max_range=100\\nbar_delimiter=59\\n' > \"$c\"; exec " + Paths.cava + " -p \"$c\""]
+        stdout: SplitParser {
+            onRead: line => root.levels = line.split(";").map(Number)
+        }
+        onRunningChanged: if (!running) root.levels = []
+    }
+
+    property var artistCache: ({})
+    Process {
+        id: artistFetch
+        property string url: ""
+        command: [Paths.sh, "-c", Paths.curl + " -sfL --max-time 8 -A 'Mozilla/5.0' \"$1\" | grep -o 'music:musician_description\" content=\"[^\"]*\"' | head -n1 | sed 's/.*content=\"//;s/\"$//;s/&amp;/\\&/g;s/&#x27;/'\"'\"'/g;s/&quot;/\"/g'", "sh", url]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const a = text.trim();
+                if (a !== "" && artistFetch.url !== "") {
+                    root.artistCache[artistFetch.url] = a;
+                    root.syncMeta();
+                }
+            }
         }
     }
     Timer {
@@ -55,6 +91,7 @@ Pill {
         target: root.player
         function onTrackTitleChanged() { root.syncMeta(); }
         function onTrackArtistChanged() { root.syncMeta(); }
+        function onMetadataChanged() { root.syncMeta(); }
         function onTrackAlbumChanged() { root.syncMeta(); }
         function onTrackArtUrlChanged() { root.syncMeta(); }
     }
@@ -258,6 +295,24 @@ Pill {
         Layout.preferredHeight: 20
         clip: true
 
+        Row {
+            anchors.fill: parent
+            spacing: 2
+            Repeater {
+                model: 12
+                Rectangle {
+                    required property int index
+                    width: (parent.width - 22) / 12
+                    height: Math.max(2, parent.height * ((root.levels[index] ?? 0) / 100))
+                    anchors.verticalCenter: parent.verticalCenter
+                    radius: 1.5
+                    color: root.titleColor
+                    opacity: 0.3
+                    Behavior on height { NumberAnimation { duration: 30 } }
+                }
+            }
+        }
+
         BarText {
             id: scrollText
             anchors.verticalCenter: parent.verticalCenter
@@ -373,11 +428,36 @@ Pill {
                     color: root.artistColor
                     Behavior on color { ColorAnimation { duration: 400 } }
                 }
-                BarText {
-                    font.family: Theme.labelFont
-                    Layout.fillWidth: true; text: root.album; font.pixelSize: 12; elide: Text.ElideRight; visible: text !== ""
-                    color: root.albumColor
-                    Behavior on color { ColorAnimation { duration: 400 } }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    BarText {
+                        font.family: Theme.labelFont
+                        Layout.fillWidth: true; text: root.album; font.pixelSize: 12; elide: Text.ElideRight
+                        color: root.albumColor
+                        Behavior on color { ColorAnimation { duration: 400 } }
+                    }
+                    // Spectre audio (cava, sortie par défaut) : actif seulement en lecture
+                    Row {
+                        id: spectrum
+                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                        transform: Translate { y: -4 }
+                        Layout.preferredHeight: 22
+                        spacing: 2
+                        Repeater {
+                            model: 12
+                            Rectangle {
+                                required property int index
+                                width: 3
+                                height: Math.max(2, 22 * ((root.levels[index] ?? 0) / 100))
+                                anchors.verticalCenter: parent.verticalCenter
+                                radius: 1.5
+                                color: root.artistColor
+                                opacity: 0.85
+                                Behavior on height { NumberAnimation { duration: 30 } }
+                            }
+                        }
+                    }
                 }
                 RowLayout {
                     spacing: 5
@@ -438,26 +518,55 @@ Pill {
                 Repeater { model: root.livePlayers.slice(0, controls.half); delegate: playerBtn }
             }
 
+            // Style des boutons Spotify : icônes plates, lecture en disque blanc,
+            // aléatoire / répétition en couleur d'accent + point quand actifs
             RowLayout {
                 id: transport
                 anchors.centerIn: parent
-                spacing: 12
-                ActionButton {
+                spacing: 6
+                FlatBtn {
+                    visible: root.player?.shuffleSupported ?? false
+                    icon: Theme.ic(0xf049d)
+                    active: root.player?.shuffle ?? false
+                    onClicked: root.player.shuffle = !root.player.shuffle
+                }
+                FlatBtn {
                     icon: Theme.ic(0xf04ae)
                     enabled: root.player?.canGoPrevious ?? false
                     onClicked: root.prevTrack()
                 }
-                ActionButton {
-                    icon: root.player?.isPlaying ? Theme.ic(0xf03e4) : Theme.ic(0xf040a)
-                    accent: root.accent
-                    highlighted: true
-                    implicitWidth: 48
-                    onClicked: root.player.togglePlaying()
+                Rectangle {
+                    implicitWidth: 40
+                    implicitHeight: 40
+                    radius: 20
+                    color: "white"
+                    scale: playMa.pressed ? 0.92 : (playMa.containsMouse ? 1.06 : 1)
+                    Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutBack } }
+                    BarText {
+                        anchors.centerIn: parent
+                        text: root.player?.isPlaying ? Theme.ic(0xf03e4) : Theme.ic(0xf040a)
+                        color: "black"
+                        font.pixelSize: 22
+                    }
+                    MouseArea {
+                        id: playMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.player.togglePlaying()
+                    }
                 }
-                ActionButton {
+                FlatBtn {
                     icon: Theme.ic(0xf04ad)
                     enabled: root.player?.canGoNext ?? false
                     onClicked: root.nextTrack()
+                }
+                FlatBtn {
+                    visible: root.player?.loopSupported ?? false
+                    icon: root.player?.loopState === MprisLoopState.Track ? Theme.ic(0xf0458) : Theme.ic(0xf0456)
+                    active: (root.player?.loopState ?? MprisLoopState.None) !== MprisLoopState.None
+                    onClicked: root.player.loopState = root.player.loopState === MprisLoopState.None ? MprisLoopState.Playlist
+                        : root.player.loopState === MprisLoopState.Playlist ? MprisLoopState.Track : MprisLoopState.None
                 }
             }
 
@@ -467,6 +576,39 @@ Pill {
                 spacing: 6
                 visible: root.livePlayers.length > 1
                 Repeater { model: root.livePlayers.slice(controls.half); delegate: playerBtn }
+            }
+        }
+
+        component FlatBtn: Item {
+            id: fb
+            property string icon: ""
+            property bool active: false
+            signal clicked()
+            implicitWidth: 32
+            implicitHeight: 40
+            opacity: enabled ? 1 : 0.35
+            BarText {
+                anchors.centerIn: parent
+                anchors.verticalCenterOffset: fb.active ? -3 : 0
+                text: fb.icon
+                font.pixelSize: 20
+                color: fb.active ? root.accent : (fbMa.containsMouse ? Theme.text : Theme.subtext)
+                Behavior on color { ColorAnimation { duration: 120 } }
+            }
+            Rectangle {
+                visible: fb.active
+                width: 4; height: 4; radius: 2
+                color: root.accent
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 6
+            }
+            MouseArea {
+                id: fbMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: fb.clicked()
             }
         }
 

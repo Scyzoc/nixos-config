@@ -5,6 +5,7 @@ import Quickshell.Hyprland
 
 // Workspaces de l'écran courant uniquement (attribués par workspace-bind)
 // Glisser un workspace sur un autre y déplace toutes ses fenêtres (ws-move)
+// Clic droit : menu déplacer / vider (WorkspaceMenu)
 Rectangle {
     id: root
     required property string monitorName
@@ -79,13 +80,14 @@ Rectangle {
                     property bool dragged: false
 
                     anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
                     hoverEnabled: true
                     preventStealing: true
                     cursorShape: root.dragFrom >= 0 ? Qt.ClosedHandCursor : Qt.PointingHandCursor
 
                     onPressed: mouse => { pressX = mouse.x; dragged = false; }
                     onPositionChanged: mouse => {
-                        if (!pressed) return;
+                        if (!(mouse.buttons & Qt.LeftButton)) return;
                         // Seuil de 6 px avant de démarrer ; un workspace vide n'a rien à déplacer
                         if (!dragged && Math.abs(mouse.x - pressX) > 6 && !ws.isEmpty) {
                             dragged = true;
@@ -105,7 +107,18 @@ Rectangle {
                         root.dragOver = -1;
                     }
                     onCanceled: { root.dragFrom = -1; root.dragOver = -1; }
-                    onClicked: if (!dragged) ws.modelData.activate()
+                    onClicked: mouse => {
+                        if (dragged) return;
+                        // Workspace vide : rien à déplacer ni à vider
+                        if (mouse.button === Qt.RightButton) { if (!ws.isEmpty) wsMenu.toggle(); }
+                        else ws.modelData.activate();
+                    }
+                }
+
+                WorkspaceMenu {
+                    id: wsMenu
+                    target: ws
+                    workspace: ws.modelData
                 }
             }
         }

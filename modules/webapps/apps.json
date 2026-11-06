@@ -11,6 +11,12 @@
     ]
   },
   {
+    "id": "backlog",
+    "name": "Backlog",
+    "url": "https://backlogs.lan/",
+    "icon": "backlog.svg"
+  },
+  {
     "id": "chatgpt",
     "name": "ChatGPT",
     "url": "https://chatgpt.com/",

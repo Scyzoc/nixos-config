@@ -3,6 +3,8 @@ conservant la disposition dwindle (sens des découpes et proportions).
 ws-move --compact [écran] : idem pour compacter les workspaces d'un écran (par
 défaut l'écran actif ; ex : 13 seul → 11), utilisé par ws-compact
 (Super+Ctrl+Tab, suggestion de la barre Quickshell).
+ws-move --clear <ws> : ferme toutes les fenêtres d'un workspace, utilisé par ws-clear
+(menu clic droit des workspaces de la barre Quickshell).
 
 L'arbre dwindle est déduit de la géométrie (partition en guillotine), puis
 reconstruit sur la cible avec `layoutmsg preselect` + `splitratio exact`.
@@ -34,6 +36,10 @@ def focus_win(addr):
 
 def move_silent(dst, addr):
     return f'dispatch hl.dsp.window.move({{ workspace = {dst}, follow = false, window = "address:{addr}" }})'
+
+
+def close_win(addr):
+    return f'dispatch hl.dsp.window.close({{ window = "address:{addr}" }})'
 
 
 def layout_msg(msg):
@@ -121,6 +127,10 @@ def compact_moves(clients, monitors, workspaces, name=None):
 
 def main():
     clients = hypr_json("clients")
+    if sys.argv[1:2] == ["--clear"]:
+        ws = int(sys.argv[2])
+        batch([close_win(c["address"]) for c in clients if c["workspace"]["id"] == ws])
+        return
     monitors = hypr_json("monitors")
     workspaces = hypr_json("workspaces")
     if sys.argv[1:2] == ["--compact"]:

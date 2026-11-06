@@ -41,7 +41,8 @@ Rectangle {
         return parts.length > 0 && parts.every(isIp);
     }
     readonly property bool staticValid: isIp(ipField.text) && prefixOf(maskField.text) >= 0
-                                        && isIp(gwField.text) && dnsValid(dnsField.text)
+                                        && (gwField.text.trim() === "" || isIp(gwField.text))
+                                        && (dnsField.text.trim() === "" || dnsValid(dnsField.text))
 
     function load() {
         status = "";
@@ -154,8 +155,8 @@ Rectangle {
             rowSpacing: 6
             Field { id: ipField; label: "Adresse IP"; placeholder: "192.168.1.50"; valid: root.isIp(text) }
             Field { id: maskField; label: "Masque"; placeholder: "24 ou 255.255.255.0"; valid: root.prefixOf(text) >= 0 }
-            Field { id: gwField; label: "Passerelle"; placeholder: "192.168.1.1"; valid: root.isIp(text) }
-            Field { id: dnsField; label: "DNS"; placeholder: "1.1.1.1, 8.8.8.8"; valid: root.dnsValid(text) }
+            Field { id: gwField; label: "Passerelle"; placeholder: "optionnelle"; valid: text.trim() === "" || root.isIp(text) }
+            Field { id: dnsField; label: "DNS"; placeholder: "optionnel"; valid: text.trim() === "" || root.dnsValid(text) }
         }
 
         // Statut : seulement quand il y a quelque chose à dire

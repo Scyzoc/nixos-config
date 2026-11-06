@@ -63,6 +63,8 @@ PanelWindow {
     // manquantes sont créées au passage : la grille se remplit au fil de l'eau.
     property var items: []          // [{ path, name, thumb, lum }], triés par nom
     property string current: ""     // chemin du fond affiché
+    property string dir: ""         // dossier lu (wallpaper-dir)
+    property bool span: false       // une seule image étendue sur tous les écrans
     readonly property var byPath: {
         const m = {};
         for (const it of items) m[it.path] = it;
@@ -77,6 +79,8 @@ PanelWindow {
         stdout: SplitParser {
             onRead: line => {
                 const p = line.split("\t");
+                if (p[0] === "span") { win.span = p[1] === "1"; return; }
+                if (p[0] === "dir") { win.dir = p[1] ?? ""; return; }
                 if (p[0] === "current") { win.current = p[1] ?? ""; return; }
                 if (p.length < 3) return;
                 indexer.seen[p[2]] = true;
@@ -100,6 +104,48 @@ PanelWindow {
         copy.sort((a, b) => norm(a.name).localeCompare(norm(b.name)));
         items = copy;
     }
+    // Suppression (corbeille) de l'image sélectionnée
+    function remove(path) {
+        if (!path) return;
+        const idx = grid.currentIndex;
+        Quickshell.execDetached([Paths.userBin + "/wallpaper-delete", path]);
+        items = items.filter(it => it.path !== path);
+        grid.currentIndex = Math.max(0, Math.min(idx, shown.length - 1));
+    }
+
+    // Mode étendu
+    function toggleSpan() {
+        span = !span;
+        Quickshell.execDetached([Paths.userBin + "/wallpaper-span-mode", span ? "on" : "off"]);
+    }
+
+    // Changement de dossier
+    property bool dirEdit: false
+    function openDirEdit() {
+        dirEdit = true;
+        dirInput.text = dir;
+        dirInput.forceActiveFocus();
+        dirInput.selectAll();
+    }
+    function closeDirEdit() { dirEdit = false; search.forceActiveFocus(); }
+    Process {
+        id: dirSetter
+        property string target: ""
+        command: [Paths.userBin + "/wallpaper-dir", "set", target]
+        onExited: code => {
+            if (code !== 0) { dirError.visible = true; dirErrTimer.restart(); return; }
+            win.items = [];
+            win.closeDirEdit();
+            win.refresh();
+        }
+    }
+    function setDir(path) {
+        if (path.trim() === "") return;
+        dirSetter.target = path.trim();
+        dirSetter.running = true;
+    }
+    Timer { id: dirErrTimer; interval: 2000; onTriggered: dirError.visible = false }
+
     // Miniatures prêtes avant la première ouverture
     Component.onCompleted: refresh()
 
@@ -252,6 +298,44 @@ PanelWindow {
                 }
                 Item { Layout.fillWidth: true }
 
+                // Étendre sur tous les écrans
+                Rectangle {
+                    implicitWidth: spanRow.implicitWidth + 24
+                    implicitHeight: 38
+                    radius: 12
+                    color: win.span ? Qt.rgba(1, 1, 1, 0.16) : Theme.pill
+                    border.color: Theme.pillBorder
+                    border.width: 1
+                    RowLayout {
+                        id: spanRow
+                        anchors.centerIn: parent
+                        spacing: 7
+                        BarText { text: Theme.ic(0xf0379); font.pixelSize: 16; color: win.span ? Theme.green : Theme.subtext }
+                        BarText { text: "Étendre"; color: win.span ? Theme.text : Theme.subtext; font.bold: win.span }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: { win.toggleSpan(); search.forceActiveFocus(); }
+                    }
+                }
+
+                // Dossier : ouvre la saisie du chemin
+                Rectangle {
+                    implicitWidth: 38
+                    implicitHeight: 38
+                    radius: 12
+                    color: win.dirEdit ? Qt.rgba(1, 1, 1, 0.16) : Theme.pill
+                    border.color: Theme.pillBorder
+                    border.width: 1
+                    BarText { anchors.centerIn: parent; text: Theme.ic(0xf024b); font.pixelSize: 17; color: Theme.subtext }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: win.dirEdit ? win.closeDirEdit() : win.openDirEdit()
+                    }
+                }
+
                 // Onglets ; le curseur glisse de l'un à l'autre
                 Rectangle {
                     id: seg
@@ -352,6 +436,7 @@ PanelWindow {
                                 case Qt.Key_Right: grid.moveCurrentIndexRight(); break;
                                 case Qt.Key_Tab:
                                 case Qt.Key_Backtab: win.setTab(win.tab === "light" ? "dark" : "light"); break;
+                                case Qt.Key_Delete: win.remove(win.shown[grid.currentIndex]); break;
                                 case Qt.Key_Return:
                                 case Qt.Key_Enter: win.apply(win.shown[grid.currentIndex]); break;
                                 default: event.accepted = false;
@@ -366,6 +451,46 @@ PanelWindow {
                             }
                         }
                     }
+                }
+            }
+
+            // Saisie du dossier
+            Rectangle {
+                visible: win.dirEdit
+                Layout.fillWidth: true
+                implicitHeight: 38
+                radius: 12
+                color: Theme.pill
+                border.color: dirError.visible ? Theme.red : Theme.pillBorder
+                border.width: 1
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    spacing: 8
+                    BarText { text: Theme.ic(0xf024b); font.pixelSize: 16; color: Theme.subtext }
+                    TextInput {
+                        id: dirInput
+                        Layout.fillWidth: true
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: Theme.text
+                        font.family: Theme.labelFont
+                        font.pixelSize: 13
+                        clip: true
+                        selectByMouse: true
+                        Keys.onPressed: event => {
+                            if (event.key === Qt.Key_Escape) { win.closeDirEdit(); event.accepted = true; }
+                            else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { win.setDir(text); event.accepted = true; }
+                        }
+                    }
+                    BarText {
+                        id: dirError
+                        visible: false
+                        text: "Dossier introuvable"
+                        color: Theme.red
+                        font.pixelSize: 11
+                    }
+                    BarText { text: "Entrée : valider"; font.pixelSize: 11; color: Theme.muted }
                 }
             }
 
@@ -469,6 +594,27 @@ PanelWindow {
                                 border.color: cell.selected ? Theme.text : Qt.rgba(1, 1, 1, 0.14)
                                 Behavior on border.color { ColorAnimation { duration: 140 } }
                             }
+                            // Corbeille (image sélectionnée)
+                            Rectangle {
+                                visible: cell.selected
+                                anchors.top: parent.top
+                                anchors.left: parent.left
+                                anchors.margins: 8
+                                width: 28
+                                height: 28
+                                radius: 14
+                                color: trashMa.containsMouse ? Qt.rgba(0.9, 0.25, 0.25, 0.85) : Qt.rgba(0, 0, 0, 0.6)
+                                border.color: Qt.rgba(1, 1, 1, 0.2)
+                                border.width: 1
+                                BarText { anchors.centerIn: parent; text: Theme.ic(0xf01b4); font.pixelSize: 14 }
+                                MouseArea {
+                                    id: trashMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: win.remove(cell.modelData)
+                                }
+                            }
                             // Fond d'écran en place
                             Rectangle {
                                 visible: cell.active
@@ -532,7 +678,7 @@ PanelWindow {
                     BarText {
                         Layout.alignment: Qt.AlignHCenter
                         text: indexer.running && win.items.length === 0 ? "Préparation des miniatures…"
-                            : win.items.length === 0 ? "Aucune image dans ~/Pictures/Wallpapers"
+                            : win.items.length === 0 ? "Aucune image dans " + win.dir
                             : win.q !== "" ? "Aucun fond d'écran ne correspond"
                             : "Aucun fond d'écran " + (win.tab === "light" ? "clair" : "sombre")
                         color: Theme.subtext
@@ -545,7 +691,7 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: 14
                 Repeater {
-                    model: [["Entrée", "appliquer"], ["Tab", "clair / sombre"], ["Clic droit", "changer de catégorie"], ["Échap", "fermer"]]
+                    model: [["Entrée", "appliquer"], ["Tab", "clair / sombre"], ["Clic droit", "changer de catégorie"], ["Suppr", "corbeille"], ["Échap", "fermer"]]
                     RowLayout {
                         required property var modelData
                         spacing: 6

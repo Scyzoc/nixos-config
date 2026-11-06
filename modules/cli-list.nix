@@ -71,6 +71,7 @@ let
       "htop|Moniteur de processus" \
       "btop|Moniteur système complet" \
       "gdu|Analyse d'espace disque" \
+      "espace|Libérer de l'espace, doublons, ranger par extension" \
       "fastfetch|Infos système" \
       "cpupower|Gestion fréquence CPU" \
       "brightnessctl|Luminosité écran" \
@@ -157,7 +158,7 @@ let
       "pcoff|Éteindre le PC Windows" \
       "monip|Afficher l'IP publique" \
       "ipinfo|Infos complètes sur une IP publique" \
-      "internet-check|Test de connexion internet" \
+      "internet-check|Test de connexion et de débit internet" \
       "netfix|Diagnostic + réparation réseau"
 
     section "Scripts perso — bureau" \
@@ -175,10 +176,12 @@ let
       "emoji-picker|Sélecteur d'emoji" \
       "clipboard-manager|Gestionnaire presse-papier" \
       "voice-to-text|Dictée vocale" \
+      "voice-vocab|Vocabulaire de la dictée (list / add / rm / edit)" \
       "notion-todo|Tâches Notion" \
       "ws-cycle|Cycler les workspaces" \
       "ws-compact|Compacter les workspaces" \
       "ws-move|Déplacer les fenêtres d'un workspace vers un autre" \
+      "ws-clear|Fermer toutes les fenêtres d'un workspace" \
       "workspace-link|Workspaces liés par paires (SUPER+P → Liaisons)"
 
     dossier "Hors Nix — nix profile" "$HOME/.nix-profile/bin"

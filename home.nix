@@ -1,5 +1,41 @@
 { config, pkgs, lib, ... }:
-let notionTodo = ./modules/notion-todo.nix; in
+let
+  notionTodo = ./modules/notion-todo.nix;
+  tesseractFra = pkgs.tesseract.override { enableLanguages = [ "fra" "eng" ]; };
+
+  # hyprlock-safe : relance hyprlock s'il plante. Le verrou Wayland reste posé
+  # quand hyprlock meurt (Hyprland affiche alors l'écran rouge « lockscreen app
+  # died » et rien ne débloque la session). Avec misc.allow_session_lock_restore
+  # (modules/hyprland.nix), un nouveau hyprlock reprend le verrou. Cas réel :
+  # réveil après retrait du dock → sortie FALLBACK détruite sous hyprlock 0.9.6
+  # → « Disconnected from pollfd id 0 » → SIGABRT.
+  # Sortie 0 = déverrouillage normal ; tout autre code = plantage → relance.
+  hyprlockSafe = pkgs.writeShellScriptBin "hyprlock-safe" ''
+    # Une seule instance : un 2e appel (hypridle pendant une relance) sort.
+    exec 9>"''${XDG_RUNTIME_DIR:-/tmp}/hyprlock-safe.lock"
+    ${pkgs.util-linux}/bin/flock -n 9 || exit 0
+
+    fails=0
+    while :; do
+      start=$(date +%s)
+      ${pkgs.hyprlock}/bin/hyprlock "$@" 9>&- && exit 0
+      rc=$?
+      # Compteur remis à zéro si hyprlock a tenu un moment (plantage isolé)
+      [ $(( $(date +%s) - start )) -gt 30 ] && fails=0
+      fails=$(( fails + 1 ))
+      echo "hyprlock-safe: hyprlock sorti avec $rc, relance n°$fails" >&2
+      if [ "$fails" -ge 15 ]; then
+        ${pkgs.libnotify}/bin/notify-send -u critical "Verrouillage" \
+          "hyprlock plante en boucle ($rc) — SUPER+L ou TTY pour relancer"
+        exit "$rc"
+      fi
+      # Filet si l'option a été perdue (reload partiel de la config)
+      ${pkgs.hyprland}/bin/hyprctl eval \
+        'hl.config({ misc = { allow_session_lock_restore = true } })' >/dev/null 2>&1
+      sleep 1
+    done
+  '';
+in
 
 {
   # ==========================================================================
@@ -21,8 +57,10 @@ let notionTodo = ./modules/notion-todo.nix; in
     ./modules/hyprland.nix
     ./modules/quickshell.nix
     ./modules/swaync.nix
+    ./modules/cours.nix
     ./modules/emoji.nix
     ./modules/voice-transcription.nix
+    ./modules/screen-record.nix
     ./modules/assistant.nix
     ./modules/atlas-task.nix
     ./modules/atlas-workspace.nix
@@ -51,6 +89,7 @@ let notionTodo = ./modules/notion-todo.nix; in
     ./modules/nixinstall.nix
     ./modules/webapps.nix
     ./modules/binds.nix
+    ./modules/espace.nix
   ];
 
   # ==========================================================================
@@ -140,16 +179,14 @@ let notionTodo = ./modules/notion-todo.nix; in
     '')
     (writeShellScriptBin "wakepc" ''
       if ${netcat-gnu}/bin/nc -z -w2 HOMELAB_IP_REDACTED 22 2>/dev/null; then
-        ssh homelab@HOMELAB_IP_REDACTED wakeonlan AA:BB:CC:DD:EE:FF \
-          && ${libnotify}/bin/notify-send 'Wake-on-LAN' 'PC réveillé (HOMELAB_IP_REDACTED)'
+        ssh homelab@HOMELAB_IP_REDACTED wakeonlan AA:BB:CC:DD:EE:FF
       else
         ${libnotify}/bin/notify-send -u critical 'Wake-on-LAN' 'Homelab injoignable — VPN pas activé ?'
       fi
     '')
     (writeShellScriptBin "pcoff" ''
       if ${netcat-gnu}/bin/nc -z -w2 HOMELAB_IP_REDACTED 22 2>/dev/null; then
-        ssh pc 'shutdown /s /t 0' \
-          && ${libnotify}/bin/notify-send 'Extinction' 'PC Windows éteint (HOMELAB_IP_REDACTED)'
+        ssh pc 'shutdown /s /t 0'
       else
         ${libnotify}/bin/notify-send -u critical 'Extinction' 'PC injoignable — allumé ? VPN activé ?'
       fi
@@ -163,7 +200,8 @@ let notionTodo = ./modules/notion-todo.nix; in
     parabolic
     stirling-pdf-desktop
     lmstudio
-    obsidian
+    # Electron 43 : fenêtre noire (webFrame cassé) → épinglé sur 42
+    (obsidian.override { electron = electron_42; })
 
 
 
@@ -175,7 +213,6 @@ let notionTodo = ./modules/notion-todo.nix; in
       NEXT=$(echo "$SINKS" | grep -v "$CURRENT" | head -n 1)
       if [ -n "$NEXT" ]; then
           wpctl set-default "$NEXT"
-          notify-send "Audio" "Sortie basculee vers l'appareil ID: $NEXT" -i audio-speakers
       fi
     '')
 
@@ -201,8 +238,11 @@ let notionTodo = ./modules/notion-todo.nix; in
     prismlauncher
     vlc
     stremio-linux-shell
+    # Recopie écran iPhone (AirPlay) : commande `airplay` (ports fixés pour le pare-feu)
+    (writeShellScriptBin "airplay" ''exec ${uxplay}/bin/uxplay -n PC_du_I -nh -p "$@"'')
 
     # --- Developpement ---
+    cryptsetup
     nodejs
     pnpm
     vscode
@@ -250,6 +290,7 @@ let notionTodo = ./modules/notion-todo.nix; in
 
     # --- Verrouillage ---
     hyprlock
+    hyprlockSafe
     hypridle
 
     # --- Emoji picker ---
@@ -292,7 +333,6 @@ let notionTodo = ./modules/notion-todo.nix; in
         echo "Usage : veille [secondes]" >&2
         exit 1
       fi
-      ${pkgs.libnotify}/bin/notify-send "Veille" "Mise en veille dans $delai secondes…" -t 2500
       echo "Mise en veille dans $delai secondes (Ctrl+C pour annuler)"
       sleep "$delai"
       systemctl suspend
@@ -302,9 +342,49 @@ let notionTodo = ./modules/notion-todo.nix; in
     (pkgs.writeShellScriptBin "screenshot" ''
       mode="''${1:-copy}"
 
+      # Clic sur l'île « Capture … » de la barre (ScreenState.open) : ouvre l'éditeur
+      if [ "$1" = "--edit" ]; then
+        exec ${pkgs.swappy}/bin/swappy -f "$2"
+      fi
+
+      # Actions du menu déroulant de l'île : copier / enregistrer sous (le fichier est déplacé)
+      if [ "$1" = "--copy" ]; then
+        ${pkgs.wl-clipboard}/bin/wl-copy < "$2"
+        exit 0
+      fi
+      # OCR : extrait le texte de la capture, le copie dans le presse-papiers
+      if [ "$1" = "--ocr" ]; then
+        txt=$(${tesseractFra}/bin/tesseract "$2" - -l fra+eng 2>/dev/null)
+        if [ -n "$(echo "$txt" | ${pkgs.coreutils}/bin/tr -d '[:space:]')" ]; then
+          printf '%s' "$txt" | ${pkgs.wl-clipboard}/bin/wl-copy
+          ${pkgs.libnotify}/bin/notify-send -a screenshot -i edit-copy "Texte extrait" "Copié dans le presse-papiers"
+        else
+          ${pkgs.libnotify}/bin/notify-send -a screenshot -i dialog-warning "Aucun texte détecté" "La capture ne contient pas de texte"
+        fi
+        exit 0
+      fi
+      if [ "$1" = "--save-as" ]; then
+        file="$2"
+        dir="$HOME/Pictures/Screenshots"
+        ${pkgs.coreutils}/bin/mkdir -p "$dir"
+        dest=$(${pkgs.zenity}/bin/zenity --file-selection --save --confirm-overwrite \
+          --title="Enregistrer la capture" \
+          --file-filter="Images PNG | *.png" \
+          --filename="$dir/screenshot_$(${pkgs.coreutils}/bin/date +%Y%m%d_%H%M%S).png") || exit 0
+        [ -z "$dest" ] && exit 0
+        case "$dest" in *.png|*.PNG) ;; *) dest="$dest.png" ;; esac
+        ${pkgs.coreutils}/bin/cp -f "$file" "$dest"
+        exit 0
+      fi
+
       if [ "$1" = "--internal-finish" ]; then
         mode="$2"
         file="$3"
+        # Écran déjà gelé (menu inclus dans l'image) : les vrais menus de la barre sont fermés,
+        # sinon ils se superposent à la copie gelée (deux menus sur la capture)
+        if ${pkgs.quickshell}/bin/quickshell ipc -c bar call popup close >/dev/null 2>&1; then
+          ${pkgs.coreutils}/bin/sleep 0.15
+        fi
         geom=$(${pkgs.slurp}/bin/slurp)
         ${pkgs.procps}/bin/pkill wayfreeze
         if [ -n "$geom" ]; then
@@ -325,7 +405,6 @@ let notionTodo = ./modules/notion-todo.nix; in
               --filename="$dir/screenshot_$(${pkgs.coreutils}/bin/date +%Y%m%d_%H%M%S).png")
             if [ -z "$dest" ]; then
               ${pkgs.coreutils}/bin/rm -f "$file"
-              ${pkgs.libnotify}/bin/notify-send -a Screenshot -u low Screenshot 'Capture annulée'
               exit 0
             fi
             case "$dest" in *.png|*.PNG) ;; *) dest="$dest.png" ;; esac
@@ -336,12 +415,9 @@ let notionTodo = ./modules/notion-todo.nix; in
             ${pkgs.wl-clipboard}/bin/wl-copy < "$file"
             msg="Zone copiée dans le presse-papiers"
           fi
-          action=$(${pkgs.libnotify}/bin/notify-send -a Screenshot -i "$file" -A "editer=Éditer" -w Screenshot "$msg")
-          if [ "$action" = "editer" ]; then
-            ${pkgs.swappy}/bin/swappy -f "$file"
-          fi
-        else
-          ${pkgs.libnotify}/bin/notify-send -a Screenshot -u low Screenshot 'Capture annulée'
+          # Annonce par l'île de la barre (ScreenState.qml lit ce fichier, « copy|save <fichier> »)
+          echo "$mode $file" > /tmp/screenshot.state
+          ( ${pkgs.coreutils}/bin/sleep 2.5; ${pkgs.coreutils}/bin/rm -f /tmp/screenshot.state ) >/dev/null 2>&1 &
         fi
         exit 0
       fi
@@ -377,6 +453,7 @@ let notionTodo = ./modules/notion-todo.nix; in
     enable = true;
     defaultApplications = {
       "inode/directory" = "thunar.desktop";
+      "x-scheme-handler/mailto" = "gmail-mailto.desktop";
     };
   };
   # Défauts Nix gardés dans ~/.local/share/applications/mimeapps.list (fallback
@@ -392,6 +469,16 @@ let notionTodo = ./modules/notion-todo.nix; in
     Name=org.freedesktop.FileManager1
     Exec=${pkgs.xfce.thunar}/bin/Thunar --gapplication-service
   '';
+
+  # mailto: → nouvel onglet de composition Gmail dans Brave
+  xdg.desktopEntries.gmail-mailto = {
+    name = "Gmail (mailto)";
+    exec = "${pkgs.writeShellScript "gmail-mailto" ''
+      exec ${pkgs.brave}/bin/brave "https://mail.google.com/mail/?extsrc=mailto&url=$1"
+    ''} %u";
+    mimeType = [ "x-scheme-handler/mailto" ];
+    noDisplay = true;
+  };
 
   xdg.desktopEntries."org.nickvision.tubeconverter" = {
     name = "Parabolic";
@@ -479,7 +566,7 @@ let notionTodo = ./modules/notion-todo.nix; in
           return 1
         fi
         if systemctl --user list-unit-files --type=service 2>/dev/null | grep -q "^''${name}\.service"; then
-          systemctl --user restart "''${name}.service" && notify-send "restart" "''${name} relancé (systemd)"
+          systemctl --user restart "''${name}.service"
           return
         fi
         local bin
@@ -492,7 +579,6 @@ let notionTodo = ./modules/notion-todo.nix; in
         sleep 0.3
         setsid -f "$bin" >/dev/null 2>&1 &
         disown
-        notify-send "restart" "''${name} relancé"
       }
     '';
   };
@@ -658,10 +744,11 @@ let notionTodo = ./modules/notion-todo.nix; in
           halign = "center";
           valign = "center";
         }
-        # Batterie (icone seule, sans pourcentage, police BatteryIcons)
+        # Batterie (icone seule, sans pourcentage, police BatteryIcons) ; masquée en mode bureau
+        # (écran externe seul : capot fermé ou écran interne éteint, cf. display-switch.nix)
         {
           # Police "BatteryIcons" : U+E000..U+E00A = 0..100 % (pas de 10), U+E00C..U+E016 = idem en charge
-          text = "cmd[update:1000] CAP=$(cat /sys/class/power_supply/BAT*/capacity | head -n 1); STATUS=$(cat /sys/class/power_supply/BAT*/status | head -n 1); AC=$(cat /sys/class/power_supply/AC/online 2>/dev/null || echo 0); B=128; if [ \"$AC\" = \"1\" ] && [ \"$STATUS\" != \"Full\" ]; then B=140; fi; printf \"\\xee\\x80\\x$(printf '%x' $(( B + (CAP + 5) / 10 )))\"";
+          text = "cmd[update:1000] case $(cat $HOME/.local/state/display-mode 2>/dev/null) in lid-closed|external-only) exit 0;; esac; CAP=$(cat /sys/class/power_supply/BAT*/capacity | head -n 1); STATUS=$(cat /sys/class/power_supply/BAT*/status | head -n 1); AC=$(cat /sys/class/power_supply/AC/online 2>/dev/null || echo 0); B=128; if [ \"$AC\" = \"1\" ] && [ \"$STATUS\" != \"Full\" ]; then B=140; fi; printf \"\\xee\\x80\\x$(printf '%x' $(( B + (CAP + 5) / 10 )))\"";
           # Couleur dynamique : Bleu (en charge), sinon Vert (>70), Jaune (>25), Rouge (<=25)
           color = "cmd[update:1000] CAP=$(cat /sys/class/power_supply/BAT*/capacity | head -n 1); STATUS=$(cat /sys/class/power_supply/BAT*/status | head -n 1); AC=$(cat /sys/class/power_supply/AC/online 2>/dev/null || echo 0); if [ \"$AC\" = \"1\" ] && [ \"$STATUS\" != \"Full\" ]; then STATUS=\"Charging\"; fi; if [ \"$STATUS\" = \"Charging\" ]; then echo \"rgba(137, 180, 250, 0.9)\"; elif [ $CAP -gt 70 ]; then echo \"rgba(166, 227, 161, 0.8)\"; elif [ $CAP -gt 25 ]; then echo \"rgba(249, 226, 175, 0.8)\"; else echo \"rgba(243, 139, 168, 0.8)\"; fi";
           font_size = 26;
@@ -688,9 +775,15 @@ let notionTodo = ./modules/notion-todo.nix; in
     enable = true;
     settings = {
       general = {
-        lock_cmd = "pidof hyprlock || hyprlock";
-        before_sleep_cmd = "loginctl lock-session";
-        after_sleep_cmd = "hyprctl dispatch 'hl.dsp.dpms({ action = \"on\" })'";
+        lock_cmd = "pidof hyprlock || ${hyprlockSafe}/bin/hyprlock-safe";
+        # display-sleep (modules/display-switch.nix) rallume eDP-1 avant la veille
+        # s'il est éteint (capot fermé sur le dock) : si le dock est retiré pendant
+        # la veille, Hyprland se réveille sinon avec zéro écran → sortie FALLBACK
+        # → hyprlock éjecté. Au réveil, `post` remet le mode capot fermé si besoin.
+        before_sleep_cmd = "${config.home.profileDirectory}/bin/display-sleep pre; loginctl lock-session";
+        after_sleep_cmd = "hyprctl dispatch 'hl.dsp.dpms({ action = \"on\" })'; ${config.home.profileDirectory}/bin/display-sleep post";
+        # 3 : la veille attend que le verrou soit posé (donc display-sleep pre fini)
+        inhibit_sleep = 3;
       };
 
       listener = [

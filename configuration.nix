@@ -19,7 +19,21 @@
   boot.extraModulePackages = [ config.boot.kernelPackages.vmware config.boot.kernelPackages.r8168 ];
   boot.blacklistedKernelModules = [ "r8169" ];
   boot.kernelModules = [ "vmmon" "vmnet" "r8168" ];
-  boot.kernelPackages = pkgs.linuxPackages_zen;
+  # nixpkgs ≥ 2026-10-20 : aggregateModules exige un <module>.ko.cer par module externe ;
+  # vmware et r8168 n'en installent pas → on en ajoute un vide (pas de signature imposée).
+  boot.kernelPackages = pkgs.linuxPackages_zen.extend (final: prev:
+    let
+      withCer = m: m.overrideAttrs (old: {
+        postFixup = (old.postFixup or "") + ''
+          find $out/lib/modules -type f -name '*.ko*' ! -name '*.cer' | while read -r f; do
+            touch "''${f%%.ko*}.ko.cer"
+          done
+        '';
+      });
+    in {
+      vmware = withCer prev.vmware;
+      r8168 = withCer prev.r8168;
+    });
   boot.kernelParams = [ "amdgpu.freesync_video=1" "amd_pstate=active" ];
 
   boot.kernel.sysctl = {
@@ -168,7 +182,6 @@
   xdg.portal = {
     enable = true;
     extraPortals = [
-      pkgs.xdg-desktop-portal-hyprland
       pkgs.xdg-desktop-portal-gtk
       pkgs.kdePackages.xdg-desktop-portal-kde
     ];
@@ -284,7 +297,8 @@
   # ==========================================================================
 
   services.printing.enable = false;
-  services.avahi.enable = false;
+  # Avahi (mDNS) : requis pour que l'iPhone découvre UxPlay (AirPlay)
+  services.avahi = { enable = true; nssmdns4 = true; publish = { enable = true; userServices = true; addresses = true; }; };
   systemd.services.ModemManager.enable = false;
 
   # ==========================================================================
@@ -405,13 +419,27 @@
   # --- Cisco Packet Tracer (nécessite le .deb téléchargé manuellement) ---
   nixpkgs.config.permittedInsecurePackages = [
   #  "cisco-packet-tracer-9.0.0"
-    "ventoy-1.1.17"  # Ventoy : composants tiers avec CVE connues, autorisé pour flashage USB
+    "ventoy-1.1.18"  # Ventoy : composants tiers avec CVE connues, autorisé pour flashage USB
   ];
 
   # --- VMware Workstation ---
   virtualisation.vmware.host = {
     enable = true;
     extraConfig = "";
+  };
+  # vmnet-natd (binaire d'origine, interpréteur /lib64 → nix-ld, cf. overlays/vmware-natd-fix.nix)
+  systemd.services.vmware-networks.environment = {
+    NIX_LD = "${pkgs.glibc}/lib/ld-linux-x86-64.so.2";
+    NIX_LD_LIBRARY_PATH = "${pkgs.vmware-workstation}/lib/vmware-ovftool:${pkgs.glibc}/lib";
+  };
+
+  # Disque externe NVMe (USB 10 Gbps) dédié aux VM, monté en /mnt/vm.
+  # nofail : pas de blocage au boot si le disque est débranché.
+  # x-systemd.automount : monté à l'accès, donc aussi après un rebranchement.
+  fileSystems."/mnt/vm" = {
+    device = "/dev/disk/by-uuid/UUID_CENSURE";
+    fsType = "ext4";
+    options = [ "noatime" "nofail" "x-systemd.automount" "x-gvfs-show" "x-gvfs-name=VMDISK" "x-systemd.device-timeout=5" ];
   };
 
   # VMware livre les icônes de sa barre d'outils dans son propre thème hicolor,
@@ -660,7 +688,10 @@
       # reponse DHCP ne traverserait jamais le tunnel si on l'attendait ici
       (
         ${pkgs.dhcpcd}/bin/dhcpcd -k $dev 2>/dev/null || true
-        ${pkgs.dhcpcd}/bin/dhcpcd --nobackground --oneshot -4 --noipv4ll -t 30 $dev
+        # nodelay : pas d'attente aléatoire avant la requête ; noarp : pas de sonde
+        # ARP de 5 s sur l'IP reçue (bail du routeur, conflit improbable)
+        ${pkgs.dhcpcd}/bin/dhcpcd -f ${pkgs.writeText "maison-dhcpcd.conf" "nodelay\nnoarp\n"} \
+          --nobackground --oneshot -4 --noipv4ll -t 30 $dev
         # Route par defaut via le tunnel : metric bas pour battre le Wi-Fi (600)
         GW=$(${pkgs.iproute2}/bin/ip -4 route show default dev $dev | ${pkgs.gawk}/bin/awk '$2=="via"{print $3; exit}')
         if [ -n "$GW" ]; then

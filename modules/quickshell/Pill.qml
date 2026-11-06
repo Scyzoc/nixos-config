@@ -32,7 +32,9 @@ Rectangle {
     border.width: 1
 
     Behavior on color { ColorAnimation { duration: 200 } }
-    Behavior on implicitWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+    // false pendant qu'un enfant anime déjà sa propre largeur (sinon double animation qui traîne)
+    property bool animateWidth: true
+    Behavior on implicitWidth { enabled: pill.animateWidth; NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
     // Clic : léger enfoncement (rebond au relâchement) + flash
     scale: mouse.pressed ? 0.94 : 1

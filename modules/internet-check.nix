@@ -1,137 +1,112 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 
+let
+  quickshell = config.programs.quickshell.package;
+
+  # Flux de mesure lu par le menu Quickshell (modules/quickshell-launcher/SpeedTest.qml).
+  # Une ligne par évènement :
+  #   phase <detect|ping|dl|ul>   début d'une étape
+  #   offline <noroute|noreply>   pas d'internet (détecté en ~1 s)
+  #   ping <moy ms> <gigue ms> <perte %>
+  #   dl|ul <Mbit/s>              débit instantané (toutes les 250 ms)
+  #   dl_done|ul_done <Mbit/s>    débit final (moyenne hors montée en charge)
+  #   done
+  speedtest-stream = pkgs.writeShellScriptBin "speedtest-stream" ''
+    PING=${pkgs.iputils}/bin/ping
+    CURL=${pkgs.curl}/bin/curl
+    IP=${pkgs.iproute2}/bin/ip
+    AWK=${pkgs.gawk}/bin/awk
+
+    HOST="1.1.1.1"
+    HOST2="8.8.8.8"
+    DL_URL="https://speed.cloudflare.com/__down?bytes=50000000"
+    UL_URL="https://speed.cloudflare.com/__up"
+    MAX_T=8          # durée max de chaque mesure de débit (s)
+    STREAMS=4        # connexions parallèles
+    UL_FILE=$(mktemp -p "''${XDG_RUNTIME_DIR:-/tmp}" speedtest-ul.XXXXXX)
+
+    cleanup() {
+      kill $(jobs -p) 2>/dev/null
+      rm -f "$UL_FILE"
+    }
+    trap cleanup EXIT TERM INT
+
+    # ── Détection instantanée : route par défaut + 2 pings en parallèle ──
+    echo "phase detect"
+    IF=$($IP route show default 2>/dev/null | $AWK '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')
+    if [ -z "$IF" ]; then
+      echo "offline noroute"
+      exit 0
+    fi
+    $PING -c2 -i0.3 -W1 -n "$HOST"  >/dev/null 2>&1 & p1=$!
+    $PING -c2 -i0.3 -W1 -n "$HOST2" >/dev/null 2>&1 & p2=$!
+    ok=1
+    wait $p1 && ok=0
+    wait $p2 && ok=0
+    if [ "$ok" -ne 0 ]; then
+      echo "offline noreply"
+      exit 0
+    fi
+
+    # ── Latence / gigue / perte ──
+    echo "phase ping"
+    OUT=$($PING -c8 -i0.2 -W1 -n "$HOST" 2>&1)
+    LOSS=$(echo "$OUT" | ${pkgs.gnugrep}/bin/grep -oP '\d+(?=% packet loss)')
+    STATS=$(echo "$OUT" | ${pkgs.gnugrep}/bin/grep -oP 'rtt min/avg/max/mdev = [0-9.]+/[0-9.]+/[0-9.]+/\K[0-9.]+')
+    AVG=$(echo "$OUT" | ${pkgs.gnugrep}/bin/grep -oP 'rtt min/avg/max/mdev = [0-9.]+/\K[0-9.]+')
+    echo "ping ''${AVG:-0} ''${STATS:-0} ''${LOSS:-100}"
+
+    # ── Mesure de débit par compteur d'octets de l'interface ──
+    # measure <dl|ul> <rx_bytes|tx_bytes>
+    measure() {
+      local kind=$1 stat=/sys/class/net/$IF/statistics/$2
+      local prev tprev t0 now cur mbps sum=0 n=0 ticks=0 all=0
+      echo "phase $kind"
+      prev=$(cat "$stat"); t0=$(date +%s%N); tprev=$t0
+      while :; do
+        sleep 0.25
+        now=$(date +%s%N); cur=$(cat "$stat")
+        mbps=$($AWK -v d=$((cur - prev)) -v ns=$((now - tprev)) 'BEGIN { printf "%.2f", d * 8 * 1000 / ns }')
+        prev=$cur; tprev=$now
+        echo "$kind $mbps"
+        ticks=$((ticks + 1))
+        all=$($AWK -v a="$all" -v m="$mbps" 'BEGIN { print a + m }')
+        # les ~1,25 premières secondes (montée en charge TCP) ne comptent pas dans la moyenne
+        if [ "$ticks" -gt 5 ]; then
+          sum=$($AWK -v a="$sum" -v m="$mbps" 'BEGIN { print a + m }')
+          n=$((n + 1))
+        fi
+        [ $(( (now - t0) / 1000000 )) -ge $((MAX_T * 1000)) ] && break
+        [ -z "$(jobs -r)" ] && break
+      done
+      kill $(jobs -p) 2>/dev/null
+      wait 2>/dev/null
+      if [ "$n" -gt 0 ]; then
+        $AWK -v s="$sum" -v n="$n" -v k="$kind" 'BEGIN { printf "%s_done %.2f\n", k, s / n }'
+      else
+        $AWK -v s="$all" -v n="$ticks" -v k="$kind" 'BEGIN { printf "%s_done %.2f\n", k, (n > 0 ? s / n : 0) }'
+      fi
+    }
+
+    for _ in $(seq $STREAMS); do
+      $CURL -s -o /dev/null -m "$MAX_T" "$DL_URL" &
+    done
+    measure dl rx_bytes
+
+    head -c 25000000 /dev/zero > "$UL_FILE"
+    for _ in $(seq $STREAMS); do
+      $CURL -s -o /dev/null -m "$MAX_T" --data-binary @"$UL_FILE" "$UL_URL" &
+    done
+    measure ul tx_bytes
+
+    echo "done"
+  '';
+
+  # SUPER+I : affiche / masque le test de débit (menu Quickshell du service launcher)
+  internet-check = pkgs.writeShellScriptBin "internet-check" ''
+    ${quickshell}/bin/quickshell ipc -c launcher call speedtest toggle >/dev/null 2>&1
+  '';
+in
 {
-  home.packages = [
-    (pkgs.writeShellScriptBin "internet-check" ''
-      # ── Couleurs ANSI ──────────────────────────────────────────
-      R='\e[0m';  BOLD='\e[1m';  DIM='\e[2m'
-      BOX='\e[38;5;111m'     # bleu — cadre
-      GRAY='\e[38;5;245m'    # gris — étiquettes
-      WHITE='\e[38;5;255m'   # blanc — valeurs
-      GREEN='\e[38;5;114m'   # vert — succès
-      YELLOW='\e[38;5;221m'  # jaune — avertissement
-      RED='\e[38;5;203m'     # rouge — erreur
-
-      # ── Dimensions ────────────────────────────────────────────
-      W=44   # largeur intérieure entre les deux │
-
-      # ── Helpers ───────────────────────────────────────────────
-      bar() { printf '─%.0s' $(seq 1 "$W"); }
-      top() { printf "\n  $BOX╭$(bar)╮$R\n"; }
-      mid() { printf "  $BOX├$(bar)┤$R\n"; }
-      bot() { printf "  $BOX╰$(bar)╯$R\n"; }
-
-      blank() { printf "  $BOX│$R%*s$BOX│$R\n" "$W" ""; }
-
-      # Longueur visible UTF-8 (wc -m compte les caractères, pas les octets)
-      vlen() { printf '%s' "$1" | wc -m; }
-
-      # Padding à N colonnes visibles
-      pad() {
-        local str="$1" target="$2"
-        local n; n=$(vlen "$str")
-        local sp=$(( target - n < 0 ? 0 : target - n ))
-        printf '%s%*s' "$str" "$sp" ""
-      }
-
-      # Ligne avec label (11 cols) + valeur (29 cols)
-      row() {
-        local label="$1" value="$2" color="''${3:-$WHITE}"
-        local l; l=$(pad "$label" 11)
-        local v; v=$(pad "$value" 29)
-        printf "  $BOX│$R  $GRAY%s$R  $color$BOLD%s$R$BOX│$R\n" "$l" "$v"
-      }
-
-      # Ligne centrée (texte sans ANSI pour mesure correcte)
-      center() {
-        local text="$1" color="''${2:-$WHITE}"
-        local len; len=$(vlen "$text")
-        local lp=$(( (W - len) / 2 ))
-        local rp=$(( W - len - lp ))
-        printf "  $BOX│$R%*s$color$BOLD%s$R%*s$BOX│$R\n" "$lp" "" "$text" "$rp" ""
-      }
-
-      # ── Paramètres ────────────────────────────────────────────
-      HOST="1.1.1.1"
-      COUNT=4
-
-      # ── Affichage pendant le ping ─────────────────────────────
-      clear
-      top
-      blank
-      center "  VERIFICATION RESEAU"
-      blank
-      mid
-      blank
-      row "Hote"   "$HOST  Cloudflare"
-      row "Statut" "Envoi de $COUNT paquets..." "$GRAY"
-      blank
-      bot
-
-      RESULT=$(ping -c "$COUNT" -W 2 "$HOST" 2>&1)
-
-      # ── Affichage des résultats ───────────────────────────────
-      clear
-      top
-      blank
-      center "  VERIFICATION RESEAU"
-      blank
-      mid
-      blank
-      row "Hote" "$HOST  Cloudflare"
-
-      if echo "$RESULT" | grep -qE "Network is unreachable|connect: Network"; then
-        blank
-        mid
-        blank
-        center "  AUCUNE INTERFACE RESEAU" "$RED"
-        blank
-        bot
-        printf "\n  $DIM$GRAY Appuyez sur une touche pour fermer...$R\n\n"
-        read -rn1
-        exit 0
-      fi
-
-      PACKET_LOSS=$(echo "$RESULT" | grep -oP '\d+(?=% packet loss)')
-      RTT_MIN=$(echo "$RESULT"     | grep -oP 'rtt min/avg/max/mdev = \K[0-9.]+')
-      RTT_AVG=$(echo "$RESULT"     | grep -oP 'rtt min/avg/max/mdev = [0-9.]+/\K[0-9.]+')
-      RTT_MAX=$(echo "$RESULT"     | grep -oP 'rtt min/avg/max/mdev = [0-9.]+/[0-9.]+/\K[0-9.]+')
-
-      if [ -z "$PACKET_LOSS" ]; then
-        blank
-        mid
-        blank
-        center "  DIAGNOSTIC IMPOSSIBLE" "$RED"
-        blank
-        bot
-        printf "\n  $DIM$GRAY Appuyez sur une touche pour fermer...$R\n\n"
-        read -rn1
-        exit 1
-      fi
-
-      RECV=$(( COUNT * (100 - PACKET_LOSS) / 100 ))
-
-      if   [ "$PACKET_LOSS" -eq 0 ];  then LC=$GREEN
-      elif [ "$PACKET_LOSS" -lt 50 ]; then LC=$YELLOW
-      else                                 LC=$RED
-      fi
-
-      row "Latence"  "$RTT_MIN / $RTT_AVG / $RTT_MAX ms"
-      row "Paquets"  "$RECV / $COUNT recus"
-      row "Perte"    "$PACKET_LOSS%" "$LC"
-      blank
-      mid
-      blank
-
-      if   [ "$PACKET_LOSS" -eq 0 ];   then center "  INTERNET -> OK"   "$GREEN"
-      elif [ "$PACKET_LOSS" -lt 100 ]; then center "  INSTABLE" "$YELLOW"
-      else                                  center "  PAS D'INTERNET"   "$RED"
-      fi
-
-      blank
-      bot
-      printf "\n  $DIM$GRAY Appuyez sur une touche pour fermer...$R\n\n"
-      read -rn1
-    '')
-  ];
+  home.packages = [ speedtest-stream internet-check ];
 }

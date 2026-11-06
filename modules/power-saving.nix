@@ -20,7 +20,6 @@ let
         printf "lock=180\ndpms=210\n" > /tmp/hypridle_timeouts
         systemctl --user restart hypridle 2>/dev/null
         echo "eco" > "$STATE_FILE"
-        $NOTIFY "Mode Éco" "CPU powersave · Luminosité 30% · Wi-Fi powersave ON" -i battery -t 2500
         ;;
       performance)
         sudo cpupower frequency-set -g performance 2>/dev/null
@@ -32,7 +31,6 @@ let
         printf "lock=600\ndpms=630\n" > /tmp/hypridle_timeouts
         systemctl --user restart hypridle 2>/dev/null
         echo "performance" > "$STATE_FILE"
-        $NOTIFY "Mode Performance" "CPU performance · Luminosité 80% · Hypridle 10min" -i battery -t 2500
         ;;
       normal)
         sudo cpupower frequency-set -g powersave 2>/dev/null
@@ -43,7 +41,6 @@ let
         printf "lock=300\ndpms=330\n" > /tmp/hypridle_timeouts
         systemctl --user restart hypridle 2>/dev/null
         echo "normal" > "$STATE_FILE"
-        $NOTIFY "Mode Normal" "TLP reprend la main · Hypridle 5min" -i battery -t 2500
         ;;
     esac
 

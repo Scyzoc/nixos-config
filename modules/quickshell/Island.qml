@@ -6,7 +6,8 @@ import Quickshell.Hyprland
 
 // « Dynamic Island » : une pilule noire née de l'horloge (Clock.qml) qui s'étire pour afficher
 // un message, puis se rétracte. Deux contenus : le bonjour du jour (GreetingState) et les bulles
-// « va dormir » (SleepState.bubble, avec « J'y vais »). Fenêtre superposée à la barre, mêmes
+// « va dormir » (SleepState.bubble, avec « J'y vais ») et « Enregistrement terminé » / « Capture copiée » (ScreenState,
+// fond gris des menus de la barre, pas noir, lisible sur n'importe quel fond). Fenêtre superposée à la barre, mêmes
 // marges → coordonnées identiques à celles de `clock`.
 PanelWindow {
     id: win
@@ -31,18 +32,23 @@ PanelWindow {
     mask: Region {
         x: island.x - 4
         y: island.y - 4
-        width: win.mode === "sleep" ? island.width + 8 : 0
-        height: win.mode === "sleep" ? island.height + 8 : 0
+        width: win.mode === "sleep" || win.mode === "record" ? island.width + 8 : 0
+        height: win.mode === "sleep" || win.mode === "record" ? island.height + 8 : 0
     }
 
     // --- Contenu voulu ---------------------------------------------------------------------
     readonly property var sleepWanted: here && !SleepState.detailsOpen ? SleepState.bubble : null
     readonly property bool greetingWanted: here && GreetingState.active
+    readonly property bool recordWanted: here && ScreenState.doneFile !== ""
     onSleepWantedChanged: refresh()
     onGreetingWantedChanged: refresh()
+    onRecordWantedChanged: refresh()
+
+    // L'île « pastille » est translucide : l'heure en dessous est masquée tant qu'elle est là
+    Binding { target: win.clock; property: "opacity"; value: 0; when: win.open && win.mode === "record" }
 
     property bool open: false          // fenêtre affichée
-    property string mode: ""           // contenu affiché : "greeting" | "sleep"
+    property string mode: ""           // contenu affiché : "greeting" | "sleep" | "record"
     property var cur: null             // bulle de sommeil affichée
     property bool closing: false
 
@@ -51,7 +57,7 @@ PanelWindow {
         ? (cur.farewell ? Theme.mauve : SleepState.levelColorFor(cur.level)) : Qt.rgba(1, 1, 1, 1)
 
     function refresh() {
-        const want = sleepWanted ? "sleep" : (greetingWanted ? "greeting" : "");
+        const want = sleepWanted ? "sleep" : (greetingWanted ? "greeting" : (recordWanted ? "record" : ""));
         if (want === "") {
             if (open && !closing) close();
             return;
@@ -82,7 +88,7 @@ PanelWindow {
         countdown.stop();
         gauge.remain = 1;
         holdGreeting.stop();
-        if (mode === "greeting") holdGreeting.restart();
+        if (mode === "greeting" || mode === "record") holdGreeting.restart();
         else if (mode === "sleep") {
             if (alarm) island.hit();
             typing.restart();
@@ -96,9 +102,11 @@ PanelWindow {
     readonly property real startX: clock.x
     readonly property real startY: (barHeight - clock.height) / 2
     // Largeur : celle du contenu (bonjour) ou fixe (bulle de sommeil, texte à la ligne)
-    property real endW: Math.min(mode === "sleep" ? 400 : greetRow.implicitWidth + 52, width - 20)
+    readonly property Item contentRow: mode === "record" ? recRow : greetRow
+    readonly property bool shotMenu: mode === "record" && ScreenState.menuOpen
+    property real endW: Math.min(mode === "sleep" ? 400 : Math.max(contentRow.implicitWidth + 52, shotMenu ? shotActions.implicitWidth + 28 : 0), width - 20)
     Behavior on endW { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-    property real endH: mode === "sleep" ? sleepBox.implicitHeight + 28 : 68
+    property real endH: mode === "sleep" ? sleepBox.implicitHeight + 28 : mode === "record" ? (shotMenu ? 84 : 36) : 68
     Behavior on endH { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
     readonly property real endX: Math.max(0, Math.min(width - endW, startX + startW / 2 - endW / 2))
 
@@ -129,10 +137,11 @@ PanelWindow {
         radius: Math.min(height / 2, 10 + 26 * win.grow)
         clip: true
         // Alarme : fond rouge sombre, flash rouge vif à chaque « coup »
-        color: win.alarm ? SleepState.mix(Qt.rgba(0.17, 0.02, 0.04, 1), SleepState.vivid, 0.7 * flash) : "#000000"
+        color: win.alarm ? SleepState.mix(Qt.rgba(0.17, 0.02, 0.04, 1), SleepState.vivid, 0.7 * flash)
+            : win.mode === "record" ? (hover.hovered ? Qt.rgba(48 / 255, 48 / 255, 48 / 255, 0.96) : Theme.popupBg) : "#000000"
         border.color: win.alarm ? SleepState.mix(Qt.rgba(0.55, 0.05, 0.1, 1), SleepState.vivid, glow)
             : win.mode === "sleep" ? Qt.rgba(win.accent.r, win.accent.g, win.accent.b, 0.35 + 0.45 * glow)
-            : Qt.rgba(1, 1, 1, 0.14)
+            : win.mode === "record" ? Theme.pillBorder : Qt.rgba(1, 1, 1, 0.14)
         border.width: win.alarm ? 2 : 1
         opacity: win.pillOpacity
 
@@ -216,6 +225,189 @@ PanelWindow {
                     font.family: Theme.labelFont
                     font.pixelSize: 12
                 }
+            }
+        }
+
+        // --- Enregistrement terminé / capture d'écran (style pastille) : clic = ouvrir le dossier de la vidéo ---
+        Row {
+            id: recRow
+            visible: win.mode === "record"
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: (36 - height) / 2
+            spacing: 8
+            opacity: win.textOpacity
+            // Enregistrement : écran (contour blanc + pied) avec une coche verte, qui rebondit
+            Item {
+                id: badge
+                visible: ScreenState.doneKind !== "shot"
+                anchors.verticalCenter: parent.verticalCenter
+                width: 22
+                height: 22
+                Rectangle {
+                    x: 1
+                    y: 2
+                    width: 20
+                    height: 14
+                    radius: 3
+                    color: "transparent"
+                    border.width: 2
+                    border.color: Theme.text
+                }
+                Rectangle {    // pied
+                    x: 7
+                    y: 19
+                    width: 8
+                    height: 2
+                    radius: 1
+                    color: Theme.text
+                }
+                Text {
+                    id: badgeCheck
+                    x: (parent.width - width) / 2
+                    y: 9 - height / 2
+                    text: Theme.ic(0xf012c)    // md-check
+                    color: Theme.green
+                    font.family: Theme.font
+                    font.pixelSize: 14
+                }
+                SequentialAnimation {
+                    running: win.mode === "record" && win.textOpacity > 0 && badge.visible
+                    PropertyAction { target: badgeCheck; property: "scale"; value: 0.3 }
+                    PauseAnimation { duration: 80 }
+                    NumberAnimation { target: badgeCheck; property: "scale"; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 2.5 }
+                }
+            }
+            // Capture d'écran : cadre de visée (quatre coins) avec une coche verte au centre
+            Item {
+                id: frame
+                visible: ScreenState.doneKind === "shot"
+                anchors.verticalCenter: parent.verticalCenter
+                width: 22
+                height: 22
+                readonly property int arm: 7
+                readonly property int th: 2
+                Repeater {
+                    model: [[0, 0], [1, 0], [0, 1], [1, 1]]
+                    Item {
+                        required property var modelData
+                        x: modelData[0] * (frame.width - frame.arm)
+                        y: modelData[1] * (frame.height - frame.arm)
+                        width: frame.arm
+                        height: frame.arm
+                        Rectangle {    // branche horizontale
+                            width: frame.arm
+                            height: frame.th
+                            radius: 1
+                            color: Theme.text
+                            y: modelData[1] ? frame.arm - frame.th : 0
+                        }
+                        Rectangle {    // branche verticale
+                            width: frame.th
+                            height: frame.arm
+                            radius: 1
+                            color: Theme.text
+                            x: modelData[0] ? frame.arm - frame.th : 0
+                        }
+                    }
+                }
+                Text {
+                    id: frameCheck
+                    anchors.centerIn: parent
+                    text: Theme.ic(0xf012c)    // md-check
+                    color: Theme.green
+                    font.family: Theme.font
+                    font.pixelSize: 14
+                }
+                SequentialAnimation {
+                    running: win.mode === "record" && win.textOpacity > 0 && frame.visible
+                    PropertyAction { target: frameCheck; property: "scale"; value: 0.3 }
+                    PauseAnimation { duration: 80 }
+                    NumberAnimation { target: frameCheck; property: "scale"; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 2.5 }
+                }
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: ScreenState.doneLabel
+                color: Theme.text
+                font.family: Theme.labelFont
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+            }
+            // Capture : bouton qui déroule le menu d'actions
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: Theme.ic(0xf0140)    // md-chevron_down
+                color: Theme.subtext
+                font.family: Theme.font
+                font.pixelSize: 16
+                rotation: win.shotMenu ? 180 : 0
+                Behavior on rotation { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+            }
+        }
+        // Menu déroulant : enregistrer sous / dessiner (la capture est déjà copiée)
+        Row {
+            id: shotActions
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 42
+            spacing: 6
+            opacity: win.shotMenu ? win.textOpacity : 0
+            Behavior on opacity { NumberAnimation { duration: 220 } }
+            ActionButton {
+                icon: Theme.ic(0xf0193)    // md-content_save (enregistrer sous)
+                iconSize: 17
+                implicitWidth: 40
+                implicitHeight: 30
+                enabled: win.shotMenu
+                onClicked: ScreenState.shotAction("save")
+            }
+            ActionButton {
+                visible: ScreenState.doneKind === "record"
+                icon: Theme.ic(0xf018f)    // md-content_copy (copier la vidéo)
+                iconSize: 17
+                implicitWidth: 40
+                implicitHeight: 30
+                enabled: win.shotMenu
+                onClicked: ScreenState.shotAction("copy")
+            }
+            ActionButton {
+                visible: ScreenState.doneKind === "record"
+                icon: Theme.ic(0xf0770)    // md-folder_open (ouvrir le dossier)
+                iconSize: 17
+                implicitWidth: 40
+                implicitHeight: 30
+                enabled: win.shotMenu
+                onClicked: ScreenState.shotAction("folder")
+            }
+            ActionButton {
+                visible: ScreenState.doneKind === "shot"
+                icon: Theme.ic(0xf03eb)    // md-pencil (dessiner)
+                iconSize: 17
+                implicitWidth: 40
+                implicitHeight: 30
+                enabled: win.shotMenu
+                onClicked: ScreenState.shotAction("draw")
+            }
+            ActionButton {
+                visible: ScreenState.doneKind === "shot"
+                icon: Theme.ic(0xf113d)    // md-text_recognition (extraire le texte)
+                iconSize: 17
+                implicitWidth: 40
+                implicitHeight: 30
+                enabled: win.shotMenu
+                onClicked: ScreenState.shotAction("ocr")
+            }
+        }
+        MouseArea {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 36
+            enabled: win.mode === "record" && win.textOpacity === 1
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                ScreenState.menuOpen = !ScreenState.menuOpen;
+                if (ScreenState.menuOpen) holdGreeting.stop();
+                else holdGreeting.restart();
             }
         }
 
@@ -365,7 +557,10 @@ PanelWindow {
     Timer {
         id: holdGreeting
         interval: 4800
-        onTriggered: GreetingState.active = false
+        onTriggered: {
+            if (win.mode === "record") ScreenState.doneFile = "";
+            else GreetingState.active = false;
+        }
     }
 
     // --- Séquences -------------------------------------------------------------------------
@@ -381,7 +576,7 @@ PanelWindow {
     SequentialAnimation {
         id: swapAnim
         NumberAnimation { target: win; property: "textOpacity"; to: 0; duration: 140 }
-        ScriptAction { script: { win.mode = win.sleepWanted ? "sleep" : "greeting"; win.cur = win.sleepWanted; } }
+        ScriptAction { script: { win.mode = win.sleepWanted ? "sleep" : (win.greetingWanted ? "greeting" : "record"); win.cur = win.sleepWanted; } }
         PauseAnimation { duration: 200 }
         NumberAnimation { target: win; property: "textOpacity"; to: 1; duration: 220 }
         ScriptAction { script: win.shown() }

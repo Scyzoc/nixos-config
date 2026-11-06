@@ -295,9 +295,15 @@ Pill {
         contentWidth: 320
 
         onVisibleChanged: {
-            if (root.wifiDev) root.wifiDev.scannerEnabled = visible;
-            if (!visible) { root.pendingSsid = ""; root.errorText = ""; root.showIpSettings = false; root.showInfo = false; }
-            else { rfkillState.running = true; VpnState.refresh(); connCheck.running = true; }
+            if (!visible) {
+                if (root.wifiDev) root.wifiDev.scannerEnabled = false;
+                root.pendingSsid = ""; root.errorText = ""; root.showIpSettings = false; root.showInfo = false;
+            }
+        }
+        // Scan et processus lancés une fois l'animation d'ouverture finie (sinon saccades)
+        onSettledChanged: if (settled) {
+            if (root.wifiDev) root.wifiDev.scannerEnabled = true;
+            rfkillState.running = true; VpnState.refresh(); connCheck.running = true;
         }
 
         // En-tête (style menu batterie) : grosse icône Wi-Fi, SSID et détails à côté
@@ -431,7 +437,9 @@ Pill {
                 busy: VpnState.busy && !VpnState.connecting
                 accent: Theme.green
                 highlighted: VpnState.active
-                onClicked: if (!VpnState.busy) VpnState.toggle()
+                // Grisé quand le Wi-Fi est coupé (sauf pour déconnecter un VPN déjà actif)
+                opacity: root.enabled_ || VpnState.active ? 1 : 0.4
+                onClicked: if (!VpnState.busy && (root.enabled_ || VpnState.active)) VpnState.toggle()
             }
             // Détails de la connexion : remplacent la liste des réseaux
             ActionButton {
@@ -461,7 +469,7 @@ Pill {
             readonly property real listH: Math.min(list.implicitHeight, 460)
             Layout.fillWidth: true
             Layout.preferredHeight: root.infoShown ? info.implicitHeight : listH
-            Behavior on Layout.preferredHeight { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+            Behavior on Layout.preferredHeight { enabled: popup.settled; NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
             visible: root.enabled_ || root.infoShown
             clip: true
 

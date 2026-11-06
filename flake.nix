@@ -32,7 +32,7 @@
           ./hosts/${host}
           home-manager.nixosModules.home-manager
           homeManagerModule
-          { nixpkgs.overlays = [ (import ./overlays/swaync-app-colors.nix) (import ./overlays/kitty-claude-notify-icon.nix) (import ./overlays/glaze-hyprland-pin.nix) (import ./overlays/cisco-packet-tracer-901.nix) (final: prev: { claude-desktop-with-fhs = inputs.claude-desktop.packages.${prev.system}.claude-desktop-with-fhs; }) ]; }
+          { nixpkgs.overlays = [ (import ./overlays/swaync-app-colors.nix) (import ./overlays/kitty-claude-notify-icon.nix) (import ./overlays/glaze-hyprland-pin.nix) (import ./overlays/cisco-packet-tracer-901.nix) (import ./overlays/vmware-natd-fix.nix) (final: prev: { claude-desktop-with-fhs = inputs.claude-desktop.packages.${prev.system}.claude-desktop-with-fhs; }) ]; }
         ];
       };
     in

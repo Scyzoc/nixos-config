@@ -21,7 +21,8 @@ RowLayout {
 
     // Apparition : s'ouvre en largeur depuis l'heure ; masqué : retiré de la pastille
     Layout.preferredWidth: SleepState.shown ? implicitWidth : 0
-    Behavior on Layout.preferredWidth { NumberAnimation { duration: 420; easing.type: Easing.OutCubic } }
+    readonly property alias animating: widthAnim.running
+    Behavior on Layout.preferredWidth { NumberAnimation { id: widthAnim; duration: 420; easing.type: Easing.OutCubic } }
     opacity: SleepState.shown ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: 420 } }
     visible: opacity > 0

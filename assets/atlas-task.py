@@ -1,6 +1,7 @@
 """Client MCP minimal pour Atlas (popup « Nouvelle tâche », AtlasTask.qml).
 
   atlas-task cached          thèmes + projets du dernier appel (cache, sans réseau)
+  atlas-task today           nombre de tâches à faire aujourd'hui
   atlas-task meta            thèmes + projets en JSON (mis en cache)
   atlas-task create '<json>' crée une tâche (arguments de l'outil create_task)
   atlas-task create-exam '<json>'
@@ -179,6 +180,13 @@ def create(args):
     return task
 
 
+def today():
+    """Nombre de tâches à faire aujourd'hui (prévues + à placer), pour le bonjour de la barre."""
+    with Client() as c:
+        t = c.tool("get_today", {})
+    return {"count": len(t.get("plannedToday") or []) + len(t.get("toPlace") or [])}
+
+
 def devalue(raw):
     """Décode les données d'une réponse d'action SvelteKit (format devalue, types simples)."""
     arr = json.loads(raw)
@@ -238,6 +246,8 @@ def main():
                 out = {"themes": [], "projects": [], "courses": []}
         elif cmd == "meta":
             out = meta()
+        elif cmd == "today":
+            out = today()
         elif cmd == "create-exam" and len(sys.argv) > 2:
             out = create_exam(json.loads(sys.argv[2]))
         elif cmd == "create" and len(sys.argv) > 2:

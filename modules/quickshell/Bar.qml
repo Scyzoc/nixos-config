@@ -60,7 +60,7 @@ PanelWindow {
         readonly property real minX: leftRow.x + leftRow.width + 12
         anchors.verticalCenter: parent.verticalCenter
         x: Math.max(minX, Math.min(centered, maxX))
-        Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        Behavior on x { enabled: !clock.resizing; NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
     }
 
     RowLayout {
@@ -73,9 +73,11 @@ PanelWindow {
         TimerPill { compact: bar.compact }
         Media { compact: bar.compact }
         Brightness { compact: bar.compact }
+        UsbDrives { compact: bar.compact }
         Volume { compact: bar.compact }
         SysRes { compact: bar.compact }
         BluetoothPill { compact: bar.compact }
+        Console { compact: bar.compact }
         Ethernet { compact: bar.compact }
         Wifi { compact: bar.compact }
         Battery { compact: bar.compact }

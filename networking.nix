@@ -8,8 +8,9 @@
   networking.hostName = "nixos";
 
   # LocalSend : découverte UDP + transfert TCP
-  networking.firewall.allowedTCPPorts = [ 53317 ];
-  networking.firewall.allowedUDPPorts = [ 53317 ];
+  # + UxPlay (AirPlay) : 7000 7001 7100 TCP, 6000 6001 7011 UDP (ports fixés via `uxplay -p`), 5353 mDNS
+  networking.firewall.allowedTCPPorts = [ 53317 7000 7001 7100 ];
+  networking.firewall.allowedUDPPorts = [ 53317 6000 6001 7011 5353 ];
 
   # On donne 100% du contrôle à NetworkManager (Ethernet, Wi-Fi, Hotplug)
   networking.networkmanager.enable = true;
@@ -37,12 +38,35 @@
       interface-name = "enp3s0f0";
       autoconnect = "true";
       autoconnect-retries = "-1";
+      autoconnect-priority = "10";
     };
-    ipv4.method = "auto";
+    # DHCP court : sans serveur DHCP, NM abandonne vite et bascule sur le profil IP fixe
+    ipv4 = {
+      method = "auto";
+      dhcp-timeout = "5";
+      may-fail = "false";
+    };
     ipv6 = {
       method = "auto";
       addr-gen-mode = "stable-privacy";
     };
+  };
+
+  # Repli : IP fixe quand aucun DHCP ne répond (réseau sans serveur DHCP, lien direct PC↔PC).
+  # Adapter l'adresse/le préfixe ici. Pour forcer l'IP fixe sans attendre : `nmcli con up "Ethernet IP fixe"`.
+  networking.networkmanager.ensureProfiles.profiles."ethernet-fixe" = {
+    connection = {
+      id = "Ethernet IP fixe";
+      type = "ethernet";
+      interface-name = "enp3s0f0";
+      autoconnect = "true";
+      autoconnect-priority = "0";
+    };
+    ipv4 = {
+      method = "manual";
+      address1 = "IP_CENSUREE/24";
+    };
+    ipv6.method = "link-local";
   };
 
   systemd.services.wake-ethernet = {

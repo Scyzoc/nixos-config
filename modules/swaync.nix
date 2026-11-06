@@ -91,7 +91,7 @@ in
     }
 
     .notification {
-      background-color: rgba(0, 0, 0, 0.25); /* Fond sombre translucide */
+      background-color: rgba(20, 20, 24, 0.82); /* Fond sombre, assez opaque pour rester lisible sur fond clair */
       border: 1px solid rgba(255, 255, 255, 0.1);
       /* border-radius: 15px; */
       /* padding: 10px; */
@@ -99,7 +99,7 @@ in
     }
 
     .notification:hover {
-      background-color: rgba(128, 128, 128, 0.2); /* Léger fond gris au survol */
+      background-color: rgba(50, 50, 56, 0.9); /* Léger fond gris au survol */
       border-color: rgba(255, 255, 255, 0.5);
       box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.3); /* Lueur blanche externe */
     }
@@ -118,7 +118,7 @@ in
 
     .body {
       font-size: 13px;
-      color: #bac2de;
+      color: #dfe3f0;
       text-shadow: 0px 0px 5px rgba(0, 0, 0, 0.8), 0px 0px 2px rgba(0, 0, 0, 1);
     }
 
@@ -248,6 +248,10 @@ in
 
     .notification.app-screenshot {
       border-left: 3px solid #FFFFFF; /* blanc */
+    }
+
+    .notification.app-disques-usb {
+      border-left: 3px solid transparent; /* sans couleur */
     }
 
     /* Apps natives — app-name envoyé directement par l'appli, pas par nous.

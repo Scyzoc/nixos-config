@@ -134,7 +134,7 @@ Pill {
         }
     }
 
-    readonly property color tint: muted ? Theme.red : Theme.lerpColor(Qt.color(Theme.muted), Qt.color("#91cfe5"), Math.min(1, vol))
+    readonly property color tint: muted ? Theme.red : Theme.lerpColor(Qt.color(Theme.subtext), Qt.color("#91cfe5"), Math.min(1, vol))
 
     BarText { text: root.icon(root.vol, root.muted); color: root.tint }
     BarText {

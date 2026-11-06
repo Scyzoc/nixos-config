@@ -10,6 +10,9 @@ Pill {
     id: root
 
     property string monitorName: ""
+    // Largeur animée par un enfant : la pastille et sa position suivent image par image
+    readonly property bool resizing: voice.animating || screen.animating || sleep.animating
+    animateWidth: !resizing
     // Compteur de sommeil affiché : pastille coupée en deux, chaque moitié a son clic
     splitX: sleep.visible ? (sleep.x, root.width, sleep.mapToItem(root, 0, 0).x - 2) : -1
 
@@ -78,10 +81,14 @@ Pill {
     BarText { text: Qt.formatDateTime(clock.date, "dd/MM"); color: Theme.subtext; font.family: Theme.labelFont; font.features: { "tnum": 1 } }
     BarText { text: "·"; color: Theme.muted; font.family: Theme.labelFont }
     BarText { text: Qt.formatDateTime(clock.date, "HH:mm"); font.family: Theme.labelFont; font.weight: Font.DemiBold; font.features: { "tnum": 1 } }
+    VoiceRec { id: voice }
+    ScreenRec { id: screen }
     SleepCountdown { id: sleep; monitorName: root.monitorName }
 
     onClicked: event => {
-        if (event.button === Qt.RightButton)
+        if (event.button === Qt.LeftButton && ScreenState.doneFile !== "")
+            ScreenState.open();      // « Enregistrement terminé » affiché : ouvre le dossier de la vidéo
+        else if (event.button === Qt.RightButton)
             Hyprland.dispatch('hl.dsp.exec_cmd("brave --app=https://atlas.homelab.lan/planning")');
         else if (root.splitX >= 0 && event.x >= root.splitX)
             sleep.toggleDetails();
@@ -93,6 +100,7 @@ Pill {
         id: popup
         target: root
         contentWidth: 300
+        morph: true
 
         property date view: new Date()
         onVisibleChanged: if (visible) view = new Date()

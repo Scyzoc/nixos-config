@@ -28,6 +28,11 @@ let
     hl_monitor() {
       local mode pos scale k v lua
       if [ "$2" = disable ]; then
+        # Jamais zéro écran actif : Hyprland 0.56 plante (SEGV CPopup::onMap) dès
+        # qu'un popup s'ouvre sans écran. On refuse de couper le dernier écran actif.
+        if [ -z "$(${HYPR} monitors -j | ${JQ} -r --arg o "$1" '.[] | select(.name != $o and ("desc:" + .description) != $o) | .name')" ]; then
+          return 0
+        fi
         lua="hl.monitor({ output = \"$1\", disabled = true })"
       else
         IFS=, read -r mode pos scale k v <<< "$2"
@@ -840,6 +845,15 @@ let
             else
               ${display-apply}/bin/display-apply extend
             fi
+            # Au branchement/démarrage via le dock MST, le Xiaomi s'allume parfois
+            # en 60 Hz (lien sans DSC) : on réimpose 120 Hz tant qu'il n'y est pas.
+            ( for _ in 1 2 3 4; do
+                sleep 3
+                XI=$(${HYPR} monitors all -j | ${JQ} -r '.[] | select(.description | test("Xiaomi")) | "\(.name) \(.refreshRate | floor)"' | head -1)
+                [ -z "$XI" ] && break
+                [ "''${XI#* }" -ge 119 ] && break
+                ${HYPR} eval "hl.monitor({ output = \"''${XI% *}\", mode = \"3440x1440@120\", position = \"0x0\", scale = 1 })" >/dev/null
+              done ) &
           else
             SIG=$(${layout-sig})
             if [ -n "$SIG" ] && [ -f "${LAYOUT_DIR}/$SIG.json" ]; then
@@ -936,6 +950,49 @@ let
     done
   '';
 
+  # ==========================================================================
+  # DISPLAY-SLEEP : appelé par hypridle (home.nix) avant/après la veille
+  # pre  : eDP-1 éteint (capot fermé sur le dock) → rallumé avant la veille.
+  #        Si le dock est retiré pendant la veille, Hyprland se réveille sinon
+  #        avec zéro écran → sortie FALLBACK créée puis détruite → hyprlock
+  #        éjecté (SIGABRT, écran rouge) + risque SEGV CPopup::onMap.
+  # post : toujours sur le dock capot fermé → remet le mode lid-closed.
+  # ==========================================================================
+  display-sleep = pkgs.writeShellScriptBin "display-sleep" ''
+    INTERNAL="eDP-1"
+    MARK="''${XDG_RUNTIME_DIR:-/tmp}/display-sleep.edp-forced"
+
+    ${HL_MONITOR}
+
+    case "$1" in
+      pre)
+        if ${HYPR} monitors all -j | ${JQ} -e --arg n "$INTERNAL" \
+             'any(.[]; .name == $n and .disabled)' >/dev/null; then
+          touch "$MARK"
+          # Verrou : sinon le `configreloaded` émis par l'eval fait réappliquer
+          # lid-closed par monitor-watcher (eDP-1 rééteint).
+          touch "${LOCK_FILE}"
+          hl_monitor "$INTERNAL" "1920x1080@60,1520x1440,1"
+          sleep 1
+          rm -f "${LOCK_FILE}"
+        fi
+        ;;
+      post)
+        [ -f "$MARK" ] || exit 0
+        rm -f "$MARK"
+        # Laisse le hotplug du réveil (dock retiré/rebranché) se stabiliser
+        sleep 4
+        LID_FILE=$(ls /proc/acpi/button/lid/*/state 2>/dev/null | head -1)
+        LID_STATE=$([ -n "$LID_FILE" ] && awk '{print $2}' "$LID_FILE" || echo "open")
+        EXT=$(${HYPR} monitors all -j | ${JQ} -r --arg n "$INTERNAL" '.[] | select(.name != $n) | .name' | head -1)
+        # Capot ouvert ou plus d'externe : lid-watcher / monitor-watcher gèrent.
+        if [ "$LID_STATE" = "closed" ] && [ -n "$EXT" ]; then
+          ${display-apply}/bin/display-apply lid-closed
+        fi
+        ;;
+    esac
+  '';
+
 in
 {
   # --------------------------------------------------------------------------
@@ -947,7 +1004,7 @@ in
   # --------------------------------------------------------------------------
   # Packages
   # --------------------------------------------------------------------------
-  home.packages = [ display-apply display-state display-layout-edit display-menu display-layouts monitor-watcher lid-watcher workspace-bind ];
+  home.packages = [ display-apply display-state display-layout-edit display-menu display-layouts monitor-watcher lid-watcher workspace-bind display-sleep ];
 
   # --------------------------------------------------------------------------
   # Services systemd user

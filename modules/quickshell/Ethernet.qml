@@ -238,10 +238,10 @@ Pill {
             linkRows: [[0xf04c5, "Vitesse", root.speedText]]    // md-speedometer
         }
 
-        // Réglages IP (DHCP / statique) : seulement avec une connexion active
-        Separator { visible: root.online }
+        // Réglages IP (DHCP / statique) : aussi pendant « Attribution d'IP… » (réseau sans DHCP)
+        Separator { visible: root.online || root.connecting }
         RowLayout {
-            visible: root.online
+            visible: root.online || root.connecting
             Layout.fillWidth: true
             spacing: 6
             ActionButton {
@@ -270,7 +270,7 @@ Pill {
         // Dépliage animé (même animation que le menu Wi-Fi)
         Item {
             id: ipPanel
-            readonly property bool open: root.online && root.showIpSettings
+            readonly property bool open: (root.online || root.connecting) && root.showIpSettings
             Layout.fillWidth: true
             Layout.preferredHeight: open ? (ipSettings.item?.implicitHeight ?? 0) : 0
             Behavior on Layout.preferredHeight { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }

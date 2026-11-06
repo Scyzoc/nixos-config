@@ -110,6 +110,13 @@ Pill {
         opacity: root.blink
     }
 
+    // Batterie critique : pourcentage à côté de l'icône
+    BarText {
+        visible: root.critical && !root.desktopMode
+        text: root.cap + "%"
+        color: root.tint
+    }
+
     onClicked: popup.toggle()
 
     function fmtDuration(s) {

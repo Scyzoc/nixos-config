@@ -31,7 +31,9 @@ Singleton {
         return w;
     }
     readonly property int minutesLeft: wake === "" ? -1 : Math.ceil((wakeDate - now) / 60000)
-    readonly property bool shown: minutesLeft > 0 && minutesLeft <= fullMin
+    // Réveil « de nuit » seulement : un événement de fin de journée (18:00) ne fait pas une nuit
+    readonly property bool morningWake: wake !== "" && Number(wake.slice(0, 2)) < 12
+    readonly property bool shown: morningWake && minutesLeft > 0 && minutesLeft <= fullMin
     readonly property bool blinking: shown && minutesLeft < blinkMin
     readonly property int alarmMin: 7 * 60      // sous 7 h : alarme (rouge vif, capsule pleine)
     readonly property bool alarm: shown && minutesLeft < alarmMin
