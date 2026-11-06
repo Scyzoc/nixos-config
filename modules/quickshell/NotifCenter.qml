@@ -59,16 +59,15 @@ Pill {
 
         PopupHeader {
             title: "Notifications"
-            showToggle: true
-            checked: NotifState.dnd
-            toggleAccent: Theme.mauve
-            onToggled: NotifState.dnd = !NotifState.dnd
 
-            BarText {
-                text: "Ne pas déranger"
-                color: Theme.subtext
-                font.family: Theme.labelFont
-                font.pixelSize: 11
+            // Ne pas déranger : bouton Zzz, teinté quand actif
+            IconButton {
+                implicitWidth: 30
+                implicitHeight: 30
+                icon: Theme.ic(0xf04b2)    // md-sleep (Zzz)
+                accent: Theme.mauve
+                checked: NotifState.dnd
+                onClicked: NotifState.dnd = !NotifState.dnd
             }
         }
 
