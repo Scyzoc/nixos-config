@@ -37,13 +37,13 @@ Singleton {
         root.doneFile = "";
     }
 
-    // Action du menu de l'île. Capture : save | draw ; enregistrement : save | copy | folder
+    // Action du menu de l'île. Capture : save | draw | ocr ; enregistrement : save | copy | folder | delete
     function shotAction(kind) {
         const f = root.doneFile;
         if (root.doneKind === "shot")
             opener.command = [Paths.userBin + "/screenshot", kind === "save" ? "--save-as" : kind === "ocr" ? "--ocr" : "--edit", f];
         else
-            opener.command = [Paths.userBin + "/screen-record", kind === "save" ? "save-as" : kind === "copy" ? "copy" : "open", f];
+            opener.command = [Paths.userBin + "/screen-record", kind === "save" ? "save-as" : kind === "copy" ? "copy" : kind === "delete" ? "delete" : "open", f];
         opener.running = true;
         root.doneFile = "";
     }

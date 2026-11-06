@@ -2,7 +2,8 @@
 # Zone choisie à la souris (slurp), sans audio, dans ~/Videos/. La barre affiche un point REC
 # + durée à droite de l'heure (quickshell/ScreenRec.qml, état dans ScreenState.qml) ; à l'arrêt,
 # « Enregistrement terminé » apparaît dans l'île de l'heure (Island.qml). Clic sur l'île : ouvre le
-# dossier avec la vidéo sélectionnée (`screen-record open <fichier>`).
+# dossier avec la vidéo sélectionnée (`screen-record open <fichier>`) ; menu : enregistrer sous,
+# copier, ouvrir le dossier, supprimer (`screen-record delete <fichier>` → corbeille).
 # États : /tmp/screen_rec.lock (pid + fichier, mtime = début) ; /tmp/screen_rec.state (done <fichier> | error).
 { pkgs, ... }:
 
@@ -25,6 +26,16 @@ let
     # Menu de l'île : copie le fichier (presse-papiers, collable dans un gestionnaire de fichiers)
     if [ "''${1:-}" = copy ]; then
         printf 'file://%s\n' "$2" | ${pkgs.wl-clipboard}/bin/wl-copy -t text/uri-list
+        exit 0
+    fi
+
+    # Menu de l'île : supprimer (vers la corbeille, récupérable)
+    if [ "''${1:-}" = delete ]; then
+        if ${pkgs.glib}/bin/gio trash "$2"; then
+            ${pkgs.libnotify}/bin/notify-send -a "Enregistrement" -i user-trash "Vidéo mise à la corbeille" "$(${pkgs.coreutils}/bin/basename "$2")"
+        else
+            ${pkgs.libnotify}/bin/notify-send -a "Enregistrement" -u critical "Suppression impossible" "$2"
+        fi
         exit 0
     fi
 

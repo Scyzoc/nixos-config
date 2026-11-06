@@ -379,6 +379,17 @@ PanelWindow {
                 onClicked: ScreenState.shotAction("folder")
             }
             ActionButton {
+                visible: ScreenState.doneKind === "record"
+                icon: Theme.ic(0xf0a7a)    // md-trash_can_outline (supprimer : corbeille)
+                iconSize: 17
+                implicitWidth: 40
+                implicitHeight: 30
+                accent: Theme.red
+                highlighted: hovered
+                enabled: win.shotMenu
+                onClicked: ScreenState.shotAction("delete")
+            }
+            ActionButton {
                 visible: ScreenState.doneKind === "shot"
                 icon: Theme.ic(0xf03eb)    // md-pencil (dessiner)
                 iconSize: 17
