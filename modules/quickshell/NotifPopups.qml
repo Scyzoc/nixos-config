@@ -18,7 +18,11 @@ PanelWindow {
     // Sous la barre (5 de marge + 36 de haut) + 8
     margins { top: 49; right: 10 }
     implicitWidth: 380
-    implicitHeight: Math.max(1, stack.implicitHeight)
+    // Hauteur FIXE (tout l'écran sous la barre) : redimensionner la surface à chaque carte qui
+    // part provoquait un saut d'une image et une bande grise (flou de l'ancienne taille).
+    // Seules les cartes captent la souris (mask) ; le reste laisse passer les clics.
+    implicitHeight: (screen?.height ?? 1080) - 59
+    mask: Region { item: stack }
     color: "transparent"
 
     Column {
