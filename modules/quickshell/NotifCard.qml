@@ -15,6 +15,9 @@ Rectangle {
     property bool popup: true
 
     readonly property string appIcon: NotifState.appIconOf(notif)
+    // Vraie image (avatar, pochette…) ; une icône de thème passée en image compte comme icône
+    readonly property string photo: notif.image && !notif.image.startsWith("image://icon/") && notif.image !== appIcon ? notif.image : ""
+    readonly property string iconSrc: appIcon || (notif.image.startsWith("image://icon/") ? notif.image : "")
     readonly property string brand: NotifState.brandColor(notif)
     readonly property color accent: brand !== "" ? brand : tint.color
     readonly property bool critical: notif.urgency === NotificationUrgency.Critical
@@ -37,7 +40,7 @@ Rectangle {
     opacity: 1 - slide
     transform: Translate { x: card.slide * (card.width + 20) }
 
-    IconColor { id: tint; source: card.appIcon; fallback: NotifState.hashColor(card.notif) }
+    IconColor { id: tint; source: card.iconSrc; fallback: NotifState.hashColor(card.notif) }
 
     Component.onCompleted: if (popup) enterAnim.start()
     NumberAnimation { id: enterAnim; target: card; property: "slide"; to: 0; duration: 320; easing.type: Easing.OutCubic }
@@ -107,29 +110,38 @@ Rectangle {
                     anchors.fill: parent
                     radius: 12
                     color: Qt.rgba(card.accent.r, card.accent.g, card.accent.b, 0.16)
-                    readonly property string src: card.notif.image || card.appIcon
 
                     Image {
-                        id: picImg
+                        id: photoImg
                         anchors.fill: parent
-                        anchors.margins: card.notif.image ? 0 : 6
-                        source: pic.src
-                        fillMode: card.notif.image ? Image.PreserveAspectCrop : Image.PreserveAspectFit
+                        visible: card.photo !== ""
+                        source: card.photo
+                        fillMode: Image.PreserveAspectCrop
                         sourceSize: Qt.size(88, 88)
                         asynchronous: true
                         smooth: true
                         mipmap: true
                     }
+                    IconImage {
+                        id: iconImg
+                        anchors.centerIn: parent
+                        visible: card.photo === "" && card.iconSrc !== ""
+                        implicitSize: 30
+                        source: visible ? card.iconSrc : ""
+                        asynchronous: true
+                    }
                     BarText {
                         anchors.centerIn: parent
-                        visible: pic.src === "" || picImg.status === Image.Error
+                        visible: card.photo !== "" ? photoImg.status === Image.Error
+                                                   : (card.iconSrc === "" || iconImg.status === Image.Error)
                         text: Theme.ic(0xf009a)    // md-bell
                         color: card.accent
                         font.pixelSize: 22
                     }
                 }
+                // Pastille de l'appli sur la photo (avatar, pochette)
                 Rectangle {
-                    visible: card.notif.image !== "" && card.appIcon !== ""
+                    visible: card.photo !== "" && card.appIcon !== ""
                     width: 20
                     height: 20
                     radius: 10
@@ -141,7 +153,7 @@ Rectangle {
                     IconImage {
                         anchors.centerIn: parent
                         implicitSize: 14
-                        source: card.appIcon
+                        source: parent.visible ? card.appIcon : ""
                         asynchronous: true
                     }
                 }
