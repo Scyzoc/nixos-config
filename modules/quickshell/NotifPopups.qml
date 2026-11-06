@@ -31,7 +31,7 @@ PanelWindow {
         spacing: 8
 
         // Les cartes restantes glissent à leur nouvelle place quand une autre part
-        move: Transition { NumberAnimation { properties: "y"; duration: 220; easing.type: Easing.OutCubic } }
+        move: Transition { NumberAnimation { properties: "y"; duration: 300; easing.type: Easing.InOutCubic } }
 
         Repeater {
             // ScriptModel : garde les cartes existantes (et leur animation / délai) quand la liste change
