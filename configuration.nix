@@ -508,7 +508,6 @@
 
     # --- Notifications ---
     libnotify
-    swaynotificationcenter
 
     # --- Capture d'écran ---
 

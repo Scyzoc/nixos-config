@@ -244,6 +244,24 @@ let
     print(json.dumps({"host": host, "name": name, "icon": icon if os.path.exists(icon) else ""}))
   '';
 
+  # Clic sur une notif sans action par défaut → focus de la fenêtre de l'appli émettrice.
+  # Match insensible à la casse : app-name, puis desktop-entry, contre class/initialClass.
+  #   notif-focus <app-name> <desktop-entry>
+  notif-focus = pkgs.writeShellScript "notif-focus" ''
+    HYPRCTL=${config.home.profileDirectory}/bin/hyprctl
+    for name in "$1" "$2"; do
+      [ -z "$name" ] && continue
+      addr=$($HYPRCTL clients -j | ${pkgs.jq}/bin/jq -r --arg n "$name" '
+        [.[] | select((.class | ascii_downcase | contains($n | ascii_downcase))
+                   or (.initialClass | ascii_downcase | contains($n | ascii_downcase)))]
+        | sort_by(.focusHistoryID) | .[0].address // empty')
+      if [ -n "$addr" ]; then
+        $HYPRCTL dispatch "hl.dsp.focus({ window = \"address:$addr\" })"
+        exit 0
+      fi
+    done
+  '';
+
   # Chemins absolus des binaires utilisés par la barre (PATH non garanti sous systemd)
   paths = pkgs.writeText "Paths.qml" ''
     pragma Singleton
@@ -282,6 +300,7 @@ let
         readonly property string stateDir: "${config.xdg.stateHome}/quickshell-bar"
         readonly property string magick: "${pkgs.imagemagick}/bin/magick"
         readonly property string webSource: "${web-source}"
+        readonly property string notifFocus: "${notif-focus}"
         readonly property string braveLogo: "file://${pkgs.brave}/share/icons/hicolor/128x128/apps/brave-browser.png"
         // Fond d'écran courant (écrit par wallpaper-apply, wallpaper-picker.nix)
         readonly property string wallpaperState: "${config.xdg.stateHome}/wallpaper/current"

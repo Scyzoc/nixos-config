@@ -56,7 +56,6 @@ in
   imports = lib.optional (builtins.pathExists notionTodo) notionTodo ++ [
     ./modules/hyprland.nix
     ./modules/quickshell.nix
-    ./modules/swaync.nix
     ./modules/cours.nix
     ./modules/emoji.nix
     ./modules/voice-transcription.nix

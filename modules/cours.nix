@@ -2,8 +2,8 @@
 
 # Mode Cours : les notifications sont muettes sur la sortie audio du PC
 # (haut-parleurs, HDMI…) mais gardent leur son si la sortie par défaut est
-# Bluetooth (AirPods). swaync n'a pas de son natif : le son est joué par le
-# script `notif-sound` (run-on receive, déclaré dans swaync.nix).
+# Bluetooth (AirPods). Le son est joué par le script `notif-sound`, lancé par
+# le serveur de notifications de la barre (modules/quickshell/NotifState.qml).
 #   cours [toggle|on|off|auto|status]    lié à SUPER+SHIFT+C
 # Automatique : le démon cours-sync (assets/cours-sync.py) lit l'emploi du temps
 # Atlas et active le mode pendant les cours (hors cours annulés). Un forçage

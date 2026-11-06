@@ -81,6 +81,7 @@ PanelWindow {
         Ethernet { compact: bar.compact }
         Wifi { compact: bar.compact }
         Battery { compact: bar.compact }
+        NotifCenter { compact: bar.compact }
         Power { compact: bar.compact }
     }
 

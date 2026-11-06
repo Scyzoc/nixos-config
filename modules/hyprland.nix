@@ -61,7 +61,6 @@ in
           "systemctl --user restart xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-hyprland",
           "hyprctl setcursor Bibata-Modern-Ice 24",
           "xhost +si:localuser:root",
-          "swaync",
           "awww-daemon",
           "awww restore || true",
           "wl-paste --type text --watch cliphist store",
@@ -293,9 +292,7 @@ in
       layer("quickshell-clipboard", { blur = true, ignore_alpha = 0.4 })
       layer("quickshell-emoji", { blur = true, ignore_alpha = 0.4 })
       layer("quickshell-speedtest", { blur = true, ignore_alpha = 0.4 })
-      layer("swaync", { blur = true, ignore_alpha = 0.1 })
-      layer("swaync-notification-window", { blur = true, ignore_alpha = 0.1 })
-      layer("swaync-control-center", { blur = true, ignore_alpha = 0.1 })
+      layer("quickshell-notifications", { blur = true, ignore_alpha = 0.1 })
       layer("launcher", { blur = true })
       layer("rofi", { blur = true, ignore_alpha = 0.1, animation = "fade" })
     '';

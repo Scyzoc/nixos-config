@@ -8,6 +8,18 @@ ShellRoot {
         Bar {}
     }
 
+    // Popups de notification (serveur : NotifState, remplace swaync)
+    NotifPopups {}
+
+    // Notifications :
+    //   quickshell ipc -c bar call notif dnd       bascule Ne pas déranger (renvoie on/off)
+    //   quickshell ipc -c bar call notif clear     efface tout
+    IpcHandler {
+        target: "notif"
+        function dnd(): string { NotifState.dnd = !NotifState.dnd; return NotifState.dnd ? "on" : "off"; }
+        function clear(): string { NotifState.clearAll(); return "ok"; }
+    }
+
     // Minuteurs / chronomètre (TimerState), utilisés par l'assistant :
     //   quickshell ipc -c bar call timer add 600 "pâtes"
     //   quickshell ipc -c bar call timer cancel ""        ("" : tous)

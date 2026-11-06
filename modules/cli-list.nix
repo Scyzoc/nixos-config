@@ -148,7 +148,6 @@ let
       "awww|Fond d'écran" \
       "rofi|Lanceur / menus" \
       "notify-send|Envoyer une notification" \
-      "swaync-client|Centre de notifications" \
       "magick|ImageMagick" \
       "xhost|Accès X11"
 
