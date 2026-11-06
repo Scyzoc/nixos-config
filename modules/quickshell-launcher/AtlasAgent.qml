@@ -447,12 +447,12 @@ PanelWindow {
                                 width: parent.width
                                 height: sgText.implicitHeight + 22
                                 radius: 10
-                                color: sgMa.containsMouse ? Qt.tint(win.cPanel, Qt.rgba(win.aiStops[1].r !== undefined ? 0 : 0, 0, 0, 0)) : win.cPanel
+                                color: win.cPanel
                                 Rectangle {
                                     anchors.fill: parent
                                     anchors.margins: 1.5
                                     radius: 8.5
-                                    color: win.aiStops.length > 0 ? Qt.rgba(Qt.color(win.aiStops[1]).r, Qt.color(win.aiStops[1]).g, Qt.color(win.aiStops[1]).b, 0.08) : "transparent"
+                                    color: Qt.rgba(Qt.color(win.aiStops[1]).r, Qt.color(win.aiStops[1]).g, Qt.color(win.aiStops[1]).b, 0.08)
                                     opacity: sgMa.containsMouse ? 1 : 0
                                     Behavior on opacity { NumberAnimation { duration: 140 } }
                                 }
