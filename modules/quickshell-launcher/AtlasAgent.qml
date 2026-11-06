@@ -311,7 +311,7 @@ PanelWindow {
                                 text: row.text
                                 color: win.cText
                                 font.family: win.sans
-                                font.pixelSize: 14.5
+                                font.pixelSize: 15
                                 lineHeight: 1.3
                             }
                         }
@@ -353,7 +353,7 @@ PanelWindow {
                                         id: thinkText
                                         text: "Thinking"
                                         font.family: win.sans
-                                        font.pixelSize: 14.5
+                                        font.pixelSize: 15
                                         font.weight: Font.DemiBold
                                         color: win.aiStops[0]
                                         SequentialAnimation on color {
@@ -396,7 +396,7 @@ PanelWindow {
                                 color: row.failed ? win.cErr : win.cText
                                 linkColor: win.aiStops[1]
                                 font.family: win.sans
-                                font.pixelSize: 14.5
+                                font.pixelSize: 15
                                 lineHeight: 1.35
                                 onLinkActivated: link => Qt.openUrlExternally(link.startsWith("/") ? "https://atlas.homelab.lan" + link : link)
                             }
@@ -431,7 +431,7 @@ PanelWindow {
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.Wrap
                         text: "L’agent lit et modifie tes tâches, projets et évaluations, et consulte ton agenda."
-                        font.family: win.sans; font.pixelSize: 14.5
+                        font.family: win.sans; font.pixelSize: 15
                         color: win.cMuted
                     }
                     Item { width: 1; height: 4 }
@@ -473,7 +473,7 @@ PanelWindow {
                                     text: sg.modelData
                                     color: win.cText
                                     font.family: win.sans
-                                    font.pixelSize: 13.5
+                                    font.pixelSize: 14
                                     lineHeight: 1.25
                                 }
                                 MouseArea {
@@ -523,7 +523,7 @@ PanelWindow {
                         anchors.rightMargin: 8
                         color: win.cText
                         font.family: win.sans
-                        font.pixelSize: 14.5
+                        font.pixelSize: 15
                         clip: true
                         selectByMouse: true
                         focus: true
