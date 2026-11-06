@@ -5,7 +5,7 @@ import Quickshell.Widgets
 import Quickshell.Services.Notifications
 
 // Carte de notification, style des menus de la barre. La couleur de l'appli (marque connue,
-// sinon teinte dominante de son icône) marque le nom de l'appli et la jauge du délai, en bas.
+// sinon teinte dominante de son icône) colore le nom de l'appli et la jauge du délai, en bas.
 //   popup: true  → carte flottante (glisse depuis la droite, délai, survol = pause)
 //   popup: false → ligne de l'historique (menu de la cloche)
 Rectangle {
@@ -176,16 +176,10 @@ Rectangle {
                 Layout.fillWidth: true
                 spacing: 2
 
-                // En-tête : ● Appli · il y a 2 min                  ✕
+                // En-tête : Appli · il y a 2 min                  ✕
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 6
-                    Rectangle {
-                        Layout.preferredWidth: 7
-                        Layout.preferredHeight: 7
-                        radius: 3.5
-                        color: card.accent
-                    }
                     BarText {
                         text: card.notif.appName || card.notif.desktopEntry || "Notification"
                         color: card.accent
