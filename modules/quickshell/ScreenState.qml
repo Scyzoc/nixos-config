@@ -23,7 +23,7 @@ Singleton {
     }
     // Dernier enregistrement / dernière capture terminés (vidé par l'île après ~5 s)
     property string doneFile: ""
-    property string doneKind: "record"     // record | shot
+    property string doneKind: "record"     // record | shot | copied (enregistrement copié, confirmation brève)
     property string doneLabel: ""
     property string lastShot: ""
     property string lastDone: ""
@@ -40,6 +40,15 @@ Singleton {
     // Action du menu de l'île. Capture : save | draw | ocr ; enregistrement : save | copy | folder | delete
     function shotAction(kind) {
         const f = root.doneFile;
+        // Copie d'un enregistrement : l'île reste et confirme « Enregistrement copié » (~2,5 s)
+        if (root.doneKind === "record" && kind === "copy") {
+            opener.command = [Paths.userBin + "/screen-record", "copy", f];
+            opener.running = true;
+            root.doneKind = "copied";
+            root.doneLabel = "Enregistrement copié";
+            root.menuOpen = false;
+            return;
+        }
         if (root.doneKind === "shot")
             opener.command = [Paths.userBin + "/screenshot", kind === "save" ? "--save-as" : kind === "ocr" ? "--ocr" : "--edit", f];
         else
@@ -50,7 +59,7 @@ Singleton {
 
     Process { id: opener }
     Timer {
-        interval: 5000
+        interval: root.doneKind === "copied" ? 2500 : 5000
         running: root.doneFile !== "" && !root.menuOpen
         onTriggered: root.doneFile = ""
     }

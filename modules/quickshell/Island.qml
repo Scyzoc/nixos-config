@@ -239,7 +239,7 @@ PanelWindow {
             // Enregistrement : écran (contour blanc + pied) avec une coche verte, qui rebondit
             Item {
                 id: badge
-                visible: ScreenState.doneKind !== "shot"
+                visible: ScreenState.doneKind === "record"
                 anchors.verticalCenter: parent.verticalCenter
                 width: 22
                 height: 22
@@ -275,6 +275,47 @@ PanelWindow {
                     PropertyAction { target: badgeCheck; property: "scale"; value: 0.3 }
                     PauseAnimation { duration: 80 }
                     NumberAnimation { target: badgeCheck; property: "scale"; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 2.5 }
+                }
+            }
+            // Enregistrement copié : presse-papiers (contour + pince) avec une coche verte, qui rebondit
+            Item {
+                id: clip
+                visible: ScreenState.doneKind === "copied"
+                anchors.verticalCenter: parent.verticalCenter
+                width: 22
+                height: 22
+                Rectangle {    // planche
+                    x: 3
+                    y: 3
+                    width: 16
+                    height: 18
+                    radius: 3
+                    color: "transparent"
+                    border.width: 2
+                    border.color: Theme.text
+                }
+                Rectangle {    // pince
+                    x: 7
+                    y: 1
+                    width: 8
+                    height: 5
+                    radius: 2
+                    color: Theme.text
+                }
+                Text {
+                    id: clipCheck
+                    x: (parent.width - width) / 2
+                    y: 13 - height / 2
+                    text: Theme.ic(0xf012c)    // md-check
+                    color: Theme.green
+                    font.family: Theme.font
+                    font.pixelSize: 13
+                }
+                SequentialAnimation {
+                    running: win.mode === "record" && win.textOpacity > 0 && clip.visible
+                    PropertyAction { target: clipCheck; property: "scale"; value: 0.3 }
+                    PauseAnimation { duration: 80 }
+                    NumberAnimation { target: clipCheck; property: "scale"; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 2.5 }
                 }
             }
             // Capture d'écran : cadre de visée (quatre coins) avec une coche verte au centre
@@ -335,6 +376,7 @@ PanelWindow {
             }
             // Capture : bouton qui déroule le menu d'actions
             Text {
+                visible: ScreenState.doneKind !== "copied"    // confirmation : pas de menu
                 anchors.verticalCenter: parent.verticalCenter
                 text: Theme.ic(0xf0140)    // md-chevron_down
                 color: Theme.subtext
@@ -413,7 +455,7 @@ PanelWindow {
             anchors.right: parent.right
             anchors.top: parent.top
             height: 36
-            enabled: win.mode === "record" && win.textOpacity === 1
+            enabled: win.mode === "record" && win.textOpacity === 1 && ScreenState.doneKind !== "copied"
             cursorShape: Qt.PointingHandCursor
             onClicked: {
                 ScreenState.menuOpen = !ScreenState.menuOpen;
