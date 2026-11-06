@@ -1,6 +1,8 @@
 pragma Singleton
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
+import Quickshell.Io
 import Quickshell.Services.Notifications
 
 // Serveur de notifications (remplace swaync) : popups en haut à droite (NotifPopups),
@@ -127,6 +129,41 @@ Singleton {
         return "";
     }
 
+    // ── Fond des popups ────────────────────────────────────────────────────────
+    // Avant d'afficher la 1re popup : capture de la zone où elle va apparaître (fenêtres comprises)
+    // → Theme.notifLum, d'où transparence du fond et couleur du texte (même règle que la barre).
+    // Pendant la mesure (~50 ms), les notifs attendent dans `pending`.
+    property var pending: []
+    function show(n) { popups = [n].concat(popups.filter(p => p !== n)).slice(0, maxPopups); }
+    function queue(n) {
+        if (popups.length > 0 && !lumProc.running) { show(n); return; }
+        pending = pending.concat([n]);
+        if (lumProc.running) return;
+        const scr = Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0];
+        if (!scr) { flush(); return; }
+        // Même place que NotifPopups : 380 px de large, sous la barre, marge droite 10
+        const geo = Math.round(scr.x + scr.width - 390) + "," + Math.round(scr.y + 49) + " 380x300";
+        // Luminosité « des parties claires » : moyenne + écart-type (une bande claire compte)
+        lumProc.command = [Paths.sh, "-c", Paths.grim + " -g \"$1\" -t ppm - | " + Paths.magick
+                           + " ppm:- -colorspace Gray -format '%[fx:min(1,mean+standard_deviation)]' info:", "_", geo];
+        lumProc.running = true;
+    }
+    function flush() {
+        const list = pending;
+        pending = [];
+        for (const n of list) if (n.tracked) show(n);
+    }
+    Process {
+        id: lumProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const v = parseFloat(text);
+                if (!isNaN(v)) Theme.notifLum = v;
+            }
+        }
+        onExited: root.flush()
+    }
+
     // ── Serveur ────────────────────────────────────────────────────────────────
     NotificationServer {
         id: server
@@ -159,7 +196,7 @@ Singleton {
 
             const critical = n.urgency === NotificationUrgency.Critical;
             if (root.dnd && !critical) return;
-            root.popups = [n].concat(root.popups.filter(p => p !== n)).slice(0, root.maxPopups);
+            root.queue(n);
             // Son (muet en mode Cours hors AirPods : script notif-sound, cours.nix)
             if (!n.hints["suppress-sound"])
                 Quickshell.execDetached([Paths.userBin + "/notif-sound"]);

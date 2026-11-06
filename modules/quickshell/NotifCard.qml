@@ -31,8 +31,8 @@ Rectangle {
     readonly property color fgSub: Qt.rgba(fg.r, fg.g, fg.b, darkText ? 0.78 : 0.72)
     readonly property color fgMuted: Qt.rgba(fg.r, fg.g, fg.b, darkText ? 0.6 : 0.45)
     readonly property color fill: darkText ? Qt.rgba(0, 0, 0, 0.08) : Qt.rgba(1, 1, 1, 0.06)
-    // Couleur de l'appli assombrie sur texte noir (sinon jaune / vert clair illisibles)
-    readonly property color accentText: darkText ? Qt.darker(accent, 2.2) : accent
+    // Couleur de l'appli ajustée pour rester lisible (bleu Discord trop sombre, jaune sur fond clair…)
+    readonly property color accentText: Theme.readable(accent, darkText)
 
     // Jauge du délai (1 → 0), en pause au survol
     property real progress: 1

@@ -24,15 +24,30 @@ Singleton {
     readonly property color barText: (barLum + 0.05) / 0.05 > 1.05 / (barLum + 0.05) ? "#000000" : "#ffffff"
     Behavior on wallLum { NumberAnimation { duration: 600 } }
 
-    // Popups de notification : même règle que la barre, mais mesurée sur la zone du fond d'écran
-    // derrière elles (quart haut droit) ; texte noir ou blanc selon le contraste
+    // Popups de notification : même règle que la barre, mais `notifLum` est mesurée sur ce qui est
+    // réellement derrière elles (capture de la zone à l'arrivée, NotifState) ; texte noir ou blanc selon le contraste
     property real notifLum: 0
     readonly property real notifAlpha: 0.25 + 0.35 * Math.max(0, Math.min(1, (notifLum - 0.4) / 0.55))
     readonly property color notifBg: Qt.rgba(0, 0, 0, notifAlpha)
     readonly property real notifBgLum: Math.pow(notifLum * (1 - notifAlpha), 2.2)
     readonly property bool notifDarkText: (notifBgLum + 0.05) / 0.05 > 1.05 / (notifBgLum + 0.05)
     readonly property color notifText: notifDarkText ? "#000000" : "#ffffff"
-    Behavior on notifLum { NumberAnimation { duration: 600 } }
+
+    // Couleur lisible sur un fond sombre (texte blanc) ou clair (texte noir) : éclaircie / assombrie
+    // jusqu'à une luminance relative suffisante, en gardant la teinte
+    function relLum(c) {
+        const f = v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    }
+    function readable(c, onLight) {
+        let out = c;
+        for (let t = 0.1; t <= 1.001; t += 0.1) {
+            const l = relLum(out);
+            if (onLight ? l <= 0.12 : l >= 0.32) break;
+            out = lerpColor(c, onLight ? Qt.rgba(0, 0, 0, 1) : Qt.rgba(1, 1, 1, 1), t);
+        }
+        return out;
+    }
 
     // Fond changé (wallpaper-apply) → luminosité moyenne de la bande haute de l'image
     FileView {
@@ -46,9 +61,6 @@ Singleton {
             lumProc.command = [Paths.magick, f + "[0]", "-gravity", "north", "-crop", "100%x6%+0+0",
                                "+repage", "-colorspace", "Gray", "-format", "%[fx:mean]", "info:"];
             lumProc.running = true;
-            notifLumProc.command = [Paths.magick, f + "[0]", "-gravity", "northeast", "-crop", "25%x55%+0+0",
-                                    "+repage", "-colorspace", "Gray", "-format", "%[fx:mean]", "info:"];
-            notifLumProc.running = true;
         }
     }
     Process {
@@ -57,16 +69,6 @@ Singleton {
             onStreamFinished: {
                 const v = parseFloat(text);
                 if (!isNaN(v)) theme.wallLum = v;
-            }
-        }
-    }
-
-    Process {
-        id: notifLumProc
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const v = parseFloat(text);
-                if (!isNaN(v)) theme.notifLum = v;
             }
         }
     }
