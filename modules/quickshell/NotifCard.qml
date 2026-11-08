@@ -59,6 +59,22 @@ Rectangle {
         NumberAnimation { target: card; property: "slide"; to: 1; duration: 240; easing.type: Easing.InCubic }
         ScriptAction { script: NotifState.hidePopup(card.notif) }
     }
+    // Fermeture (croix / clic droit) : la carte file à droite en fondu, puis la notif est supprimée
+    property bool dismissing: false
+    function dismissAnimated() {
+        if (dismissing) return;
+        dismissing = true;
+        leaving = true;
+        timer.stop();
+        enterAnim.stop();
+        leaveAnim.stop();
+        dismissAnim.start();
+    }
+    SequentialAnimation {
+        id: dismissAnim
+        NumberAnimation { target: card; property: "slide"; to: 1; duration: 260; easing.type: Easing.InCubic }
+        ScriptAction { script: card.notif.dismiss() }
+    }
     // « Tout effacer » (historique) : la carte file à droite en accélérant, après `delay` ms
     function sweepOut(delay) {
         timer.stop();
@@ -106,7 +122,7 @@ Rectangle {
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         cursorShape: Qt.PointingHandCursor
         onClicked: event => {
-            if (event.button === Qt.RightButton) card.notif.dismiss();
+            if (event.button === Qt.RightButton) card.dismissAnimated();
             else if (event.button === Qt.MiddleButton) NotifState.hideAllPopups();
             else { fx.play(); NotifState.activate(card.notif); }
         }
@@ -230,7 +246,7 @@ Rectangle {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: card.notif.dismiss()
+                            onClicked: card.dismissAnimated()
                         }
                     }
                 }
