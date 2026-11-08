@@ -18,7 +18,19 @@ let
     fails=0
     while :; do
       start=$(date +%s)
-      ${pkgs.hyprlock}/bin/hyprlock "$@" 9>&- && exit 0
+      # Mode bureau (écran externe seul) : batterie masquée → champ mot de passe
+      # remonté juste sous la date (config dérivée, position -120 → -75).
+      cfg="$HOME/.config/hypr/hyprlock.conf"
+      args=("$@")
+      case $(cat "$HOME/.local/state/display-mode" 2>/dev/null) in
+        lid-closed|external-only)
+          alt="''${XDG_RUNTIME_DIR:-/tmp}/hyprlock-desktop.conf"
+          if ${pkgs.gnused}/bin/sed 's/^\(\s*position\s*=\s*0,\s*\)-120\s*$/\1-75/' "$cfg" > "$alt" 2>/dev/null; then
+            args=(-c "$alt" "$@")
+          fi
+          ;;
+      esac
+      ${pkgs.hyprlock}/bin/hyprlock "''${args[@]}" 9>&- && exit 0
       rc=$?
       # Compteur remis à zéro si hyprlock a tenu un moment (plantage isolé)
       [ $(( $(date +%s) - start )) -gt 30 ] && fails=0
