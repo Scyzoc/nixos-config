@@ -673,15 +673,21 @@ in
       };
 
       # Fondu à l'apparition/disparition (no_fade_in/out retirés depuis hyprlock 0.9)
+      # Tout est animé : apparition/disparition, points, couleurs (vert vérif, lueur rouge échec), fondu du champ
       animations = {
         enabled = true;
-        bezier = [ "easeOut, 0.25, 1, 0.5, 1" ];
+        bezier = [
+          "easeOut, 0.25, 1, 0.5, 1"
+          "smooth, 0.4, 0, 0.2, 1"
+        ];
         animation = [
+          "global, 1, 4, smooth"
           "fadeIn, 1, 6, easeOut"
-          "fadeOut, 1, 1, easeOut"
+          "fadeOut, 1, 2, easeOut"
           "inputFieldDots, 1, 2, easeOut"
-          "inputFieldColors, 1, 3, easeOut"
-          "inputFieldWidth, 1, 3, easeOut"
+          "inputFieldFade, 1, 3, smooth"
+          "inputFieldColors, 1, 4, smooth"
+          "inputFieldWidth, 1, 3, smooth"
         ];
       };
 
@@ -710,7 +716,7 @@ in
           fail_color = "rgba(255, 60, 60, ${toString a})";
           font_color = "rgba(0, 0, 0, 0)";
           fail_text = "";
-          fail_timeout = 600;
+          fail_timeout = 1100;
           fade_on_empty = false;
           placeholder_text = "";
           position = "0, -120";
@@ -730,7 +736,7 @@ in
           fail_color = "rgba(255, 255, 255, 0.1)";
           font_color = "rgb(200, 200, 200)";
           fail_text = "";
-          fail_timeout = 600;
+          fail_timeout = 1100;
           fade_on_empty = true;
           placeholder_text = "";
           hide_input = false;
