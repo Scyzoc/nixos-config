@@ -683,7 +683,7 @@ in
         animation = [
           "global, 1, 4, smooth"
           "fadeIn, 1, 6, easeOut"
-          "fadeOut, 1, 2, easeOut"
+          "fadeOut, 0"
           "inputFieldDots, 1, 2, easeOut"
           "inputFieldFade, 1, 3, smooth"
           "inputFieldColors, 1, 4, smooth"
@@ -732,7 +732,7 @@ in
           dots_center = true;
           outer_color = "rgba(255, 255, 255, 0.1)";
           inner_color = "rgba(255, 255, 255, 0.1)";
-          check_color = "rgba(80, 250, 123, 0.95)";
+          check_color = "rgba(255, 255, 255, 0.1)";
           fail_color = "rgba(255, 255, 255, 0.1)";
           font_color = "rgb(200, 200, 200)";
           fail_text = "";
