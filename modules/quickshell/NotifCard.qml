@@ -191,16 +191,7 @@ Rectangle {
                     Layout.fillWidth: true
                     spacing: 6
                     BarText {
-                        text: card.notif.appName || card.notif.desktopEntry || "Notification"
-                        color: card.accentText
-                        font.family: Theme.labelFont
-                        font.pixelSize: 11
-                        font.weight: Font.DemiBold
-                        elide: Text.ElideRight
-                        Layout.maximumWidth: 170
-                    }
-                    BarText {
-                        text: "·  " + NotifState.ago(card.notif)
+                        text: NotifState.ago(card.notif)
                         visible: NotifState.ago(card.notif) !== ""
                         color: card.fgMuted
                         font.family: Theme.labelFont
