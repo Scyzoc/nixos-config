@@ -307,6 +307,18 @@
 
   services.printing.enable = false;
   services.flatpak.enable = true; # Brave (retiré de nixpkgs) : flatpak install flathub com.brave.Browser
+  # Remote flathub + Brave (retiré de nixpkgs) installés au boot s'ils manquent
+  systemd.services.flatpak-brave = {
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    path = [ pkgs.flatpak ];
+    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; };
+    script = ''
+      flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      flatpak info com.brave.Browser >/dev/null 2>&1 || flatpak install -y --noninteractive flathub com.brave.Browser
+    '';
+  };
   # Avahi (mDNS) : requis pour que l'iPhone découvre UxPlay (AirPlay)
   services.avahi = { enable = true; nssmdns4 = true; publish = { enable = true; userServices = true; }; settings.publish.publish-addresses = true; };
   systemd.services.ModemManager.enable = false;
