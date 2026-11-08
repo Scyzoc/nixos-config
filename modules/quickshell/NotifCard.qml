@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Widgets
 import Quickshell.Services.Notifications
@@ -43,9 +44,20 @@ Rectangle {
     implicitHeight: content.implicitHeight + 24 + (popup && timeout > 0 ? 4 : 0)
     radius: 14
     color: hovered && !popup ? Qt.rgba(1, 1, 1, 0.08) : (popup ? Theme.notifBg : Qt.rgba(1, 1, 1, 0.04))
-    border.color: critical ? Qt.rgba(243 / 255, 139 / 255, 168 / 255, 0.7) : (popup ? Theme.border : Theme.pillBorder)
+    border.color: popup ? Theme.border : Theme.pillBorder
     border.width: 1
     Behavior on color { ColorAnimation { duration: 150 } }
+
+    // Notif critique : pas de contour rouge, juste une lueur douce derrière la carte
+    Rectangle {
+        z: -1
+        visible: card.critical
+        anchors.fill: parent
+        radius: card.radius
+        color: Qt.rgba(243 / 255, 139 / 255, 168 / 255, 0.45)
+        layer.enabled: card.critical
+        layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 20 }
+    }
 
     opacity: 1 - slide
     transform: Translate { x: card.slide * (card.width + 20) }

@@ -306,8 +306,9 @@
   # ==========================================================================
 
   services.printing.enable = false;
+  services.flatpak.enable = true; # Brave (retiré de nixpkgs) : flatpak install flathub com.brave.Browser
   # Avahi (mDNS) : requis pour que l'iPhone découvre UxPlay (AirPlay)
-  services.avahi = { enable = true; nssmdns4 = true; publish = { enable = true; userServices = true; addresses = true; }; };
+  services.avahi = { enable = true; nssmdns4 = true; publish = { enable = true; userServices = true; }; settings.publish.publish-addresses = true; };
   systemd.services.ModemManager.enable = false;
 
   # ==========================================================================
@@ -428,6 +429,7 @@
   # --- Cisco Packet Tracer (nécessite le .deb téléchargé manuellement) ---
   nixpkgs.config.permittedInsecurePackages = [
   #  "cisco-packet-tracer-9.0.0"
+    "electron-42.11.18"  # Obsidian épinglé sur Electron 42 (43 = fenêtre noire)
     "ventoy-1.1.18"  # Ventoy : composants tiers avec CVE connues, autorisé pour flashage USB
   ];
 

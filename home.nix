@@ -285,7 +285,6 @@ in
     baobab
     lazydocker
     nwg-displays
-    unrar
     fsearch            # Recherche de fichiers instantanee (equivalent Everything)
     trash-cli          # Corbeille en CLI (trash-put, trash-list, trash-restore, trash-empty)
 
@@ -697,7 +696,27 @@ in
         }
       ];
 
-      input-field = [
+      # Lueur rouge à l'échec : hyprlock n'a qu'une ombre fixe, donc on empile des champs fantômes
+      # (transparents au repos, anneau rouge de plus en plus pâle via fail_color) autour du vrai champ
+      input-field = (lib.imap1 (i: a:
+        let d = 2 + 3 * (i - 1); in {
+          size = "${toString (250 + 2 * d)}, ${toString (60 + 2 * d)}";
+          outline_thickness = 3;
+          rounding = 24 + d;
+          dots_size = 0.01;
+          outer_color = "rgba(0, 0, 0, 0)";
+          inner_color = "rgba(0, 0, 0, 0)";
+          check_color = "rgba(0, 0, 0, 0)";
+          fail_color = "rgba(255, 60, 60, ${toString a})";
+          font_color = "rgba(0, 0, 0, 0)";
+          fail_text = "";
+          fail_timeout = 600;
+          fade_on_empty = false;
+          placeholder_text = "";
+          position = "0, -120";
+          halign = "center";
+          valign = "center";
+        }) [ 0.5 0.38 0.26 0.16 0.08 ]) ++ [
         {
           size = "250, 60";
           outline_thickness = 2;
@@ -708,7 +727,7 @@ in
           outer_color = "rgba(255, 255, 255, 0.1)";
           inner_color = "rgba(255, 255, 255, 0.1)";
           check_color = "rgba(80, 250, 123, 0.95)";
-          fail_color = "rgba(220, 50, 50, 0.9)";
+          fail_color = "rgba(255, 255, 255, 0.1)";
           font_color = "rgb(200, 200, 200)";
           fail_text = "";
           fail_timeout = 600;

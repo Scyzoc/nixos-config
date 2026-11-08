@@ -57,7 +57,7 @@ let
       "curl|Requêtes HTTP" \
       "unzip|Décompression zip" \
       "zip|Compression zip" \
-      "unrar|Décompression rar" \
+      "unar|Décompression rar/zip/7z" \
       "unar|Extraction toutes archives" \
       "7z|Archives 7-Zip" \
       "jq|Manipulation JSON" \
