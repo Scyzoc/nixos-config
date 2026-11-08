@@ -62,6 +62,14 @@
 
   services.earlyoom.enable = true;
 
+  # Service PAM dédié à hyprlock (sinon il retombe sur « su ») : pas de délai après un mauvais
+  # mot de passe (pam_unix attend ~2 s et hyprlock ignore la frappe pendant ce temps) → on peut
+  # retaper tout de suite.
+  security.pam.services.hyprlock = {
+    failDelay = { enable = true; delay = 0; };
+    rules.auth.unix.settings.nodelay = lib.mkForce true;
+  };
+
   # Mise à jour firmware (dock Lenovo, etc.) via LVFS
   services.fwupd.enable = true;
 
