@@ -679,7 +679,7 @@ in
         bezier = [ "easeOut, 0.25, 1, 0.5, 1" ];
         animation = [
           "fadeIn, 1, 6, easeOut"
-          "fadeOut, 1, 5, easeOut"
+          "fadeOut, 1, 1, easeOut"
           "inputFieldDots, 1, 2, easeOut"
           "inputFieldColors, 1, 3, easeOut"
           "inputFieldWidth, 1, 3, easeOut"
@@ -707,7 +707,7 @@ in
           dots_center = true;
           outer_color = "rgba(255, 255, 255, 0.1)";
           inner_color = "rgba(255, 255, 255, 0.1)";
-          check_color = "rgba(220, 50, 50, 0.9)";
+          check_color = "rgba(80, 250, 123, 0.95)";
           fail_color = "rgba(220, 50, 50, 0.9)";
           font_color = "rgb(200, 200, 200)";
           fail_text = "";
