@@ -33,6 +33,17 @@ Item {
 
     function toggle() { visible = !visible; }
 
+    // Hauteur voulue du cadre = celle du contenu, suivie image par image. La fenêtre, elle, grandit
+    // tout de suite mais ne rétrécit qu'une fois le contenu stabilisé (sinon le compositeur la
+    // redimensionne à chaque image pendant un repli : saccades, cadre qui saute).
+    readonly property real contentH: body.implicitHeight + padding * 2
+    property real winH: contentH
+    onContentHChanged: {
+        if (contentH >= winH) { winH = contentH; shrinkTimer.stop(); }
+        else shrinkTimer.restart();
+    }
+    Timer { id: shrinkTimer; interval: 150; onTriggered: popup.winH = popup.contentH }
+
     // Position du menu décidée ici (pas par le compositeur) pour que le cadre parte exactement
     // de la pastille et y revienne : fenêtre centrée sur la pastille, ramenée dans l'écran si besoin.
     property real tx: 0       // abscisse de la pastille dans la fenêtre de la barre
@@ -128,7 +139,7 @@ Item {
         color: "transparent"
         visible: popup.shown
         implicitWidth: popup.contentWidth + popup.padding * 2
-        implicitHeight: body.implicitHeight + popup.padding * 2
+        implicitHeight: popup.winH
 
         Shortcut {
             sequence: "Escape"
@@ -154,9 +165,9 @@ Item {
             Rectangle {
                 id: frame
                 readonly property real w0: popup.morph ? popup.target.width : win.width
-                readonly property real h0: popup.morph ? popup.target.height : win.height
+                readonly property real h0: popup.morph ? popup.target.height : popup.contentH
                 width: w0 + (win.width - w0) * popup.grow
-                height: h0 + (win.height - h0) * popup.grow
+                height: h0 + (popup.contentH - h0) * popup.grow
                 // Centre du cadre : celui de la pastille au départ, celui du menu à l'arrivée
                 readonly property real c0: win.width / 2 - popup.shift
                 x: (c0 + (win.width / 2 - c0) * popup.grow) - width / 2

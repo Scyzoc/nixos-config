@@ -10,6 +10,12 @@ Pill {
     readonly property int count: NotifState.count
     // Animation « Tout effacer » en cours (cartes qui partent en cascade)
     property bool clearing: false
+    // Repli de la dernière ligne (0 → 1) : « Tout effacer » et les marges se replient avec elle
+    property real lastCollapse: 0
+    onCountChanged: if (count > 0) lastCollapse = 0
+    // Apparition douce de « Aucune notification »
+    property real emptyP: count === 0 ? 1 : 0
+    Behavior on emptyP { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
     // Chorégraphie (sans aucun saut de mise en page) : les cartes filent à droite en cascade,
     // le menu commence à se replier pendant leur départ (contenu inchangé), et les notifications
@@ -74,20 +80,26 @@ Pill {
             }
         }
 
-        BarText {
+        Item {
             Layout.fillWidth: true
-            Layout.topMargin: 6
-            Layout.bottomMargin: 6
-            visible: root.count === 0
-            text: "Aucune notification"
-            color: Theme.muted
-            font.family: Theme.labelFont
-            horizontalAlignment: Text.AlignHCenter
+            Layout.topMargin: -10 * (1 - root.emptyP)
+            Layout.preferredHeight: (emptyText.implicitHeight + 12) * root.emptyP
+            visible: root.emptyP > 0
+            opacity: root.emptyP
+            BarText {
+                id: emptyText
+                anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: 6 }
+                text: "Aucune notification"
+                color: Theme.muted
+                font.family: Theme.labelFont
+                horizontalAlignment: Text.AlignHCenter
+            }
         }
 
         Flickable {
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(list.implicitHeight, 480)
+            Layout.bottomMargin: -10 * root.lastCollapse
             visible: root.count > 0
             contentHeight: list.implicitHeight
             clip: true
@@ -96,17 +108,28 @@ Pill {
             Column {
                 id: list
                 width: parent.width
-                spacing: 6
+                spacing: 0
                 move: Transition { NumberAnimation { properties: "y"; duration: 200; easing.type: Easing.OutCubic } }
                 Repeater {
                     id: histRep
                     // `shown` (et pas `visible`) : la liste reste en place pendant l'animation de fermeture
                     model: ScriptModel { values: menu.shown ? NotifState.history : [] }
-                    NotifCard {
+                    // Ligne = carte + 6 px d'espace, qui se replient ensemble (hauteur continue, sans saut)
+                    Item {
+                        id: row
                         required property var modelData
-                        notif: modelData
-                        popup: false
                         width: list.width
+                        height: (card.implicitHeight + 6) * (1 - card.collapse)
+                        clip: card.collapse > 0
+                        function sweepOut(delay) { card.sweepOut(delay); }
+                        NotifCard {
+                            id: card
+                            notif: row.modelData
+                            popup: false
+                            collapseOnDismiss: true
+                            width: parent.width
+                            onCollapseChanged: if (histRep.count === 1) root.lastCollapse = collapse
+                        }
                     }
                 }
             }
@@ -115,9 +138,12 @@ Pill {
         // Tout effacer
         Rectangle {
             Layout.fillWidth: true
-            Layout.bottomMargin: 4
+            Layout.topMargin: -10 * root.lastCollapse
+            Layout.bottomMargin: 4 * (1 - root.lastCollapse)
             visible: root.count > 0
-            implicitHeight: 30
+            Layout.preferredHeight: 30 * (1 - root.lastCollapse)
+            opacity: 1 - root.lastCollapse
+            clip: true
             radius: 10
             color: clearMouse.containsMouse ? Qt.rgba(243 / 255, 139 / 255, 168 / 255, 0.25) : Qt.rgba(243 / 255, 139 / 255, 168 / 255, 0.12)
             Behavior on color { ColorAnimation { duration: 150 } }

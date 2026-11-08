@@ -61,6 +61,8 @@ Rectangle {
     }
     // Fermeture (croix / clic droit) : la carte file à droite en fondu, puis la notif est supprimée
     property bool dismissing: false
+    property bool collapseOnDismiss: false   // historique : la ligne se replie avant de disparaître
+    property real collapse: 0
     function dismissAnimated() {
         if (dismissing) return;
         dismissing = true;
@@ -73,6 +75,7 @@ Rectangle {
     SequentialAnimation {
         id: dismissAnim
         NumberAnimation { target: card; property: "slide"; to: 1; duration: 260; easing.type: Easing.InCubic }
+        NumberAnimation { target: card; property: "collapse"; to: card.collapseOnDismiss ? 1 : 0; duration: card.collapseOnDismiss ? 240 : 0; easing.type: Easing.InOutCubic }
         ScriptAction { script: card.notif.dismiss() }
     }
     // « Tout effacer » (historique) : la carte file à droite en accélérant, après `delay` ms
