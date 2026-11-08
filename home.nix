@@ -681,6 +681,8 @@ in
           "fadeIn, 1, 6, easeOut"
           "fadeOut, 1, 5, easeOut"
           "inputFieldDots, 1, 2, easeOut"
+          "inputFieldColors, 1, 3, easeOut"
+          "inputFieldWidth, 1, 3, easeOut"
         ];
       };
 
@@ -709,7 +711,7 @@ in
           fail_color = "rgba(220, 50, 50, 0.9)";
           font_color = "rgb(200, 200, 200)";
           fail_text = "";
-          fail_timeout = 300;
+          fail_timeout = 600;
           fade_on_empty = true;
           placeholder_text = "";
           hide_input = false;

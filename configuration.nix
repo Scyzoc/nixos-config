@@ -68,6 +68,7 @@
   security.pam.services.hyprlock = {
     failDelay = { enable = true; delay = 0; };
     rules.auth.unix.settings.nodelay = lib.mkForce true;
+    rules.auth.unix-early.settings.nodelay = lib.mkForce true;
   };
 
   # Mise à jour firmware (dock Lenovo, etc.) via LVFS
