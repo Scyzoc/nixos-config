@@ -682,7 +682,7 @@ in
         ];
         animation = [
           "global, 1, 4, smooth"
-          "fadeIn, 1, 6, easeOut"
+          "fadeIn, 1, 8, smooth"
           "fadeOut, 0"
           "inputFieldDots, 1, 2, easeOut"
           "inputFieldFade, 1, 3, smooth"
