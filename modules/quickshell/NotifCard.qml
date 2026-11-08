@@ -186,10 +186,23 @@ Rectangle {
                 Layout.fillWidth: true
                 spacing: 2
 
-                // En-tête : Appli · il y a 2 min                  ✕
+                // En-tête : Titre                    il y a 2 min  ✕
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 6
+                    BarText {
+                        Layout.fillWidth: true
+                        visible: text !== ""
+                        text: card.notif.summary
+                        color: card.fg
+                        font.family: Theme.labelFont
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        maximumLineCount: 1
+                        textFormat: Text.PlainText
+                    }
+                    Item { Layout.fillWidth: true; visible: card.notif.summary === "" }
                     BarText {
                         text: NotifState.ago(card.notif)
                         visible: NotifState.ago(card.notif) !== ""
@@ -197,11 +210,11 @@ Rectangle {
                         font.family: Theme.labelFont
                         font.pixelSize: 11
                     }
-                    Item { Layout.fillWidth: true }
                     Rectangle {
-                        Layout.preferredWidth: 20
+                        Layout.preferredWidth: card.hovered ? 20 : 0
                         Layout.preferredHeight: 20
                         radius: 10
+                        clip: true
                         opacity: card.hovered ? 1 : 0
                         Behavior on opacity { NumberAnimation { duration: 150 } }
                         color: closeMouse.containsMouse ? Theme.red : card.fill
@@ -222,19 +235,6 @@ Rectangle {
                     }
                 }
 
-                BarText {
-                    Layout.fillWidth: true
-                    visible: text !== ""
-                    text: card.notif.summary
-                    color: card.fg
-                    font.family: Theme.labelFont
-                    font.pixelSize: 13
-                    font.weight: Font.DemiBold
-                    wrapMode: Text.Wrap
-                    maximumLineCount: 2
-                    elide: Text.ElideRight
-                    textFormat: Text.PlainText
-                }
                 BarText {
                     Layout.fillWidth: true
                     visible: text !== ""

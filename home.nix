@@ -699,7 +699,7 @@ in
         {
           size = "250, 60";
           outline_thickness = 2;
-          rounding = 12;
+          rounding = 20;
           dots_size = 0.2;
           dots_spacing = 0.2;
           dots_center = true;
