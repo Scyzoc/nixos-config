@@ -48,15 +48,18 @@ Rectangle {
     border.width: 1
     Behavior on color { ColorAnimation { duration: 150 } }
 
-    // Notif critique : pas de contour rouge, juste une lueur douce derrière la carte
+    // Notif critique : pas de contour net, juste une lueur douce qui déborde autour de la carte
+    // (anneau flouté : un aplat plein teinterait toute la carte, son fond est translucide)
     Rectangle {
         z: -1
         visible: card.critical
         anchors.fill: parent
         radius: card.radius
-        color: Qt.rgba(243 / 255, 139 / 255, 168 / 255, 0.45)
+        color: "transparent"
+        border.width: 3
+        border.color: Qt.rgba(243 / 255, 139 / 255, 168 / 255, 0.6)
         layer.enabled: card.critical
-        layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 20 }
+        layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 24 }
     }
 
     opacity: 1 - slide
